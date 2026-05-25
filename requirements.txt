@@ -1,0 +1,13 @@
+# Project dependencies detected from imports
+numpy
+matplotlib
+scipy
+open3d
+ultralytics
+Pillow
+opencv-python
+
+# Optional / hardware-specific (install only if needed)
+# pyrealsense2  # Intel RealSense SDK; install only if you have the device and wheels available
+# ur_rtde       # UR RTDE Python bindings (if using RTDEReceiveInterface)
+# rtde          # alternative RTDE package

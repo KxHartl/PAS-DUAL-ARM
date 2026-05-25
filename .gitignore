@@ -1,0 +1,37 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+
+# RAG vector store (auto-generated, large)
+data/rag/vector_store/
+data/rag/parsed/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Personal notes
+IDEAS.md
+TODO.md

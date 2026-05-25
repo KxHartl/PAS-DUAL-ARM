@@ -1,0 +1,41 @@
+# LaTeX Package Requirements
+# All templates (thesis, seminar, paper) require these packages.
+# Run `scripts/check-latex-packages.ps1` to verify and auto-install missing packages.
+
+# --- Core ---
+inputenc
+fontenc
+babel
+babel-croatian
+geometry
+graphicx
+
+# --- Typography ---
+mathptmx          # Times New Roman font
+setspace          # Line spacing (1.5 for thesis/seminar, single for paper)
+titlesec          # Section heading formatting
+caption           # Figure/table caption formatting
+
+# --- Headers/Footers ---
+fancyhdr
+
+# --- Tables ---
+longtable
+array
+tabularx
+booktabs
+
+# --- Math ---
+amsmath
+amssymb
+
+# --- Counters ---
+chngcntr          # counterwithin for chapter-based numbering
+
+# --- Paper-specific ---
+abstract          # Abstract formatting (kx-paper)
+hyperref          # Clickable links (kx-paper)
+
+# --- Demo/Graphs (optional, for demo compilation) ---
+tikz
+pgfplots

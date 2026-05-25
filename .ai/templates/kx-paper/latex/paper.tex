@@ -1,0 +1,124 @@
+\documentclass[10pt,a4paper,twocolumn]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[croatian]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{setspace}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{abstract}
+\usepackage{tabularx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathptmx}       % Times New Roman font (koherentno s thesis/seminar)
+\usepackage{chngcntr}       % Za numeriranje po poglavljima
+\usepackage{hyperref}
+
+% ---- POSTAVKE MARGINA ----
+\geometry{left=1.8cm,right=1.8cm,top=2.2cm,bottom=2.2cm,columnsep=0.7cm}
+
+% ---- PRORED ----
+\singlespacing
+
+% ---- STILOVI NASLOVA ----
+% Koherentno s thesis/seminar: section = bold uppercase, subsection = bold, subsubsection = bold italic
+\titleformat{\section}
+  {\normalfont\normalsize\bfseries\uppercase}{\thesection.}{0.5em}{}
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\itshape}{\thesubsubsection.}{0.5em}{}
+
+\titlespacing*{\section}{0pt}{12pt plus 2pt minus 1pt}{6pt plus 1pt minus 1pt}
+\titlespacing*{\subsection}{0pt}{10pt plus 2pt minus 1pt}{4pt plus 1pt minus 1pt}
+\titlespacing*{\subsubsection}{0pt}{8pt plus 2pt minus 1pt}{4pt plus 1pt minus 1pt}
+
+% Dubina numeriranja
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+
+% ---- NUMERIRANJE SLIKA, TABLICA I JEDNADŽBI PO POGLAVLJIMA ----
+\counterwithin{figure}{section}
+\counterwithin{table}{section}
+\counterwithin{equation}{section}
+
+% ---- NAZIVI (babel croatian override) ----
+\addto\captionscroatian{%
+  \renewcommand{\refname}{LITERATURA}%
+  \renewcommand{\abstractname}{SAŽETAK}%
+}
+
+% ---- POTPISI SLIKA I TABLICA ----
+% Captions: small bold (koherentno s thesis/seminar)
+\captionsetup[figure]{font={small,bf},labelsep=period}
+\captionsetup[table]{font={small,bf},labelsep=period,position=above}
+
+% ---- ABSTRACT STIL ----
+\renewcommand{\abstractnamefont}{\normalfont\normalsize\bfseries}
+\renewcommand{\abstracttextfont}{\normalfont\small}
+\setlength{\absleftindent}{0pt}
+\setlength{\absrightindent}{0pt}
+
+% ---- ZAGLAVLJE I PODNOŽJE ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{{{IME_I_PREZIME}}}}
+\fancyhead[R]{\small\textit{{{KRATKI_NASLOV}}}}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ---- NASLOV RADA ----
+\title{%
+    \vspace{-1.5cm}%
+    {\fontsize{16pt}{19pt}\selectfont\bfseries\uppercase{{{NASLOV_RADA}}}}%
+    \vspace{0.3cm}%
+}
+\author{%
+    {\fontsize{12pt}{14pt}\selectfont {{IME_I_PREZIME}}}\\[2pt]
+    {\small\textit{{{INSTITUCIJA}}}}\\[2pt]
+    {\small\textit{{{EMAIL}}}}%
+}
+\date{}
+
+% ---- HYPERLINK POSTAVKE ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    urlcolor=blue
+}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{fancy}
+
+% ---- SAŽETAK I KLJUČNE RIJEČI ----
+\begin{abstract}
+\noindent {{SAZETAK}}
+
+\vspace{0.3cm}
+\noindent \textbf{Ključne riječi:} {{KLJUCNE_RIJECI}}
+\end{abstract}
+
+\vspace{0.5cm}
+
+% ---- SADRŽAJ RADA ----
+
+\section{UVOD}
+{{UVOD}}
+
+{{SADRZAJ}}
+
+\section{ZAKLJUČAK}
+{{ZAKLJUCAK}}
+
+% ---- LITERATURA ----
+\begin{thebibliography}{99}
+{{LITERATURA}}
+\end{thebibliography}
+
+\end{document}

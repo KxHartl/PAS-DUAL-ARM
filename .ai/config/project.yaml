@@ -1,0 +1,5 @@
+name: "Humanoidna zadaca 3"
+type: "seminar"              # seminar | thesis | paper | homework
+latex_format: "fsb-seminar"  # fsb-seminar | fsb-thesis | kx-paper
+rag_mode: "none"             # none | cloud | local
+brain_mode: "global"         # none | global
