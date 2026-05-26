@@ -7,7 +7,7 @@
   
   <!-- 1. OMNI BASE -->
   <!-- We include the omni_base description. It provides the base_link and wheels. -->
-  <xacro:include filename="$(find omni_base_description)/urdf/omni_base.urdf.xacro"/>
+  <xacro:include filename="$(find omni_base_description)/robots/omni_base.urdf.xacro"/>
 
   <!-- 2. DUAL ARM TORSO -->
   <!-- We include our custom torso and attach it to the base_link -->
@@ -15,7 +15,7 @@
   <!-- The origin here defines where the torso is mounted on the omni_base. 
        Let's place it at the center of the base, somewhat elevated. -->
   <xacro:dual_arm_torso parent="base_footprint">
-    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+    <origin xyz="0 0 0.2" rpy="0 0 -1.5708"/>
   </xacro:dual_arm_torso>
 
   <!-- 3. KINOVA GEN3 ARMS -->
@@ -38,7 +38,7 @@
     session_inactivity_timeout_ms="60000" 
     connection_inactivity_timeout_ms="2000" 
     sim_ignition="$(arg sim_ignition)">
-    <origin xyz="0.06 0.02 0.11" rpy="0 1.5708 0"/>
+    <origin xyz="0.060 0.047 0.112" rpy="-1.5708 0 0"/>
   </xacro:load_robot>
 
   <!-- Right Arm -->
@@ -58,7 +58,7 @@
     session_inactivity_timeout_ms="60000" 
     connection_inactivity_timeout_ms="2000" 
     sim_ignition="$(arg sim_ignition)">
-    <origin xyz="0.06 0.02 0.11" rpy="0 1.5708 0"/>
+    <origin xyz="0.060 0.047 0.112" rpy="-1.5708 0 0"/>
   </xacro:load_robot>
 
   <!-- 4. PAN-TILT & REALSENSE -->
@@ -66,14 +66,14 @@
   <xacro:include filename="$(find pan_tilt_description)/urdf/pan_tilt.urdf.xacro"/>
   <xacro:pan_tilt parent="torso_base_link">
     <!-- Place the pan-tilt at the top of the torso (Z=0.956) -->
-    <origin xyz="0 0 0.956" rpy="0 0 0"/>
+    <origin xyz="0 0 0.956" rpy="0 0 1.5708"/>
   </xacro:pan_tilt>
 
   <!-- Include Realsense D435 camera URDF -->
   <!-- Wait, realsense2_description uses _d435.urdf.xacro. -->
   <xacro:include filename="$(find realsense2_description)/urdf/_d435.urdf.xacro"/>
   <!-- Attach the camera to the pan_tilt top link -->
-  <xacro:sensor_d435 parent="tilt_link" name="camera" use_nominal_extrinsics="true">
+  <xacro:sensor_d435 parent="pan_tilt_surface" name="camera" use_nominal_extrinsics="true">
     <origin xyz="0 0 0.05" rpy="0 0 0"/>
   </xacro:sensor_d435>
 

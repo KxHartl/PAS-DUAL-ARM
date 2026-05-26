@@ -7,8 +7,12 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 
-install(
-  DIRECTORY launch urdf worlds config
+install(DIRECTORY
+  launch
+  urdf
+  worlds
+  config
+  rviz
   DESTINATION share/${PROJECT_NAME}
 )
 

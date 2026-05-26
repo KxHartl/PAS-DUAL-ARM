@@ -27,11 +27,13 @@ def generate_launch_description():
         parameters=[robot_description]
     )
 
+    rviz_config_file = os.path.join(pkg_share, 'rviz', 'display.rviz')
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
         name='rviz2',
-        output='screen'
+        output='screen',
+        arguments=['-d', rviz_config_file]
     )
 
     return LaunchDescription([
