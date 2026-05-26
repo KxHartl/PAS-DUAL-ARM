@@ -1,0 +1,22 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 1000  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    omni_base_controller:
+      type: diff_drive_controller/DiffDriveController # Note: Use an appropriate omni controller if diff drive is not suitable!
+      # We will refine the controller types later based on omni_base configs.
+
+    left_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    right_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    torso_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    pan_tilt_controller:
+      type: joint_trajectory_controller/JointTrajectoryController

@@ -74,8 +74,14 @@ for cmd in python3 python; do
 done
 
 if [[ -n "$python_cmd" ]]; then
-    if [[ ! -d "$root/.venv" ]]; then
-        $python_cmd -m venv "$root/.venv"
+    if [[ ! -x "$root/.venv/bin/pip" ]]; then
+        rm -rf "$root/.venv"
+
+        if ! $python_cmd -m venv "$root/.venv"; then
+            echo "  python3-venv nije dostupan, koristim virtualenv fallback..."
+            $python_cmd -m pip install --user -q virtualenv
+            $python_cmd -m virtualenv "$root/.venv"
+        fi
     fi
 
     pip_cmd="$root/.venv/bin/pip"

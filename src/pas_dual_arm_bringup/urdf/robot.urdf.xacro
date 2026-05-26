@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="dual_arm_robot">
+
+  <!-- Arguments -->
+  <xacro:arg name="use_sim_time" default="true"/>
+  <xacro:arg name="sim_ignition" default="true"/>
+  
+  <!-- 1. OMNI BASE -->
+  <!-- We include the omni_base description. It provides the base_link and wheels. -->
+  <xacro:include filename="$(find omni_base_description)/urdf/omni_base.urdf.xacro"/>
+
+  <!-- 2. DUAL ARM TORSO -->
+  <!-- We include our custom torso and attach it to the base_link -->
+  <xacro:include filename="$(find dual_arm_torso)/urdf/dual_arm_torso.urdf.xacro"/>
+  <!-- The origin here defines where the torso is mounted on the omni_base. 
+       Let's place it at the center of the base, somewhat elevated. -->
+  <xacro:dual_arm_torso parent="base_footprint">
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+  </xacro:dual_arm_torso>
+
+  <!-- 3. KINOVA GEN3 ARMS -->
+  <xacro:include filename="$(find kortex_description)/robots/kortex_robot.xacro"/>
+  
+  <!-- Left Arm -->
+  <xacro:load_robot 
+    parent="left_carriage_link" 
+    prefix="left_" 
+    arm="gen3" 
+    gripper="robotiq_2f_85" 
+    gripper_joint_name="left_robotiq_85_left_knuckle_joint"
+    dof="7" 
+    vision="true" 
+    robot_ip="xxx.yyy.zzz.www" 
+    username="admin" 
+    password="admin" 
+    port="10000" 
+    port_realtime="10001" 
+    session_inactivity_timeout_ms="60000" 
+    connection_inactivity_timeout_ms="2000" 
+    sim_ignition="$(arg sim_ignition)">
+    <origin xyz="0.06 0.02 0.11" rpy="0 1.5708 0"/>
+  </xacro:load_robot>
+
+  <!-- Right Arm -->
+  <xacro:load_robot 
+    parent="right_carriage_link" 
+    prefix="right_" 
+    arm="gen3" 
+    gripper="robotiq_2f_85" 
+    gripper_joint_name="right_robotiq_85_left_knuckle_joint"
+    dof="7" 
+    vision="true" 
+    robot_ip="xxx.yyy.zzz.www" 
+    username="admin" 
+    password="admin" 
+    port="10000" 
+    port_realtime="10001" 
+    session_inactivity_timeout_ms="60000" 
+    connection_inactivity_timeout_ms="2000" 
+    sim_ignition="$(arg sim_ignition)">
+    <origin xyz="0.06 0.02 0.11" rpy="0 1.5708 0"/>
+  </xacro:load_robot>
+
+  <!-- 4. PAN-TILT & REALSENSE -->
+  <!-- Include pan_tilt URDF -->
+  <xacro:include filename="$(find pan_tilt_description)/urdf/pan_tilt.urdf.xacro"/>
+  <xacro:pan_tilt parent="torso_base_link">
+    <!-- Place the pan-tilt at the top of the torso (Z=0.956) -->
+    <origin xyz="0 0 0.956" rpy="0 0 0"/>
+  </xacro:pan_tilt>
+
+  <!-- Include Realsense D435 camera URDF -->
+  <!-- Wait, realsense2_description uses _d435.urdf.xacro. -->
+  <xacro:include filename="$(find realsense2_description)/urdf/_d435.urdf.xacro"/>
+  <!-- Attach the camera to the pan_tilt top link -->
+  <xacro:sensor_d435 parent="tilt_link" name="camera" use_nominal_extrinsics="true">
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+  </xacro:sensor_d435>
+
+  <!-- 5. ROS2_CONTROL & GAZEBO IGNITION PLUGIN -->
+  <gazebo>
+    <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin">
+      <parameters>$(find pas_dual_arm_bringup)/config/controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+</robot>

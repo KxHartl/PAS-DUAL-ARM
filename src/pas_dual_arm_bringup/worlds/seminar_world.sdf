@@ -1,0 +1,183 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="seminar_world">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin
+      filename="libignition-gazebo-physics-system.so"
+      name="ignition::gazebo::systems::Physics">
+    </plugin>
+    <plugin
+      filename="libignition-gazebo-user-commands-system.so"
+      name="ignition::gazebo::systems::UserCommands">
+    </plugin>
+    <plugin
+      filename="libignition-gazebo-scene-broadcaster-system.so"
+      name="ignition::gazebo::systems::SceneBroadcaster">
+    </plugin>
+    <plugin
+      filename="libignition-gazebo-sensors-system.so"
+      name="ignition::gazebo::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    
+    <!-- Light -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- Ground Plane -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Wall with 0.8m Doorway -->
+    <model name="wall_with_door">
+      <static>true</static>
+      <pose>2.0 0 0 0 0 0</pose> <!-- Wall is 2 meters in front of origin -->
+      
+      <!-- Left part of the wall -->
+      <link name="wall_left">
+        <pose>0 1.4 1 0 0 0</pose>
+        <collision name="collision">
+          <geometry>
+            <box><size>0.2 2.0 2.0</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>0.2 2.0 2.0</size></box>
+          </geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient></material>
+        </visual>
+      </link>
+
+      <!-- Right part of the wall -->
+      <!-- Door is between Y=0.4 and Y=-0.4 (0.8m wide). So right wall starts at Y=-0.4 going negative -->
+      <link name="wall_right">
+        <pose>0 -1.4 1 0 0 0</pose>
+        <collision name="collision">
+          <geometry>
+            <box><size>0.2 2.0 2.0</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>0.2 2.0 2.0</size></box>
+          </geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient></material>
+        </visual>
+      </link>
+      
+      <!-- Top header above the door (from Z=2.0 to 2.5) -->
+      <link name="door_header">
+        <pose>0 0 2.25 0 0 0</pose>
+        <collision name="collision">
+          <geometry>
+            <box><size>0.2 0.8 0.5</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>0.2 0.8 0.5</size></box>
+          </geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- The Table (Final Destination) -->
+    <model name="target_table">
+      <static>true</static>
+      <!-- Placed 2m beyond the wall, so X=4.0, Y=0.0 -->
+      <pose>4.0 0 0 0 0 0</pose>
+      <link name="table_top">
+        <pose>0 0 0.75 0 0 0</pose>
+        <collision name="collision">
+          <geometry>
+            <box><size>1.0 1.5 0.05</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1.0 1.5 0.05</size></box>
+          </geometry>
+          <material><ambient>0.6 0.4 0.2 1</ambient></material>
+        </visual>
+      </link>
+      <!-- We can skip legs or add simple boxes for legs -->
+    </model>
+
+    <!-- The Box with Aruco Marker (Pick Target) -->
+    <model name="aruco_box">
+      <pose>1.0 0 0.15 0 0 0</pose> <!-- Placed before the door, X=1.0 -->
+      <link name="box_link">
+        <inertial>
+          <mass>1.0</mass>
+          <inertia>
+            <ixx>0.015</ixx>
+            <iyy>0.015</iyy>
+            <izz>0.015</izz>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <box><size>0.3 0.3 0.3</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>0.3 0.3 0.3</size></box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <pbr>
+              <metal>
+                <albedo_map>materials/textures/aruco_marker_0.png</albedo_map>
+              </metal>
+            </pbr>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>
