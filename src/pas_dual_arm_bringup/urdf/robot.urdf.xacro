@@ -15,7 +15,7 @@
   <!-- The origin here defines where the torso is mounted on the omni_base. 
        Let's place it at the center of the base, somewhat elevated. -->
   <xacro:dual_arm_torso parent="base_footprint">
-    <origin xyz="0 0 0.2" rpy="0 0 -1.5708"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
   </xacro:dual_arm_torso>
 
   <!-- 3. KINOVA GEN3 ARMS -->
@@ -38,7 +38,7 @@
     session_inactivity_timeout_ms="60000" 
     connection_inactivity_timeout_ms="2000" 
     sim_ignition="$(arg sim_ignition)">
-    <origin xyz="0.060 0.047 0.112" rpy="-1.5708 0 0"/>
+    <origin xyz="0.060 0.0735 0.112" rpy="-1.5708 0 0"/>
   </xacro:load_robot>
 
   <!-- Right Arm -->
@@ -58,7 +58,7 @@
     session_inactivity_timeout_ms="60000" 
     connection_inactivity_timeout_ms="2000" 
     sim_ignition="$(arg sim_ignition)">
-    <origin xyz="0.060 0.047 0.112" rpy="-1.5708 0 0"/>
+    <origin xyz="0.060 0.0735 0.112" rpy="-1.5708 0 0"/>
   </xacro:load_robot>
 
   <!-- 4. PAN-TILT & REALSENSE -->
@@ -66,7 +66,7 @@
   <xacro:include filename="$(find pan_tilt_description)/urdf/pan_tilt.urdf.xacro"/>
   <xacro:pan_tilt parent="torso_base_link">
     <!-- Place the pan-tilt at the top of the torso (Z=0.956) -->
-    <origin xyz="0 0 0.956" rpy="0 0 1.5708"/>
+    <origin xyz="0 0 0.956" rpy="0 0 0"/>
   </xacro:pan_tilt>
 
   <!-- Include Realsense D435 camera URDF -->
