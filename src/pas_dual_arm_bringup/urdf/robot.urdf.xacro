@@ -15,7 +15,7 @@
   <!-- The origin here defines where the torso is mounted on the omni_base. 
        Let's place it at the center of the base, somewhat elevated. -->
   <xacro:dual_arm_torso parent="base_footprint">
-    <origin xyz="0.026 -0.143 0.2" rpy="0 0 0"/>
+    <origin xyz="0.026 -0.143 0.31" rpy="0 0 0"/>
   </xacro:dual_arm_torso>
 
   <!-- 3. KINOVA GEN3 ARMS -->
@@ -65,8 +65,8 @@
   <!-- Include pan_tilt URDF -->
   <xacro:include filename="$(find pan_tilt_description)/urdf/pan_tilt.urdf.xacro"/>
   <xacro:pan_tilt parent="torso_base_link">
-    <!-- Place the pan-tilt at the top of the torso (Z=0.956) -->
-    <origin xyz="0 0 0.956" rpy="0 0 0"/>
+    <!-- Place the pan-tilt at the center of the front beam -->
+    <origin xyz="0.237 0.143 0.956" rpy="0 0 0"/>
   </xacro:pan_tilt>
 
   <!-- Include Realsense D435 camera URDF -->
@@ -74,7 +74,7 @@
   <xacro:include filename="$(find realsense2_description)/urdf/_d435.urdf.xacro"/>
   <!-- Attach the camera to the pan_tilt top link -->
   <xacro:sensor_d435 parent="pan_tilt_surface" name="camera" use_nominal_extrinsics="true">
-    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </xacro:sensor_d435>
 
   <!-- 5. ROS2_CONTROL & GAZEBO IGNITION PLUGIN -->
