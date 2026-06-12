@@ -1,7 +1,13 @@
 # Stanje Projekta (State)
 
-**Trenutna faza**: Početno postavljanje radnog okruženja dovršeno, prelazak na Fazu 2 (URDF).
-**Datum zadnje izmjene**: Automatsko ažuriranje
+**Trenutna faza**: URDF geometrija dovršena i vizualno provjerena u RViz-u.
+**Datum zadnje izmjene**: 2026-06-12
+
+## Provjereno (2026-06-12)
+- Integralni URDF (`robot.urdf.xacro`) se parsira čisto (111 zglobova).
+- RViz `display.launch.py`: robot izgleda ispravno, geometrija i mjere točne.
+- Zglobovi se ispravno rotiraju preko `joint_state_publisher_gui`.
+- Napomena: za lokalno pokretanje koristiti Fast DDS (`RMW_IMPLEMENTATION=rmw_fastrtps_cpp`); globalni `rmw_zenoh` iz `.bashrc` traži vanjski router.
 
 ## Preuzeti Repozitoriji (src/)
 Svi su klonirani na `humble` / `humble-devel` / ispravne grane za ROS2:
