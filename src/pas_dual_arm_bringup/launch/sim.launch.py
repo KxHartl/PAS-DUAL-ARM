@@ -1,4 +1,6 @@
 import os
+import re
+import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -45,8 +47,15 @@ def generate_launch_description():
     )
     
     # 2. Robot State Publisher
-    robot_description = {'robot_description': ParameterValue(
-        Command(['xacro ', urdf_file, ' sim_ignition:=true']), value_type=str)}
+    # Expand the xacro here (at launch time) and post-process it. The PAL omni_base
+    # mirrors its left-side parts (antennas, suspensions, wheels) with NEGATIVE mesh
+    # scales (e.g. scale="1 -1 1"); DART asserts (scale > 0) on collision meshes and
+    # aborts the whole Gazebo server. Strip the minus signs from every scale attribute
+    # (visually negligible) so physics can build the collision shapes.
+    robot_xml = subprocess.check_output(
+        ['xacro', urdf_file, 'sim_ignition:=true']).decode('utf-8')
+    robot_xml = re.sub(r'(scale="[0-9. ]*)-([0-9])', r'\1\2', robot_xml)
+    robot_description = {'robot_description': robot_xml}
     node_robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
