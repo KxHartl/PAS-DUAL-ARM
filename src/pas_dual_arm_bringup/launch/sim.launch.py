@@ -2,14 +2,21 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     pkg_bringup = get_package_share_directory('pas_dual_arm_bringup')
+
+    # Force Fast DDS for local sim. The user's ~/.bashrc globally sets rmw_zenoh_cpp
+    # with a ZENOH_CONFIG_OVERRIDE pointing at an external router (192.168.0.14:7447)
+    # that is not available locally; without this override every node aborts on startup.
+    rmw_env = SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')
+    zenoh_env = SetEnvironmentVariable('ZENOH_CONFIG_OVERRIDE', '')
     
     # Arguments
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
@@ -26,7 +33,8 @@ def generate_launch_description():
     )
     
     # 2. Robot State Publisher
-    robot_description = {'robot_description': Command(['xacro ', urdf_file, ' sim_ignition:=true'])}
+    robot_description = {'robot_description': ParameterValue(
+        Command(['xacro ', urdf_file, ' sim_ignition:=true']), value_type=str)}
     node_robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -58,17 +66,35 @@ def generate_launch_description():
     )
 
     # 5. Controller Spawners
-    joint_state_broadcaster_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['joint_state_broadcaster'],
-        output='screen'
-    )
+    # Each spawner blocks until controller_manager (loaded by the ign_ros2_control
+    # plugin inside Gazebo) is available, so ordering relative to the GZ server is safe.
+    def spawner(name):
+        return Node(
+            package='controller_manager',
+            executable='spawner',
+            # Large CM timeout: Gazebo Fortress needs ~50-60 s to load this big model,
+            # so a short default makes spawners retry and double-load ("already loaded").
+            arguments=[name, '--controller-manager-timeout', '120'],
+            output='screen',
+        )
+
+    controller_names = [
+        'joint_state_broadcaster',
+        'left_arm_controller',
+        'right_arm_controller',
+        'torso_controller',
+        'pan_tilt_controller',
+        'left_gripper_controller',
+        'right_gripper_controller',
+    ]
+    controller_spawners = [spawner(n) for n in controller_names]
 
     return LaunchDescription([
+        rmw_env,
+        zenoh_env,
         gz_sim,
         node_robot_state_publisher,
         node_spawn_entity,
         node_ros_gz_bridge,
-        joint_state_broadcaster_spawner
+        *controller_spawners,
     ])

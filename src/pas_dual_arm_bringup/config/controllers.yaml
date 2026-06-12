@@ -1,13 +1,10 @@
 controller_manager:
   ros__parameters:
-    update_rate: 1000  # Hz
+    update_rate: 100  # Hz
+    use_sim_time: true
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
-
-    omni_base_controller:
-      type: diff_drive_controller/DiffDriveController # Note: Use an appropriate omni controller if diff drive is not suitable!
-      # We will refine the controller types later based on omni_base configs.
 
     left_arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
@@ -20,3 +17,78 @@ controller_manager:
 
     pan_tilt_controller:
       type: joint_trajectory_controller/JointTrajectoryController
+
+    left_gripper_controller:
+      type: position_controllers/GripperActionController
+
+    right_gripper_controller:
+      type: position_controllers/GripperActionController
+
+# NOTE: the omnidirectional base is NOT driven through ros2_control. The PAL
+# omni_base ros2_control block targets Gazebo Classic (gazebo_ros2_control/GazeboSystem)
+# and cannot be loaded by the ign_ros2_control plugin. In Ignition Fortress the base is
+# driven by the MecanumDrive system plugin via /cmd_vel (see robot.urdf.xacro).
+
+left_arm_controller:
+  ros__parameters:
+    joints:
+      - left_joint_1
+      - left_joint_2
+      - left_joint_3
+      - left_joint_4
+      - left_joint_5
+      - left_joint_6
+      - left_joint_7
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+right_arm_controller:
+  ros__parameters:
+    joints:
+      - right_joint_1
+      - right_joint_2
+      - right_joint_3
+      - right_joint_4
+      - right_joint_5
+      - right_joint_6
+      - right_joint_7
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+torso_controller:
+  ros__parameters:
+    joints:
+      - torso_left_carriage_joint
+      - torso_right_carriage_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+pan_tilt_controller:
+  ros__parameters:
+    joints:
+      - pan_tilt_yaw_joint
+      - pan_tilt_pitch_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+left_gripper_controller:
+  ros__parameters:
+    joint: left_robotiq_85_left_knuckle_joint
+    allow_stalling: true
+
+right_gripper_controller:
+  ros__parameters:
+    joint: right_robotiq_85_left_knuckle_joint
+    allow_stalling: true

@@ -6,8 +6,17 @@
   <xacro:arg name="sim_ignition" default="true"/>
   
   <!-- 1. OMNI BASE -->
-  <!-- We include the omni_base description. It provides the base_link and wheels. -->
-  <xacro:include filename="$(find omni_base_description)/robots/omni_base.urdf.xacro"/>
+  <!-- We include ONLY the structural part of the omni_base (base_link, base_footprint,
+       wheels, lasers, imu). We deliberately do NOT include robots/omni_base.urdf.xacro,
+       because it appends a ros2_control block bound to gazebo_ros2_control/GazeboSystem
+       (Gazebo Classic), which the ign_ros2_control plugin cannot load under Fortress.
+       The base is instead driven by the Ignition MecanumDrive plugin (see section 5). -->
+  <xacro:property name="namespace" value=""/>
+  <xacro:property name="is_public_sim" value="true"/>
+  <xacro:include filename="$(find pal_urdf_utils)/urdf/materials.urdf.xacro"/>
+  <xacro:include filename="$(find pal_urdf_utils)/urdf/deg_to_rad.urdf.xacro"/>
+  <xacro:include filename="$(find omni_base_description)/urdf/base/base_sensors.urdf.xacro"/>
+  <xacro:base_sensors name="base" front_laser_model="sick-571" rear_laser_model="sick-571"/>
 
   <!-- 2. DUAL ARM TORSO -->
   <!-- We include our custom torso and attach it to the base_link -->
@@ -77,10 +86,74 @@
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </xacro:sensor_d435>
 
-  <!-- 5. ROS2_CONTROL & GAZEBO IGNITION PLUGIN -->
+  <!-- 5. ROS2_CONTROL FOR TORSO AND PAN-TILT -->
+  <!-- The Kinova arms and Robotiq grippers already declare their own
+       ign_ros2_control blocks (via load_robot, sim_ignition:=true). The custom torso
+       carriages and the pan-tilt joints do not, so we declare them here. -->
+  <ros2_control name="torso_system" type="system">
+    <hardware>
+      <plugin>ign_ros2_control/IgnitionSystem</plugin>
+    </hardware>
+    <joint name="torso_left_carriage_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.05</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="torso_right_carriage_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.05</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <ros2_control name="pan_tilt_system" type="system">
+    <hardware>
+      <plugin>ign_ros2_control/IgnitionSystem</plugin>
+    </hardware>
+    <joint name="pan_tilt_yaw_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="pan_tilt_pitch_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <!-- 6. IGNITION SYSTEM PLUGINS -->
   <gazebo>
+    <!-- ros2_control manager: loads ALL ros2_control blocks (arms, grippers, torso, pan-tilt) -->
     <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin">
       <parameters>$(find pas_dual_arm_bringup)/config/controllers.yaml</parameters>
+    </plugin>
+
+    <!-- Omnidirectional base drive (replaces PAL's Gazebo-Classic planar_move).
+         Subscribes to /cmd_vel (Twist) and publishes /odom + odom->base_footprint TF. -->
+    <plugin filename="ignition-gazebo-mecanum-drive-system"
+            name="ignition::gazebo::systems::MecanumDrive">
+      <front_left_joint>wheel_front_left_joint</front_left_joint>
+      <front_right_joint>wheel_front_right_joint</front_right_joint>
+      <back_left_joint>wheel_rear_left_joint</back_left_joint>
+      <back_right_joint>wheel_rear_right_joint</back_right_joint>
+      <wheel_separation>0.44715</wheel_separation>
+      <wheelbase>0.488</wheelbase>
+      <wheel_radius>0.0762</wheel_radius>
+      <topic>cmd_vel</topic>
+      <odom_topic>odom</odom_topic>
+      <tf_topic>tf</tf_topic>
+      <frame_id>odom</frame_id>
+      <child_frame_id>base_footprint</child_frame_id>
+      <odom_publish_frequency>50</odom_publish_frequency>
     </plugin>
   </gazebo>
 
