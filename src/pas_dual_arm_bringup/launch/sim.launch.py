@@ -17,7 +17,19 @@ def generate_launch_description():
     # that is not available locally; without this override every node aborts on startup.
     rmw_env = SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')
     zenoh_env = SetEnvironmentVariable('ZENOH_CONFIG_OVERRIDE', '')
-    
+
+    # Let Ignition resolve package:// mesh URIs. Kinova meshes are emitted as absolute
+    # file:// paths, but the omni_base, torso and pan_tilt meshes stay as package://,
+    # which Fortress cannot resolve unless every package's share dir is on the resource
+    # path. Without this, the base/torso/pan-tilt are invisible (only the arms render).
+    share_dirs = [os.path.join(p, 'share')
+                  for p in os.environ.get('AMENT_PREFIX_PATH', '').split(':') if p]
+    resource_path = ':'.join(share_dirs)
+    existing_res = os.environ.get('IGN_GAZEBO_RESOURCE_PATH', '')
+    if existing_res:
+        resource_path = resource_path + ':' + existing_res
+    ign_resource_env = SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', resource_path)
+
     # Arguments
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     
@@ -92,6 +104,7 @@ def generate_launch_description():
     return LaunchDescription([
         rmw_env,
         zenoh_env,
+        ign_resource_env,
         gz_sim,
         node_robot_state_publisher,
         node_spawn_entity,
