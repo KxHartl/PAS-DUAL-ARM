@@ -65,8 +65,8 @@
   <!-- Include pan_tilt URDF -->
   <xacro:include filename="$(find pan_tilt_description)/urdf/pan_tilt.urdf.xacro"/>
   <xacro:pan_tilt parent="torso_base_link">
-    <!-- Place the pan-tilt at the center of the front beam -->
-    <origin xyz="0.237 0.143 0.956" rpy="0 0 0"/>
+    <!-- Place the pan-tilt on the front beam (moved back to sit on the beam) -->
+    <origin xyz="0.060 0.143 0.956" rpy="0 0 0"/>
   </xacro:pan_tilt>
 
   <!-- Include Realsense D435 camera URDF -->
