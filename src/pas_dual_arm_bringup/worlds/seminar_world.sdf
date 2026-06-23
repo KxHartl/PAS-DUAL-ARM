@@ -65,14 +65,14 @@
       </link>
     </model>
 
-    <!-- Wall with 0.8m Doorway -->
+    <!-- Wall with 1.2m Doorway (= 2x the 0.6m robot width) -->
     <model name="wall_with_door">
       <static>true</static>
       <pose>2.0 0 0 0 0 0</pose> <!-- Wall is 2 meters in front of origin -->
-      
-      <!-- Left part of the wall -->
+
+      <!-- Left part of the wall (inner edge at Y=0.6 -> 1.2m opening) -->
       <link name="wall_left">
-        <pose>0 1.4 1 0 0 0</pose>
+        <pose>0 1.6 1 0 0 0</pose>
         <collision name="collision">
           <geometry>
             <box><size>0.2 2.0 2.0</size></box>
@@ -87,9 +87,9 @@
       </link>
 
       <!-- Right part of the wall -->
-      <!-- Door is between Y=0.4 and Y=-0.4 (0.8m wide). So right wall starts at Y=-0.4 going negative -->
+      <!-- Door is between Y=-0.6 and Y=0.6 (1.2m wide). -->
       <link name="wall_right">
-        <pose>0 -1.4 1 0 0 0</pose>
+        <pose>0 -1.6 1 0 0 0</pose>
         <collision name="collision">
           <geometry>
             <box><size>0.2 2.0 2.0</size></box>
@@ -108,12 +108,12 @@
         <pose>0 0 2.25 0 0 0</pose>
         <collision name="collision">
           <geometry>
-            <box><size>0.2 0.8 0.5</size></box>
+            <box><size>0.2 1.2 0.5</size></box>
           </geometry>
         </collision>
         <visual name="visual">
           <geometry>
-            <box><size>0.2 0.8 0.5</size></box>
+            <box><size>0.2 1.2 0.5</size></box>
           </geometry>
           <material><ambient>0.5 0.5 0.5 1</ambient></material>
         </visual>

@@ -6,7 +6,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -34,16 +34,25 @@ def generate_launch_description():
 
     # Arguments
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
-    
+    # headless:=true runs the Gazebo server only (no GUI). The GUI renderer is
+    # CPU-hungry and, on a loaded machine, starves the gz_ros2_control update
+    # loop enough that controller activation times out; headless is reliable for
+    # automated runs.
+    headless = LaunchConfiguration('headless', default='false')
+    headless_arg = DeclareLaunchArgument('headless', default_value='false')
+
     world_file = os.path.join(pkg_bringup, 'worlds', 'seminar_world.sdf')
     urdf_file = os.path.join(pkg_bringup, 'urdf', 'robot.urdf.xacro')
-    
-    # 1. Gazebo Ignition Server
+
+    # 1. Gazebo Ignition Server. PythonExpression picks server-only (-s) args when
+    # headless, full (GUI) args otherwise.
+    gz_args = PythonExpression(
+        ["('-s -r ' if '", headless, "'=='true' else '-r ') + '", world_file, "'"])
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([FindPackageShare('ros_gz_sim'), 'launch', 'gz_sim.launch.py'])
         ),
-        launch_arguments={'gz_args': f'-r {world_file}'}.items(),
+        launch_arguments={'gz_args': gz_args}.items(),
     )
     
     # 2. Robot State Publisher
@@ -120,6 +129,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        headless_arg,
         rmw_env,
         zenoh_env,
         ign_resource_env,
