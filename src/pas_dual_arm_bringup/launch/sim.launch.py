@@ -101,6 +101,7 @@ def generate_launch_description():
 
     controller_names = [
         'joint_state_broadcaster',
+        'base_controller',
         'left_arm_controller',
         'right_arm_controller',
         'torso_controller',
@@ -110,6 +111,14 @@ def generate_launch_description():
     ]
     controller_spawners = [spawner(n) for n in controller_names]
 
+    # Nav2/teleop publish Twist on /cmd_vel; the diff_drive controller listens on
+    # its namespaced topic, so relay between them.
+    cmd_vel_relay = Node(
+        package='pas_dual_arm_scripts',
+        executable='cmd_vel_relay',
+        output='screen',
+    )
+
     return LaunchDescription([
         rmw_env,
         zenoh_env,
@@ -118,5 +127,6 @@ def generate_launch_description():
         node_robot_state_publisher,
         node_spawn_entity,
         node_ros_gz_bridge,
+        cmd_vel_relay,
         *controller_spawners,
     ])

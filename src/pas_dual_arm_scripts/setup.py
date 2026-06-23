@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'aruco_detector = pas_dual_arm_scripts.aruco_detector:main',
+            'cmd_vel_relay = pas_dual_arm_scripts.cmd_vel_relay:main',
             'main_task = pas_dual_arm_scripts.main_task:main',
         ],
     },

@@ -86,6 +86,24 @@
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </xacro:sensor_d435>
 
+  <!-- 4.4 WHEEL FRICTION OVERRIDE -->
+  <!-- PAL's wheel.gazebo.xacro sets mu1=mu2=0.0 on every wheel (their Classic sim
+       drives the base kinematically with planar_move, so wheels are decorative).
+       Our diff_drive base actually rolls on the wheels, so give them traction. -->
+  <xacro:macro name="wheel_friction" params="side">
+    <gazebo reference="wheel_${side}_link">
+      <mu1>1.5</mu1>
+      <mu2>1.5</mu2>
+      <kp>1000000.0</kp>
+      <kd>1000.0</kd>
+      <minDepth>0.003</minDepth>
+    </gazebo>
+  </xacro:macro>
+  <xacro:wheel_friction side="front_left"/>
+  <xacro:wheel_friction side="front_right"/>
+  <xacro:wheel_friction side="rear_left"/>
+  <xacro:wheel_friction side="rear_right"/>
+
   <!-- 4.5 IGNITION SENSORS -->
   <!-- The PAL base ships Gazebo-Classic gpu_ray lasers and the RealSense macro has no
        Gazebo sensor at all, so neither emits under Fortress. We add native Ignition
@@ -149,6 +167,37 @@
   <!-- The Kinova arms and Robotiq grippers already declare their own
        ign_ros2_control blocks (via load_robot, sim_ignition:=true). The custom torso
        carriages and the pan-tilt joints do not, so we declare them here. -->
+  <!-- Wheel drive through ros2_control (velocity interfaces) + diff_drive_controller.
+       The PAL ros2_control block targets Gazebo Classic and the Fortress built-in
+       drive systems (MecanumDrive/VelocityControl) never instantiate on this
+       install, while gz_ros2_control demonstrably works - so the wheels are driven
+       the same way as every other joint of this robot. -->
+  <ros2_control name="base_wheels_system" type="system">
+    <hardware>
+      <plugin>ign_ros2_control/IgnitionSystem</plugin>
+    </hardware>
+    <joint name="wheel_front_left_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="wheel_front_right_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="wheel_rear_left_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="wheel_rear_right_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
   <ros2_control name="torso_system" type="system">
     <hardware>
       <plugin>ign_ros2_control/IgnitionSystem</plugin>
@@ -196,24 +245,10 @@
       <parameters>$(find pas_dual_arm_bringup)/config/controllers.yaml</parameters>
     </plugin>
 
-    <!-- Omnidirectional base drive (replaces PAL's Gazebo-Classic planar_move).
-         Subscribes to /cmd_vel (Twist) and publishes /odom + odom->base_footprint TF. -->
-    <plugin filename="ignition-gazebo-mecanum-drive-system"
-            name="ignition::gazebo::systems::MecanumDrive">
-      <front_left_joint>wheel_front_left_joint</front_left_joint>
-      <front_right_joint>wheel_front_right_joint</front_right_joint>
-      <back_left_joint>wheel_rear_left_joint</back_left_joint>
-      <back_right_joint>wheel_rear_right_joint</back_right_joint>
-      <wheel_separation>0.44715</wheel_separation>
-      <wheelbase>0.488</wheelbase>
-      <wheel_radius>0.0762</wheel_radius>
-      <topic>cmd_vel</topic>
-      <odom_topic>odom</odom_topic>
-      <tf_topic>tf</tf_topic>
-      <frame_id>odom</frame_id>
-      <child_frame_id>base_footprint</child_frame_id>
-      <odom_publish_frequency>50</odom_publish_frequency>
-    </plugin>
+    <!-- Base motion + odometry are handled by the ros2_control diff_drive
+         base_controller (see base_wheels_system above and controllers.yaml).
+         The Fortress built-in drive systems (MecanumDrive, VelocityControl) were
+         tried first but never instantiate on this install. -->
   </gazebo>
 
 </robot>

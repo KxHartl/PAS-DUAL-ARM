@@ -24,10 +24,32 @@ controller_manager:
     right_gripper_controller:
       type: position_controllers/GripperActionController
 
-# NOTE: the omnidirectional base is NOT driven through ros2_control. The PAL
-# omni_base ros2_control block targets Gazebo Classic (gazebo_ros2_control/GazeboSystem)
-# and cannot be loaded by the ign_ros2_control plugin. In Ignition Fortress the base is
-# driven by the MecanumDrive system plugin via /cmd_vel (see robot.urdf.xacro).
+    base_controller:
+      type: diff_drive_controller/DiffDriveController
+
+# The base wheels are driven through ros2_control like every other joint (the PAL
+# ros2_control block targets Gazebo Classic, and the Fortress built-in drive
+# systems never instantiate on this install). 4-wheel skid-steer via
+# diff_drive_controller gives x + yaw, which is all the task needs, and provides
+# wheel-encoder odometry + odom->base_footprint TF like on a real robot.
+base_controller:
+  ros__parameters:
+    left_wheel_names: [wheel_front_left_joint, wheel_rear_left_joint]
+    right_wheel_names: [wheel_front_right_joint, wheel_rear_right_joint]
+    wheel_separation: 0.44715
+    wheel_radius: 0.0762
+    use_stamped_vel: false
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+    enable_odom_tf: true
+    publish_rate: 50.0
+    cmd_vel_timeout: 0.5
+    linear.x.has_velocity_limits: true
+    linear.x.max_velocity: 0.6
+    linear.x.min_velocity: -0.6
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 1.0
+    angular.z.min_velocity: -1.0
 
 left_arm_controller:
   ros__parameters:
