@@ -1,6 +1,6 @@
 # Stanje Projekta (State)
 
-**Trenutna faza**: Autonomna navigacija (Nav2) radi end-to-end u simulaciji.
+**Trenutna faza**: Puni pick-carry-place zadatak radi end-to-end u simulaciji.
 **Datum zadnje izmjene**: 2026-06-23
 
 ## Završeni Milestoneovi (commitano)
@@ -9,6 +9,28 @@
 - **M3** — Puni MoveIt2 config za dual-arm (`pas_dual_arm_moveit_config`).
 - **M4** — Aruco detekcija (DICT_4X4_50, ID 0) preko kamere.
 - **M5** — Nav2 autonomna navigacija s diff_drive bazom (vidi dolje).
+- **M6** — Puna orkestracija zadatka (`main_task.py`): hvatanje → nošenje kroz vrata → odlaganje.
+
+## M6 — Pick-Carry-Place (provjereno end-to-end 2026-06-23, headless)
+Slijed (`main_task.py`, state machine, sve preko stvarnih akcija):
+nav do kutije → pan-tilt pogled + Aruco → ready poza → spuštanje klizača →
+dvoručni grasp → zatvaranje hvataljki → podizanje → **uvlačenje laktova** →
+staging ispred vrata → prolazak kroz vrata → odlaganje na stol → otpuštanje → retract.
+Pokrenuti: `sim.launch.py headless:=true`, `nav2.launch.py`, `task.launch.py`.
+- Grasp: klizači se spuste (0.05) da visoko montirane ruke dosegnu kutiju na podu;
+  svaka ruka se planira ZASEBNO (left_arm/right_arm) s labavom orijentacijom + retry
+  (RRTConnect je nasumičan pa pojedini pokušaj zna vratiti put s kolizijom). Obje ruke
+  potvrđeno dosežu bočne strane kutije (z=0.30, base_link).
+- `ARM_CARRY` poza uvlači laktove (~0.6 m raspon) za prolaz kroz vrata.
+- Vrata proširena na **1.2 m** (= 2× širina robota 0.6 m) u `seminar_world.sdf`;
+  `inflation_radius` 0.35 → 0.15 da prolaz bude prohodan.
+- `sim.launch.py headless:=true` (samo server) — GUI renderer inače gladuje
+  gz_ros2_control petlju pa aktivacija kontrolera istekne na opterećenom stroju.
+- Otvoreno za fino ugađanje: baza se pri odlaganju slegne malo kraće od cilja
+  (~x=2.5 umjesto 3.0) jer pokreti ruku pomaknu bazu; Aruco se u simu još ne detektira
+  pouzdano (kamera/kut), pa se koristi nominalna poza kutije kao fallback.
+
+## M5 — Nav2 (provjereno uživo 2026-06-23)
 
 ## M5 — Nav2 (provjereno uživo 2026-06-23)
 - `base_controller` (diff_drive_controller) vozi 4 kotača bazne ploče, daje wheel-odometriju
