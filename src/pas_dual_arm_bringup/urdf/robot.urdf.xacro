@@ -178,10 +178,13 @@
     </sensor>
   </gazebo>
 
-  <!-- RGB camera on the pan-tilt RealSense, for Aruco detection -->
+  <!-- RGBD camera on the pan-tilt RealSense: RGB for Aruco marker detection
+       (camera/image) + depth image and point cloud (camera/depth_image,
+       camera/points) so the box pose and dimensions can be measured by the
+       depth sensor for the grasp plan. -->
   <gazebo reference="camera_link">
-    <sensor name="rgb_camera" type="camera">
-      <topic>camera/image</topic>
+    <sensor name="rgbd_camera" type="rgbd_camera">
+      <topic>camera</topic>
       <update_rate>15</update_rate>
       <always_on>1</always_on>
       <visualize>true</visualize>
@@ -197,6 +200,12 @@
           <near>0.1</near>
           <far>20.0</far>
         </clip>
+        <depth_camera>
+          <clip>
+            <near>0.1</near>
+            <far>10.0</far>
+          </clip>
+        </depth_camera>
       </camera>
     </sensor>
   </gazebo>

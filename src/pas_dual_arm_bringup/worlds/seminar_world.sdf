@@ -142,22 +142,20 @@
       <!-- We can skip legs or add simple boxes for legs -->
     </model>
 
-    <!-- Pick table: a low table the bar rests on. Raising the target off the
-         floor puts it near the arms' mounting height so they reach it more
-         naturally (less contortion) than reaching all the way down. Top surface
-         at Z=0.20. Kept shallow/back so it does not block the base or the Nav2
-         approach; the bar sits on its front edge. -->
+    <!-- Pick table: a low table (top at Z=0.20) to the RIGHT of the robot, so
+         the robot must turn to find it. Square slab so the bar can sit at any
+         yaw; the box is found/measured by the depth camera, not assumed. -->
     <model name="pick_table">
       <static>true</static>
-      <pose>1.10 0 0 0 0 0</pose>
+      <pose>1.2 -2.0 0 0 0 0</pose>
       <link name="table">
         <collision name="slab_c">
           <pose>0 0 0.18 0 0 0</pose>
-          <geometry><box><size>0.5 0.6 0.04</size></box></geometry>
+          <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
         </collision>
         <visual name="slab_v">
           <pose>0 0 0.18 0 0 0</pose>
-          <geometry><box><size>0.5 0.6 0.04</size></box></geometry>
+          <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
           <material><ambient>0.5 0.35 0.2 1</ambient><diffuse>0.5 0.35 0.2 1</diffuse></material>
         </visual>
         <collision name="pillar_c">
@@ -172,13 +170,45 @@
       </link>
     </model>
 
-    <!-- The Pick Target: a bar elongated left-right (Y), resting on the pick
-         table. The 85 mm Robotiq grippers cannot wrap a wide box, so the gripped
-         cross-section is 0.07 m (fits the gripper with margin); each arm grips
-         one end (a real dual-arm form-closure grasp). 0.07x0.30x0.10 m, 0.5 kg.
-         Sits on the table front edge: top surface 0.20 + half height 0.05 -> centre Z=0.25. -->
+    <!-- Marker sign: a large (0.195 m) Aruco panel on a post next to the table,
+         facing the robot's start so it is detectable from across the room during
+         the 360 scan (a small marker on the box is unreadable at ~2 m). It only
+         localises the table; the box itself is measured by the depth camera.
+         Panel +X face points toward the origin (yaw ~2.06 rad). -->
+    <model name="marker_sign">
+      <static>true</static>
+      <pose>1.0 -1.78 0 0 0 2.06</pose>
+      <link name="sign">
+        <visual name="post_v">
+          <pose>0 0 0.25 0 0 0</pose>
+          <geometry><box><size>0.04 0.04 0.5</size></box></geometry>
+          <material><ambient>0.2 0.2 0.2 1</ambient><diffuse>0.2 0.2 0.2 1</diffuse></material>
+        </visual>
+        <visual name="panel_v">
+          <pose>0 0 0.6 0 0 0</pose>
+          <geometry><box><size>0.01 0.26 0.26</size></box></geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0 0 0 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>materials/textures/aruco_marker_0.png</albedo_map>
+                <metalness>0.0</metalness>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- The Pick Target: a bar on the pick table. No marker on it - the depth
+         camera measures its pose and dimensions for the grasp. Gripped
+         cross-section 0.07 m fits the 85 mm gripper. 0.07x0.30x0.10 m, 0.5 kg,
+         centre Z = table top 0.20 + half height 0.05 = 0.25. -->
     <model name="aruco_box">
-      <pose>0.90 0 0.25 0 0 0</pose>
+      <pose>1.2 -2.0 0.25 0 0 0</pose>
       <link name="box_link">
         <inertial>
           <mass>0.5</mass>
@@ -196,8 +226,6 @@
           <geometry>
             <box><size>0.07 0.30 0.10</size></box>
           </geometry>
-          <!-- Friction + moderately stiff contact so the form-closure grip is
-               secure but does not blow up the contact solver. -->
           <surface>
             <friction>
               <ode>
@@ -218,30 +246,8 @@
             <box><size>0.07 0.30 0.10</size></box>
           </geometry>
           <material>
-            <ambient>0.8 0.8 0.2 1</ambient>
-            <diffuse>0.8 0.8 0.2 1</diffuse>
-          </material>
-        </visual>
-        <!-- Aruco marker decal on the -X face (the long face toward the robot).
-             A thin plate whose ±X faces (0.07 x 0.07) show the square marker;
-             the PNG carries a 12.5% white quiet zone, so the marker proper is
-             0.0525 m -> detector marker_size must match. -->
-        <visual name="marker">
-          <pose>-0.0355 0 0 0 0 0</pose>
-          <geometry>
-            <box><size>0.001 0.07 0.07</size></box>
-          </geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <pbr>
-              <metal>
-                <albedo_map>materials/textures/aruco_marker_0.png</albedo_map>
-                <metalness>0.0</metalness>
-                <roughness>1.0</roughness>
-              </metal>
-            </pbr>
+            <ambient>0.8 0.2 0.2 1</ambient>
+            <diffuse>0.8 0.2 0.2 1</diffuse>
           </material>
         </visual>
       </link>
