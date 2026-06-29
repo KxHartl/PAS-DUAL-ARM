@@ -74,8 +74,10 @@ class MainTask(Node):
         super().__init__('main_task_node')
 
         # --- tunable geometry (map frame unless noted) -----------------------
-        # Pre-grasp: stop ~0.5 m short of the box (box front face at X~0.85).
-        self.declare_parameter('pregrasp_xy', [0.45, 0.0])
+        # Pre-grasp: stop short of the pick table (table front edge at X~0.85, the
+        # bar's near face at X~0.865). Kept back so the base does not jam the
+        # table and Nav2 can reach the goal; the bar then sits at base_link X~0.55.
+        self.declare_parameter('pregrasp_xy', [0.35, 0.0])
         self.declare_parameter('pregrasp_yaw', 0.0)
         # Pre-place: just in front of the table (table front face at X~3.5).
         # Stop short of the table (front face at X=3.5) so the base footprint does
@@ -86,10 +88,9 @@ class MainTask(Node):
         # long robot threads it square instead of approaching off-center/angled.
         self.declare_parameter('door_xy', [1.5, 0.0])
         self.declare_parameter('door_yaw', 0.0)
-        # Bar and table heights for the arm targets (the bar centre sits low,
-        # ~0.03 m world; this base_link Z is calibrated against the grasp
-        # geometry telemetry).
-        self.declare_parameter('box_grasp_z', 0.18)
+        # Bar grasp height (base_link). The bar rests on the pick table, centre
+        # at ~0.25 m; calibrated against the grasp geometry telemetry.
+        self.declare_parameter('box_grasp_z', 0.25)
         self.declare_parameter('table_place_z', 0.85)
         # Half-extent in Y at which each gripper grips the bar (bar is 0.30 m
         # long -> ends at ±0.15; grip just inside the ends at ±0.13).
@@ -446,7 +447,7 @@ class MainTask(Node):
         # the end and close. A tight orientation tolerance is enforced so the
         # gripper actually points straight down and the fingers straddle the bar
         # (a wide tolerance lets IK pick a skewed wrist that misses the grip).
-        pre_l, pre_r = self.grasp_poses(box, z_offset=0.24)
+        pre_l, pre_r = self.grasp_poses(box, z_offset=0.20)
         self.plan_arm('left_arm', 'left_end_effector_link', pre_l,
                       'base_link', 'STEP3 pregrasp left', ori_tol=0.5)
         self.plan_arm('right_arm', 'right_end_effector_link', pre_r,
@@ -476,7 +477,7 @@ class MainTask(Node):
         #    the bar rides up held by the form-closure grip on its two ends. A
         #    tight orientation tolerance keeps the wrists pointing down so the
         #    pull-up stays vertical and does not twist the bar out of the grip.
-        lift_l, lift_r = self.grasp_poses(box, z_offset=0.27)
+        lift_l, lift_r = self.grasp_poses(box, z_offset=0.22)
         self.plan_arm('left_arm', 'left_end_effector_link', lift_l,
                       'base_link', 'STEP4 lift left', ori_tol=0.4)
         self.plan_arm('right_arm', 'right_end_effector_link', lift_r,

@@ -142,20 +142,51 @@
       <!-- We can skip legs or add simple boxes for legs -->
     </model>
 
-    <!-- The Pick Target: a bar elongated left-right (Y). The 85 mm Robotiq
-         grippers cannot wrap a 300 mm box, so the target is a 0.06 m square
-         cross-section bar 0.30 m long; each arm grips one end (a real dual-arm
-         form-closure grasp) and the carriages lift it. -->
+    <!-- Pick table: a low table the bar rests on. Raising the target off the
+         floor puts it near the arms' mounting height so they reach it more
+         naturally (less contortion) than reaching all the way down. Top surface
+         at Z=0.20. Kept shallow/back so it does not block the base or the Nav2
+         approach; the bar sits on its front edge. -->
+    <model name="pick_table">
+      <static>true</static>
+      <pose>1.10 0 0 0 0 0</pose>
+      <link name="table">
+        <collision name="slab_c">
+          <pose>0 0 0.18 0 0 0</pose>
+          <geometry><box><size>0.5 0.6 0.04</size></box></geometry>
+        </collision>
+        <visual name="slab_v">
+          <pose>0 0 0.18 0 0 0</pose>
+          <geometry><box><size>0.5 0.6 0.04</size></box></geometry>
+          <material><ambient>0.5 0.35 0.2 1</ambient><diffuse>0.5 0.35 0.2 1</diffuse></material>
+        </visual>
+        <collision name="pillar_c">
+          <pose>0 0 0.08 0 0 0</pose>
+          <geometry><box><size>0.12 0.12 0.16</size></box></geometry>
+        </collision>
+        <visual name="pillar_v">
+          <pose>0 0 0.08 0 0 0</pose>
+          <geometry><box><size>0.12 0.12 0.16</size></box></geometry>
+          <material><ambient>0.4 0.28 0.16 1</ambient><diffuse>0.4 0.28 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- The Pick Target: a bar elongated left-right (Y), resting on the pick
+         table. The 85 mm Robotiq grippers cannot wrap a wide box, so the gripped
+         cross-section is 0.07 m (fits the gripper with margin); each arm grips
+         one end (a real dual-arm form-closure grasp). 0.07x0.30x0.10 m, 0.5 kg.
+         Sits on the table front edge: top surface 0.20 + half height 0.05 -> centre Z=0.25. -->
     <model name="aruco_box">
-      <pose>1.0 0 0.03 0 0 0</pose> <!-- before the door (X=1.0); rests on floor (Z=half of 0.06) -->
+      <pose>0.90 0 0.25 0 0 0</pose>
       <link name="box_link">
         <inertial>
           <mass>0.5</mass>
-          <!-- Solid box 0.06(X) x 0.30(Y) x 0.06(Z), m=0.5 kg -->
+          <!-- Solid box 0.07(X) x 0.30(Y) x 0.10(Z), m=0.5 kg -->
           <inertia>
-            <ixx>0.0039</ixx>
-            <iyy>0.0003</iyy>
-            <izz>0.0039</izz>
+            <ixx>0.0042</ixx>
+            <iyy>0.0006</iyy>
+            <izz>0.0040</izz>
             <ixy>0</ixy>
             <ixz>0</ixz>
             <iyz>0</iyz>
@@ -163,7 +194,7 @@
         </inertial>
         <collision name="collision">
           <geometry>
-            <box><size>0.06 0.30 0.06</size></box>
+            <box><size>0.07 0.30 0.10</size></box>
           </geometry>
           <!-- Friction + moderately stiff contact so the form-closure grip is
                secure but does not blow up the contact solver. -->
@@ -184,7 +215,7 @@
         </collision>
         <visual name="visual">
           <geometry>
-            <box><size>0.06 0.30 0.06</size></box>
+            <box><size>0.07 0.30 0.10</size></box>
           </geometry>
           <material>
             <ambient>0.8 0.8 0.2 1</ambient>
@@ -192,13 +223,13 @@
           </material>
         </visual>
         <!-- Aruco marker decal on the -X face (the long face toward the robot).
-             A thin plate whose ±X faces (0.05 x 0.05) show the square marker;
+             A thin plate whose ±X faces (0.07 x 0.07) show the square marker;
              the PNG carries a 12.5% white quiet zone, so the marker proper is
-             0.0375 m -> detector marker_size must match. -->
+             0.0525 m -> detector marker_size must match. -->
         <visual name="marker">
-          <pose>-0.0305 0 0 0 0 0</pose>
+          <pose>-0.0355 0 0 0 0 0</pose>
           <geometry>
-            <box><size>0.001 0.05 0.05</size></box>
+            <box><size>0.001 0.07 0.07</size></box>
           </geometry>
           <material>
             <ambient>1 1 1 1</ambient>
