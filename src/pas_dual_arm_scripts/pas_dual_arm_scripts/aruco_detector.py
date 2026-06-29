@@ -77,7 +77,11 @@ class ArucoDetector(Node):
         self.marker_frame = self.get_parameter('marker_frame').value
 
         dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-        self.detector = cv2.aruco.ArucoDetector(dictionary)
+        # Sub-pixel corner refinement gives markedly more stable corners (and
+        # therefore a steadier solvePnP pose) than the default contour corners.
+        params = cv2.aruco.DetectorParameters()
+        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+        self.detector = cv2.aruco.ArucoDetector(dictionary, params)
         self.camera_matrix = None
         self.dist_coeffs = None
 

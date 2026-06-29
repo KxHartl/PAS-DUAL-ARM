@@ -25,6 +25,8 @@ Run order (separate terminals, all with Fast DDS):
   ros2 launch pas_dual_arm_bringup task.launch.py   # move_group + aruco + this
 """
 import math
+import subprocess
+import threading
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -111,6 +113,18 @@ class MainTask(Node):
         # --- perception ------------------------------------------------------
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        # --- grasp-attach (box follows the grippers while held) --------------
+        # Ignition Fortress has no Classic grasp-fix plugin and a friction-only
+        # squeeze of a free box is unreliable in DART, so while the box is
+        # "grasped" a background thread pins the aruco_box model to the midpoint
+        # of the two grippers via the world set_pose service.
+        self.declare_parameter('world_name', 'seminar_world')
+        self.declare_parameter('box_model', 'aruco_box')
+        self.world_name = self.get_parameter('world_name').value
+        self.box_model = self.get_parameter('box_model').value
+        self._carry = False
+        self._carry_thread = None
 
         self.get_logger().info('Main task node ready.')
 
@@ -308,35 +322,113 @@ class MainTask(Node):
         self.get_logger().info(f'{label}: torso -> {height} m')
         return self._send_and_wait(self.torso, goal, label)
 
+    # ------------------------------------------------------------ grasp-attach
+    def _set_box_pose(self, x, y, z):
+        req = (f'name: "{self.box_model}", '
+               f'position: {{x: {x:.3f}, y: {y:.3f}, z: {z:.3f}}}, '
+               f'orientation: {{x: 0, y: 0, z: 0, w: 1}}')
+        subprocess.run(
+            ['ign', 'service', '-s', f'/world/{self.world_name}/set_pose',
+             '--reqtype', 'ignition.msgs.Pose',
+             '--reptype', 'ignition.msgs.Boolean',
+             '--timeout', '300', '--req', req],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def _carry_loop(self):
+        # The Ignition world frame coincides with the ROS map frame (the robot
+        # spawns at the world origin and SLAM initialises map there), so a
+        # map-frame end-effector position is already a world position.
+        while self._carry and rclpy.ok():
+            try:
+                lt = self.tf_buffer.lookup_transform(
+                    'map', 'left_end_effector_link', rclpy.time.Time())
+                rt = self.tf_buffer.lookup_transform(
+                    'map', 'right_end_effector_link', rclpy.time.Time())
+                lx, ly, lz = (lt.transform.translation.x,
+                              lt.transform.translation.y,
+                              lt.transform.translation.z)
+                rx, ry, rz = (rt.transform.translation.x,
+                              rt.transform.translation.y,
+                              rt.transform.translation.z)
+                # Midpoint of the two grippers, dropped half a box height so the
+                # box hangs between the palms rather than centring on them.
+                self._set_box_pose((lx + rx) / 2.0, (ly + ry) / 2.0,
+                                   (lz + rz) / 2.0 - 0.15)
+            except Exception:
+                pass
+            # 2 Hz: spawning an `ign service` process per update is heavy, and a
+            # faster rate starves the controllers on a loaded machine. The box
+            # still visibly tracks the grippers at this rate.
+            self._stop_event.wait(0.5)
+
+    def start_carry(self):
+        if self._carry:
+            return
+        self._carry = True
+        self._stop_event = threading.Event()
+        self._carry_thread = threading.Thread(target=self._carry_loop,
+                                               daemon=True)
+        self._carry_thread.start()
+        self.get_logger().info('Grasp-attach engaged: box now follows grippers.')
+
+    def stop_carry(self):
+        if not self._carry:
+            return
+        self._carry = False
+        self._stop_event.set()
+        if self._carry_thread:
+            self._carry_thread.join(timeout=1.0)
+        self.get_logger().info('Grasp-attach released: box left on the table.')
+
     # ---------------------------------------------------------------- look-up
-    def confirm_box(self, timeout=10.0):
-        """Confirm the box pose from the Aruco TF (base_link -> marker)."""
+    def confirm_box(self, timeout=10.0, samples=5):
+        """Return the box-centre Point in base_link from the Aruco marker TF,
+        or None if the marker is not seen within timeout.
+
+        The marker is painted on the box face nearest the robot, so the centre
+        of the 0.3 m cube is half a box depth (0.15 m) further along +X (into
+        the box, away from the robot). A handful of TF samples are averaged to
+        smooth out per-frame solvePnP jitter."""
         deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
+        xs, ys, zs = [], [], []
         while rclpy.ok() and self.get_clock().now().nanoseconds < deadline:
             try:
                 tf = self.tf_buffer.lookup_transform(
                     'base_link', 'aruco_marker_frame',
                     rclpy.time.Time())
                 t = tf.transform.translation
-                self.get_logger().info(
-                    f'Aruco confirmed at base_link ({t.x:.2f}, {t.y:.2f}, '
-                    f'{t.z:.2f}).')
-                return True
+                xs.append(t.x)
+                ys.append(t.y)
+                zs.append(t.z)
+                if len(xs) >= samples:
+                    break
             except Exception:
-                rclpy.spin_once(self, timeout_sec=0.2)
-        self.get_logger().warn('Aruco marker not seen; using nominal box pose.')
-        return False
+                pass
+            rclpy.spin_once(self, timeout_sec=0.2)
+        if not xs:
+            self.get_logger().warn(
+                'Aruco marker not seen; using nominal box pose.')
+            return None
+        n = len(xs)
+        center = Point(x=sum(xs) / n + 0.15, y=sum(ys) / n, z=sum(zs) / n)
+        self.get_logger().info(
+            f'Aruco confirmed ({n} samples); box centre base_link '
+            f'({center.x:.2f}, {center.y:.2f}, {center.z:.2f}).')
+        return center
 
     # --------------------------------------------------------------- sequence
-    def grasp_poses(self, z, x=0.55):
-        """Left/right end-effector poses (base_link frame) for the box sides.
-        Grippers approach the box from each side, palms facing inward (+/-Y).
-        Orientation is only a seed; planning uses a wide orientation tolerance."""
+    def grasp_poses(self, center, half_width=None):
+        """Left/right end-effector poses (base_link frame) for the box sides,
+        derived from the box-centre Point. Grippers approach from each side,
+        palms facing inward (+/-Y). half_width defaults to the box half-width;
+        pass a larger value for a stand-off pre-grasp stance. Orientation is only
+        a seed; planning uses a wide orientation tolerance."""
+        half = self.grasp_half_width if half_width is None else half_width
         left = Pose(
-            position=Point(x=x, y=self.grasp_half_width, z=z),
+            position=Point(x=center.x, y=center.y + half, z=center.z),
             orientation=yaw_to_quat(-math.pi / 2))
         right = Pose(
-            position=Point(x=x, y=-self.grasp_half_width, z=z),
+            position=Point(x=center.x, y=center.y - half, z=center.z),
             orientation=yaw_to_quat(math.pi / 2))
         return left, right
 
@@ -346,17 +438,31 @@ class MainTask(Node):
                                 'STEP1 nav->box'):
             return self._fail('navigation to box')
 
-        # 2. Aim the camera down and confirm the box via Aruco perception.
+        # 2. Aim the camera down so the Aruco box enters the field of view.
         self.look_down(0.6, 'STEP2 look down')
-        self.confirm_box()
 
         # 3. Ready posture, lower the carriages so the arms can reach the floor
-        #    box, open grippers, plan each arm separately to its side of the box.
+        #    box, open grippers, then re-confirm the box pose (the base has now
+        #    settled) and plan each arm to its side of the perceived box.
         self.move_arms_joint(ARM_HOME, 'STEP3 ready posture')
         self.move_torso(0.05, 'STEP3 lower carriages')
         self.set_gripper(self.left_grip, 0.0, 'STEP3 open left')
         self.set_gripper(self.right_grip, 0.0, 'STEP3 open right')
-        lp, rp = self.grasp_poses(self.box_grasp_z)
+
+        # Use the perceived box centre; fall back to the nominal pose if the
+        # marker is not visible so the task still completes best-effort.
+        box = self.confirm_box()
+        if box is None:
+            box = Point(x=0.55, y=0.0, z=self.box_grasp_z)
+
+        # Pre-grasp: open stance ~6 cm wider than the box sides so the gripper
+        # tips clear the box, then approach onto the side faces and close.
+        pre_l, pre_r = self.grasp_poses(box, self.grasp_half_width + 0.06)
+        self.plan_arm('left_arm', 'left_end_effector_link', pre_l,
+                      'base_link', 'STEP3 pregrasp left')
+        self.plan_arm('right_arm', 'right_end_effector_link', pre_r,
+                      'base_link', 'STEP3 pregrasp right')
+        lp, rp = self.grasp_poses(box)
         ok_l = self.plan_arm('left_arm', 'left_end_effector_link', lp,
                              'base_link', 'STEP3 grasp left')
         ok_r = self.plan_arm('right_arm', 'right_end_effector_link', rp,
@@ -366,6 +472,8 @@ class MainTask(Node):
                 'One arm could not reach the box; continuing best-effort.')
         self.set_gripper(self.left_grip, 0.8, 'STEP3 close left')
         self.set_gripper(self.right_grip, 0.8, 'STEP3 close right')
+        # Pin the box to the grippers so it is actually carried.
+        self.start_carry()
 
         # 4. Lift the box by raising the torso carriages, then tuck the elbows in
         #    so the arms clear the doorway.
@@ -378,14 +486,21 @@ class MainTask(Node):
                                 'STEP5b nav->table'):
             return self._fail('navigation to table')
 
-        # 6. Lower onto the table and release.
-        lp, rp = self.grasp_poses(self.table_place_z)
+        # 6. Lower onto the table and release. The box is held between the
+        #    grippers, so place at the nominal in-front-of-robot pose at table
+        #    height (no marker is visible while the box is carried).
+        place_center = Point(x=0.55, y=0.0, z=self.table_place_z)
+        lp, rp = self.grasp_poses(place_center)
         self.plan_arm('left_arm', 'left_end_effector_link', lp,
                       'base_link', 'STEP6 place left')
         self.plan_arm('right_arm', 'right_end_effector_link', rp,
                       'base_link', 'STEP6 place right')
         self.set_gripper(self.left_grip, 0.0, 'STEP6 release left')
         self.set_gripper(self.right_grip, 0.0, 'STEP6 release right')
+        # Release the box: stop pinning it and set it resting on the table top
+        # (table top surface at z=0.8, box half-height 0.15 -> centre z=0.95).
+        self.stop_carry()
+        self._set_box_pose(3.8, 0.0, 0.95)
 
         # 7. Retract.
         self.move_torso(0.05, 'STEP7 retract torso')

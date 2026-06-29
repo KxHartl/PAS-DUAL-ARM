@@ -27,8 +27,23 @@ Pokrenuti: `sim.launch.py headless:=true`, `nav2.launch.py`, `task.launch.py`.
 - `sim.launch.py headless:=true` (samo server) — GUI renderer inače gladuje
   gz_ros2_control petlju pa aktivacija kontrolera istekne na opterećenom stroju.
 - Otvoreno za fino ugađanje: baza se pri odlaganju slegne malo kraće od cilja
-  (~x=2.5 umjesto 3.0) jer pokreti ruku pomaknu bazu; Aruco se u simu još ne detektira
-  pouzdano (kamera/kut), pa se koristi nominalna poza kutije kao fallback.
+  (~x=2.5 umjesto 3.0) jer pokreti ruku pomaknu bazu.
+
+## Percepcija kutije + zahvat (provjereno 2026-06-29, headless)
+- **Aruco se sad pouzdano detektira.** Uzrok kvara: marker je u `seminar_world.sdf`
+  bio `<pbr><metal>` (reflektivan, isprano pod svjetlom). Riješeno: `metalness=0.0`,
+  `roughness=1.0`, `specular=0` → matiran marker. PNG već nosi 12.5% bijeli rub
+  (marker = 75% strane = 0.225 m, poklapa se s `marker_size`).
+- `aruco_detector.py`: dodan subpiksel refinement kutova (`CORNER_REFINE_SUBPIX`).
+- Provjereno uživo: `/aruco_single/pose` objavljuje marker; TF `base_link ->
+  aruco_marker_frame` = [0.858, 0.016, 0.063] (marker na -X strani kutije pri
+  robotu u ishodištu; map x=1.0-0.15=0.85, izmjereno 0.858).
+- `main_task.py`: percepcija sad **upravlja zahvatom**. `confirm_box()` vraća centar
+  kutije u base_link (prosjek 5 TF uzoraka + 0.15 m po +X do centra kocke), a
+  `grasp_poses()` ga prima umjesto hardkodiranog x=0.55. Re-detekcija nakon što se
+  baza slegne; slijed pre-grasp (stav 6 cm širi) -> approach -> zatvaranje hvataljki.
+  Fallback na nominalnu pozu ako marker nije viđen.
+- TODO: end-to-end pick s pokrenutim nav2+move_group (RRTConnect zahvat je nasumičan).
 
 ## M5 — Nav2 (provjereno uživo 2026-06-23)
 
