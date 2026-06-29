@@ -142,16 +142,20 @@
       <!-- We can skip legs or add simple boxes for legs -->
     </model>
 
-    <!-- The Box with Aruco Marker (Pick Target) -->
+    <!-- The Pick Target: a bar elongated left-right (Y). The 85 mm Robotiq
+         grippers cannot wrap a 300 mm box, so the target is a 0.06 m square
+         cross-section bar 0.30 m long; each arm grips one end (a real dual-arm
+         form-closure grasp) and the carriages lift it. -->
     <model name="aruco_box">
-      <pose>1.0 0 0.15 0 0 0</pose> <!-- Placed before the door, X=1.0 -->
+      <pose>1.0 0 0.03 0 0 0</pose> <!-- before the door (X=1.0); rests on floor (Z=half of 0.06) -->
       <link name="box_link">
         <inertial>
-          <mass>1.0</mass>
+          <mass>0.5</mass>
+          <!-- Solid box 0.06(X) x 0.30(Y) x 0.06(Z), m=0.5 kg -->
           <inertia>
-            <ixx>0.015</ixx>
-            <iyy>0.015</iyy>
-            <izz>0.015</izz>
+            <ixx>0.0039</ixx>
+            <iyy>0.0003</iyy>
+            <izz>0.0039</izz>
             <ixy>0</ixy>
             <ixz>0</ixz>
             <iyz>0</iyz>
@@ -159,21 +163,46 @@
         </inertial>
         <collision name="collision">
           <geometry>
-            <box><size>0.3 0.3 0.3</size></box>
+            <box><size>0.06 0.30 0.06</size></box>
           </geometry>
+          <!-- Friction + moderately stiff contact so the form-closure grip is
+               secure but does not blow up the contact solver. -->
+          <surface>
+            <friction>
+              <ode>
+                <mu>1.5</mu>
+                <mu2>1.5</mu2>
+              </ode>
+            </friction>
+            <contact>
+              <ode>
+                <kp>100000.0</kp>
+                <kd>1.0</kd>
+              </ode>
+            </contact>
+          </surface>
         </collision>
         <visual name="visual">
           <geometry>
-            <box><size>0.3 0.3 0.3</size></box>
+            <box><size>0.06 0.30 0.06</size></box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.2 1</ambient>
+            <diffuse>0.8 0.8 0.2 1</diffuse>
+          </material>
+        </visual>
+        <!-- Aruco marker decal on the -X face (the long face toward the robot).
+             A thin plate whose ±X faces (0.05 x 0.05) show the square marker;
+             the PNG carries a 12.5% white quiet zone, so the marker proper is
+             0.0375 m -> detector marker_size must match. -->
+        <visual name="marker">
+          <pose>-0.0305 0 0 0 0 0</pose>
+          <geometry>
+            <box><size>0.001 0.05 0.05</size></box>
           </geometry>
           <material>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <!-- Matte, non-reflective surface: a metallic/glossy marker washes
-                 out under the scene lights and ArUco corner detection fails.
-                 The PNG already carries a 12.5% white quiet zone (marker = 75%
-                 of the 0.3 m face = 0.225 m, matching the detector's
-                 marker_size). -->
             <specular>0 0 0 1</specular>
             <pbr>
               <metal>

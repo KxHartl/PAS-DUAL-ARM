@@ -17,7 +17,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'marker_id': 0,
-            'marker_size': 0.225,  # marker fills 75% of the 0.3 m box face
+            'marker_size': 0.0375,  # marker fills 75% of the 0.05 m decal plate
             'image_topic': '/camera/image',
             'camera_info_topic': '/camera/camera_info',
             'marker_frame': 'aruco_marker_frame',

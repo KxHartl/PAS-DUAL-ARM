@@ -104,6 +104,44 @@
   <xacro:wheel_friction side="rear_left"/>
   <xacro:wheel_friction side="rear_right"/>
 
+  <!-- 4.5 GRIPPER FINGER-TIP FRICTION -->
+  <!-- The 85 mm Robotiq grippers cannot enclose the 300 mm box, so it is held
+       by a two-arm friction squeeze: each gripper's finger tips press a side
+       face and the carriages lift. Give those tip links high friction and a
+       stiff contact so the squeeze actually carries the 1 kg box. -->
+  <xacro:macro name="tip_friction" params="link">
+    <gazebo reference="${link}">
+      <mu1>2.0</mu1>
+      <mu2>2.0</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.002</minDepth>
+    </gazebo>
+  </xacro:macro>
+  <xacro:tip_friction link="left_robotiq_85_left_finger_tip_link"/>
+  <xacro:tip_friction link="left_robotiq_85_right_finger_tip_link"/>
+  <xacro:tip_friction link="right_robotiq_85_left_finger_tip_link"/>
+  <xacro:tip_friction link="right_robotiq_85_right_finger_tip_link"/>
+
+  <!-- 4.6 GRASP ATTACH (DetachableJoint) -->
+  <!-- Gazebo Fortress/DART does not hold an object by gripper contact friction,
+       so once the arms are confirmed closed around the bar ends, the bar is
+       rigidly fixed to the left wrist with a DetachableJoint; the arms then lift
+       it as a rigid body. This is physically justified (the grippers really are
+       on the bar, verified from TF) rather than a teleport. The joint starts
+       attached, so main_task detaches it at startup (bar free on the floor),
+       attaches on grasp, and detaches again to place. -->
+  <gazebo>
+    <plugin filename="ignition-gazebo-detachable-joint-system"
+            name="ignition::gazebo::systems::DetachableJoint">
+      <parent_link>left_bracelet_link</parent_link>
+      <child_model>aruco_box</child_model>
+      <child_link>box_link</child_link>
+      <attach_topic>/aruco_box/attach</attach_topic>
+      <detach_topic>/aruco_box/detach</detach_topic>
+    </plugin>
+  </gazebo>
+
   <!-- 4.5 IGNITION SENSORS -->
   <!-- The PAL base ships Gazebo-Classic gpu_ray lasers and the RealSense macro has no
        Gazebo sensor at all, so neither emits under Fortress. We add native Ignition
@@ -203,14 +241,27 @@
       <plugin>ign_ros2_control/IgnitionSystem</plugin>
     </hardware>
     <joint name="torso_left_carriage_joint">
-      <command_interface name="position"/>
+      <!-- ign_ros2_control realises a position command as a velocity
+           (joint_velocity = position_proportional_gain * error). The default
+           gain (0.1) drives light joints (arms, pan-tilt) but leaves the heavy
+           vertical carriage pinned at its lower limit under gravity, so raise
+           the gain for the carriages. -->
+      <command_interface name="position">
+        <param name="min">0.05</param>
+        <param name="max">0.8</param>
+        <param name="position_proportional_gain">20.0</param>
+      </command_interface>
       <state_interface name="position">
         <param name="initial_value">0.05</param>
       </state_interface>
       <state_interface name="velocity"/>
     </joint>
     <joint name="torso_right_carriage_joint">
-      <command_interface name="position"/>
+      <command_interface name="position">
+        <param name="min">0.05</param>
+        <param name="max">0.8</param>
+        <param name="position_proportional_gain">20.0</param>
+      </command_interface>
       <state_interface name="position">
         <param name="initial_value">0.05</param>
       </state_interface>

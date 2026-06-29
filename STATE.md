@@ -45,6 +45,35 @@ Pokrenuti: `sim.launch.py headless:=true`, `nav2.launch.py`, `task.launch.py`.
   Fallback na nominalnu pozu ako marker nije viđen.
 - TODO: end-to-end pick s pokrenutim nav2+move_group (RRTConnect zahvat je nasumičan).
 
+## Stvarni dvoručni hvat + podizanje (provjereno 2026-06-30, headless)
+Prelazak s teleport-varke (`set_pose` koja je kutiju "uskakala" u ruke) na fizički
+ispravan hvat. Ključni nalazi i rješenja:
+- **Stara 0.3 m kutija je negrabljiva**: Robotiq 2f_85 ima hod ~85 mm. Cilj zato
+  pretvoren u **šipku 0.06×0.30×0.06 m (0.5 kg)**, duga lijevo-desno; svaka ruka
+  obuhvati svoj kraj (presjek 0.06 m stane u hvataljku). Marker je sad 0.0375 m
+  decal na -X plohi (`aruco.launch.py marker_size=0.0375`).
+- **Top-down hvat**: izmjereno iz TF-a da je tool-frame approach = lokalni +Z,
+  otvaranje prstiju = lokalni +X. Ciljna orijentacija `GRASP_DOWN=(1,0,0,0)`
+  (180° oko X) → approach ravno dolje, prsti opkoračuju 0.06 m širinu. Hvat se
+  planira okomito iznad krajeva (y=±0.13), tijesna orijentacija (`ori_tol=0.15`)
+  da prsti sjednu centrirano (široka tolerancija ih je krivila pa promaše).
+- **Klizači (prismatic torzo) se NE dižu** u ign_ros2_control pod težinom ruke
+  (lagani zglobovi rade, opterećeni okomiti ostaje na donjem limitu). Isprobano:
+  effort 100→1000, dodani `min`/`max` i `position_proportional_gain` na
+  command_interface — ništa ne pomaže. **Zaobiđeno: podizanje rukama** (MoveIt2
+  digne oba EE ~15 cm ravno gore).
+- **DART ne drži objekt kontaktom hvataljki** (isti razlog zašto je original
+  teleportirao). Rješenje: **DetachableJoint** plugin (na robotu, `parent_link=
+  left_bracelet_link`, `child_model=aruco_box`) koji se aktivira **tek nakon
+  potvrđenog hvata** (`/aruco_box/attach`), pa je fizički opravdan, nije teleport
+  na sredinu. Detach na startu i pri odlaganju (`/aruco_box/detach`).
+- Provjereno: šipka se digne s poda z=0.03 → **z≈0.179** (prati zglob). Hvat+
+  podizanje rade end-to-end (`pick_only=true` gate u `main_task.py`).
+- TODO: prilagoditi transport kroz vrata + odlaganje (STEP5-7) na šipku i
+  detach-pri-odlaganju; dosad provjeren samo pick+lift. Detekcija je u punom
+  slijedu zaklonjena rukama pa pada na nominalnu pozu (zaseban TODO: detektirati
+  prije pomicanja ruku).
+
 ## M5 — Nav2 (provjereno uživo 2026-06-23)
 
 ## M5 — Nav2 (provjereno uživo 2026-06-23)

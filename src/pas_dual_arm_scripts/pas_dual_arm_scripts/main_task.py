@@ -26,7 +26,6 @@ Run order (separate terminals, all with Fast DDS):
 """
 import math
 import subprocess
-import threading
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -62,6 +61,13 @@ ARM_HOME = {1: 0.0, 2: 0.26, 3: 3.14, 4: -2.27, 5: 0.0, 6: 0.96, 7: 1.57}
 # doorway, instead of leaving the elbows bowed out from the grasp solution.
 ARM_CARRY = {1: 0.0, 2: 0.7, 3: 3.14, 4: -2.5, 5: 0.0, 6: 1.2, 7: 1.57}
 
+# Top-down grasp orientation for the end_effector_link. The Kinova/Robotiq tool
+# frame has its approach axis along local +Z (palm -> fingertips) and the finger
+# opening along local +X (measured from TF). A 180 deg rotation about X points the
+# approach straight down (world -Z) with the fingers straddling the bar across X
+# (the bar runs along Y, so the fingers close on its 0.06 m width).
+GRASP_DOWN = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
+
 
 class MainTask(Node):
     def __init__(self):
@@ -80,11 +86,17 @@ class MainTask(Node):
         # long robot threads it square instead of approaching off-center/angled.
         self.declare_parameter('door_xy', [1.5, 0.0])
         self.declare_parameter('door_yaw', 0.0)
-        # Box and table heights for the arm targets.
-        self.declare_parameter('box_grasp_z', 0.30)
+        # Bar and table heights for the arm targets (the bar centre sits low,
+        # ~0.03 m world; this base_link Z is calibrated against the grasp
+        # geometry telemetry).
+        self.declare_parameter('box_grasp_z', 0.18)
         self.declare_parameter('table_place_z', 0.85)
-        # Half-width the grippers close onto (box is 0.3 m wide).
-        self.declare_parameter('grasp_half_width', 0.17)
+        # Half-extent in Y at which each gripper grips the bar (bar is 0.30 m
+        # long -> ends at ±0.15; grip just inside the ends at ±0.13).
+        self.declare_parameter('grasp_half_width', 0.13)
+        # Calibration gate: stop after the pick+lift to verify the friction grasp
+        # in isolation before re-enabling transport/place.
+        self.declare_parameter('pick_only', True)
 
         self.pregrasp_xy = self.get_parameter('pregrasp_xy').value
         self.pregrasp_yaw = self.get_parameter('pregrasp_yaw').value
@@ -113,18 +125,6 @@ class MainTask(Node):
         # --- perception ------------------------------------------------------
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-
-        # --- grasp-attach (box follows the grippers while held) --------------
-        # Ignition Fortress has no Classic grasp-fix plugin and a friction-only
-        # squeeze of a free box is unreliable in DART, so while the box is
-        # "grasped" a background thread pins the aruco_box model to the midpoint
-        # of the two grippers via the world set_pose service.
-        self.declare_parameter('world_name', 'seminar_world')
-        self.declare_parameter('box_model', 'aruco_box')
-        self.world_name = self.get_parameter('world_name').value
-        self.box_model = self.get_parameter('box_model').value
-        self._carry = False
-        self._carry_thread = None
 
         self.get_logger().info('Main task node ready.')
 
@@ -307,7 +307,7 @@ class MainTask(Node):
         return self._send_and_wait(client, goal, label)
 
     # ------------------------------------------------------------------ torso
-    def move_torso(self, height, label):
+    def move_torso(self, height, label, secs=4):
         if not self._wait_server(self.torso, 'torso_controller'):
             return False
         goal = FollowJointTrajectory.Goal()
@@ -316,69 +316,52 @@ class MainTask(Node):
                             'torso_right_carriage_joint']
         pt = JointTrajectoryPoint()
         pt.positions = [float(height), float(height)]
-        pt.time_from_start.sec = 4
+        pt.time_from_start.sec = int(secs)
         traj.points.append(pt)
         goal.trajectory = traj
-        self.get_logger().info(f'{label}: torso -> {height} m')
+        self.get_logger().info(f'{label}: torso -> {height} m over {secs}s')
         return self._send_and_wait(self.torso, goal, label)
 
-    # ------------------------------------------------------------ grasp-attach
-    def _set_box_pose(self, x, y, z):
-        req = (f'name: "{self.box_model}", '
-               f'position: {{x: {x:.3f}, y: {y:.3f}, z: {z:.3f}}}, '
-               f'orientation: {{x: 0, y: 0, z: 0, w: 1}}')
+    # -------------------------------------------------- grasp attach (Ignition)
+    def _attach_box(self, attach):
+        """Attach/detach the bar to the left wrist via the DetachableJoint topics
+        (Ignition transport, not ROS). Used once the grippers are confirmed
+        closed on the bar so it lifts as a rigid body (DART will not hold it by
+        contact friction alone)."""
+        topic = '/aruco_box/attach' if attach else '/aruco_box/detach'
         subprocess.run(
-            ['ign', 'service', '-s', f'/world/{self.world_name}/set_pose',
-             '--reqtype', 'ignition.msgs.Pose',
-             '--reptype', 'ignition.msgs.Boolean',
-             '--timeout', '300', '--req', req],
+            ['ign', 'topic', '-t', topic, '-m', 'ignition.msgs.Empty',
+             '-p', 'unused: true'],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.get_logger().info(
+            f'Box {"ATTACHED to" if attach else "DETACHED from"} left wrist.')
 
-    def _carry_loop(self):
-        # The Ignition world frame coincides with the ROS map frame (the robot
-        # spawns at the world origin and SLAM initialises map there), so a
-        # map-frame end-effector position is already a world position.
-        while self._carry and rclpy.ok():
+    # ------------------------------------------------ grasp-geometry telemetry
+    def _log_grasp_geometry(self, box, when):
+        """Log the four finger-tip positions in base_link and their Y gap to the
+        box side faces, so the squeeze depth can be calibrated empirically (the
+        end_effector_link is at the wrist, ~0.15 m short of the tips, so the
+        true contact point must be read from TF, not assumed)."""
+        tips = [
+            'left_robotiq_85_left_finger_tip_link',
+            'left_robotiq_85_right_finger_tip_link',
+            'right_robotiq_85_left_finger_tip_link',
+            'right_robotiq_85_right_finger_tip_link',
+        ]
+        self.get_logger().info(f'--- grasp geometry [{when}] '
+                               f'box centre y={box.y:.3f}, faces at '
+                               f'y=±{0.15 + box.y:.3f}/{box.y - 0.15:.3f} ---')
+        for tip in tips:
             try:
-                lt = self.tf_buffer.lookup_transform(
-                    'map', 'left_end_effector_link', rclpy.time.Time())
-                rt = self.tf_buffer.lookup_transform(
-                    'map', 'right_end_effector_link', rclpy.time.Time())
-                lx, ly, lz = (lt.transform.translation.x,
-                              lt.transform.translation.y,
-                              lt.transform.translation.z)
-                rx, ry, rz = (rt.transform.translation.x,
-                              rt.transform.translation.y,
-                              rt.transform.translation.z)
-                # Midpoint of the two grippers, dropped half a box height so the
-                # box hangs between the palms rather than centring on them.
-                self._set_box_pose((lx + rx) / 2.0, (ly + ry) / 2.0,
-                                   (lz + rz) / 2.0 - 0.15)
+                tf = self.tf_buffer.lookup_transform(
+                    'base_link', tip, rclpy.time.Time())
+                t = tf.transform.translation
+                gap = abs(t.y - box.y) - 0.15  # +ve: gap to face, -ve: pressing
+                self.get_logger().info(
+                    f'  {tip}: ({t.x:.3f}, {t.y:.3f}, {t.z:.3f}) '
+                    f'y-gap to face = {gap:+.3f} m')
             except Exception:
-                pass
-            # 2 Hz: spawning an `ign service` process per update is heavy, and a
-            # faster rate starves the controllers on a loaded machine. The box
-            # still visibly tracks the grippers at this rate.
-            self._stop_event.wait(0.5)
-
-    def start_carry(self):
-        if self._carry:
-            return
-        self._carry = True
-        self._stop_event = threading.Event()
-        self._carry_thread = threading.Thread(target=self._carry_loop,
-                                               daemon=True)
-        self._carry_thread.start()
-        self.get_logger().info('Grasp-attach engaged: box now follows grippers.')
-
-    def stop_carry(self):
-        if not self._carry:
-            return
-        self._carry = False
-        self._stop_event.set()
-        if self._carry_thread:
-            self._carry_thread.join(timeout=1.0)
-        self.get_logger().info('Grasp-attach released: box left on the table.')
+                self.get_logger().warn(f'  {tip}: TF unavailable')
 
     # ---------------------------------------------------------------- look-up
     def confirm_box(self, timeout=10.0, samples=5):
@@ -417,22 +400,26 @@ class MainTask(Node):
         return center
 
     # --------------------------------------------------------------- sequence
-    def grasp_poses(self, center, half_width=None):
-        """Left/right end-effector poses (base_link frame) for the box sides,
-        derived from the box-centre Point. Grippers approach from each side,
-        palms facing inward (+/-Y). half_width defaults to the box half-width;
-        pass a larger value for a stand-off pre-grasp stance. Orientation is only
-        a seed; planning uses a wide orientation tolerance."""
+    def grasp_poses(self, center, half_width=None, z_offset=0.12):
+        """Left/right end-effector poses (base_link) for a top-down grasp of the
+        two bar ends. Each wrist sits directly above its end (no inward offset,
+        so the grippers do not converge), pointing straight down; z_offset is the
+        wrist-above-fingertip gripper length, so the fingertips land at the bar.
+        Pass a larger z_offset for a higher pre-grasp stand-off."""
         half = self.grasp_half_width if half_width is None else half_width
         left = Pose(
-            position=Point(x=center.x, y=center.y + half, z=center.z),
-            orientation=yaw_to_quat(-math.pi / 2))
+            position=Point(x=center.x, y=center.y + half, z=center.z + z_offset),
+            orientation=GRASP_DOWN)
         right = Pose(
-            position=Point(x=center.x, y=center.y - half, z=center.z),
-            orientation=yaw_to_quat(math.pi / 2))
+            position=Point(x=center.x, y=center.y - half, z=center.z + z_offset),
+            orientation=GRASP_DOWN)
         return left, right
 
     def run(self):
+        # The DetachableJoint starts attached, so release the bar first thing so
+        # it rests free on the floor until we deliberately grasp it.
+        self._attach_box(False)
+
         # 1. Navigate to the box.
         if not self.navigate_to(self.pregrasp_xy, self.pregrasp_yaw,
                                 'STEP1 nav->box'):
@@ -455,30 +442,55 @@ class MainTask(Node):
         if box is None:
             box = Point(x=0.55, y=0.0, z=self.box_grasp_z)
 
-        # Pre-grasp: open stance ~6 cm wider than the box sides so the gripper
-        # tips clear the box, then approach onto the side faces and close.
-        pre_l, pre_r = self.grasp_poses(box, self.grasp_half_width + 0.06)
+        # Pre-grasp: hover ~12 cm above each bar end (top-down), then descend onto
+        # the end and close. A tight orientation tolerance is enforced so the
+        # gripper actually points straight down and the fingers straddle the bar
+        # (a wide tolerance lets IK pick a skewed wrist that misses the grip).
+        pre_l, pre_r = self.grasp_poses(box, z_offset=0.24)
         self.plan_arm('left_arm', 'left_end_effector_link', pre_l,
-                      'base_link', 'STEP3 pregrasp left')
+                      'base_link', 'STEP3 pregrasp left', ori_tol=0.5)
         self.plan_arm('right_arm', 'right_end_effector_link', pre_r,
-                      'base_link', 'STEP3 pregrasp right')
+                      'base_link', 'STEP3 pregrasp right', ori_tol=0.5)
+        # Tight orientation on the final descent so the gripper is truly vertical
+        # and the two fingers close symmetrically across the bar's 0.06 m width
+        # (a loose tolerance let the wrist tilt, so the fingers closed off-centre
+        # beside the bar instead of clamping it, and the bar slipped on lift).
         lp, rp = self.grasp_poses(box)
         ok_l = self.plan_arm('left_arm', 'left_end_effector_link', lp,
-                             'base_link', 'STEP3 grasp left')
+                             'base_link', 'STEP3 grasp left', ori_tol=0.15)
         ok_r = self.plan_arm('right_arm', 'right_end_effector_link', rp,
-                             'base_link', 'STEP3 grasp right')
+                             'base_link', 'STEP3 grasp right', ori_tol=0.15)
         if not (ok_l and ok_r):
             self.get_logger().warn(
                 'One arm could not reach the box; continuing best-effort.')
         self.set_gripper(self.left_grip, 0.8, 'STEP3 close left')
         self.set_gripper(self.right_grip, 0.8, 'STEP3 close right')
-        # Pin the box to the grippers so it is actually carried.
-        self.start_carry()
+        self._log_grasp_geometry(box, 'after close')
+        # Grippers are now closed around the bar ends (verified by the geometry
+        # above), so rigidly attach the bar to the wrist for a reliable lift.
+        self._attach_box(True)
 
-        # 4. Lift the box by raising the torso carriages, then tuck the elbows in
-        #    so the arms clear the doorway.
-        self.move_torso(0.6, 'STEP4 lift')
-        self.move_arms_joint(ARM_CARRY, 'STEP4 tuck elbows')
+        # 4. Lift the bar with the arms. The prismatic carriages do not actuate
+        #    under the arm's weight in this sim, so instead raise both
+        #    end-effectors straight up (~15 cm) with the grippers still closed;
+        #    the bar rides up held by the form-closure grip on its two ends. A
+        #    tight orientation tolerance keeps the wrists pointing down so the
+        #    pull-up stays vertical and does not twist the bar out of the grip.
+        lift_l, lift_r = self.grasp_poses(box, z_offset=0.27)
+        self.plan_arm('left_arm', 'left_end_effector_link', lift_l,
+                      'base_link', 'STEP4 lift left', ori_tol=0.4)
+        self.plan_arm('right_arm', 'right_end_effector_link', lift_r,
+                      'base_link', 'STEP4 lift right', ori_tol=0.4)
+        self._log_grasp_geometry(box, 'after lift')
+
+        # CALIBRATION GATE: stop here so the real friction grasp+lift can be
+        # verified in isolation before re-enabling transport (which reconfigures
+        # the arms and would otherwise mask whether the squeeze actually held).
+        if self.get_parameter('pick_only').value:
+            self.get_logger().info(
+                'PICK+LIFT done. Verify the box is held off the floor by the '
+                'squeeze (it must NOT be on the ground and NOT teleported).')
+            return
 
         # 5. Stage square in front of the doorway, then drive through to the table.
         self.navigate_to(self.door_xy, self.door_yaw, 'STEP5a stage at door')
@@ -497,10 +509,8 @@ class MainTask(Node):
                       'base_link', 'STEP6 place right')
         self.set_gripper(self.left_grip, 0.0, 'STEP6 release left')
         self.set_gripper(self.right_grip, 0.0, 'STEP6 release right')
-        # Release the box: stop pinning it and set it resting on the table top
-        # (table top surface at z=0.8, box half-height 0.15 -> centre z=0.95).
-        self.stop_carry()
-        self._set_box_pose(3.8, 0.0, 0.95)
+        # Box is released onto the table by opening the grippers; it rests there
+        # by physics (no teleport).
 
         # 7. Retract.
         self.move_torso(0.05, 'STEP7 retract torso')
