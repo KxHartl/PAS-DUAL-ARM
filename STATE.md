@@ -1,7 +1,40 @@
 # Stanje Projekta (State)
 
-**Trenutna faza**: Puni pick-carry-place zadatak radi end-to-end u simulaciji.
-**Datum zadnje izmjene**: 2026-06-23
+**Trenutna faza**: Autonomni find → prilaz → hvat → podizanje → spuštanje na stol
+radi end-to-end u GUI-ju (pošteno, bez varke). Transport do ZASEBNOG stola nije
+izvediv (DART DetachableJoint + gibanje baze izbacuje kutiju).
+**Datum zadnje izmjene**: 2026-06-30
+
+## Autonomni pick→lift→place bez Nav2/SLAM (provjereno u GUI 2026-06-30)
+Slijed (`main_task.py`, sve preko stvarnih akcija, bez Nav2/SLAM):
+SCAN (pan kamere, baza miruje) → vizualni prilaz (cmd_vel) do ~0.9 m → dovoz +
+mjerenje dubinom → dvoručni top-down hvat → **contact check (prsti STVARNO na
+kutiji)** → attach (contact-verified) → **podizanje** → spuštanje na stol → detach.
+- **Nav2/SLAM napušten**: skid-steer baza pri okretu u mjestu kliže → uništava
+  wheel-odom + scan-matching (robot odlutao 30 m). Zamjena: direktni cmd_vel
+  vizualni servo na `base_link→aruco_marker_frame` TF (SLAM-neovisan).
+- **Kotači mu1=0.4, mu2=0.0**: čista rotacija u mjestu (drift ~4 mm). Okret i
+  vožnja se NE rade istovremeno (inače baza "krabira" uz mu2=0).
+- **Prilaz samo do ~0.9 m markerom**: bliže, niski marker traži strm nagib kamere
+  → vertikalni marker se foreshorten-a → ArUco padne. Zadnji komad: ravni dovoz +
+  mjerenje dubinom (depth ne pati od kuta).
+- **Kutija okrenuta (yaw −0.68)** da marker gleda prema ishodištu → head-on
+  detekcija + robot završi ravno ispred → top-down hvat poravnat.
+- **Čisto trenje NE drži u DART-u** (probano μ 2→5, masa 0.4→0.2, kp, sila): kutija
+  se nikad ne digne. Zato **contact-verified DetachableJoint** (attach TEK nakon
+  contact-check ON BOX) — fizički opravdano, nije teleport.
+- **Ključno za stabilan attach**: (1) attach PRIJE stiska + njEžan stisak
+  (effort 20) — jak stisak + zglob preodređuju kutiju pa je DART izbaci; (2) pri
+  dizanju **povuci DESNU ruku** i nosi samo na LIJEVOM zglobu — desna ruka koja
+  gura fiksiranu kutiju zasebnim putem ruši solver (kutija odleti).
+- Provjereno (poza kutije uzorkovana, ne-cirkularno): miruje z=0.225 → digne se
+  (drži, ostaje kod mjesta uzimanja, NE odlijeće) → slegne na stol (1.30,−0.85,
+  0.225). GUI vidljiv.
+- **Otvoreno**: (a) lijevi RRTConnect put pri dizanju zaljulja kutiju do ~1 m prije
+  sliježa (kozmetika; treba kartezijski ravni put); (b) transport do ZASEBNOG
+  stola izbacuje kutiju (gibanje baze + zglob) — kutija se vraća na isti stol.
+
+## (starije) Puni pick-carry-place s Nav2 (2026-06-23)
 
 ## Završeni Milestoneovi (commitano)
 - **M0+M1** — `ros2_control` u Gazebo Fortress + pouzdan `sim.launch.py` (8 kontrolera se konfigurira i aktivira čisto).
