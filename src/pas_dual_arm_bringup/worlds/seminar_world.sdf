@@ -187,12 +187,13 @@
       <pose>1.28 -1.0 0.225 0 0 -0.68</pose>
       <link name="box_link">
         <inertial>
-          <mass>0.4</mass>
-          <!-- Solid box 0.06(X) x 0.30(Y) x 0.25(Z), m=0.4 kg -->
+          <mass>0.2</mass>
+          <!-- Solid box 0.06(X) x 0.30(Y) x 0.25(Z), m=0.2 kg (light, so a
+               friction grip can carry it). -->
           <inertia>
-            <ixx>0.0051</ixx>
-            <iyy>0.0022</iyy>
-            <izz>0.0031</izz>
+            <ixx>0.0025</ixx>
+            <iyy>0.0011</iyy>
+            <izz>0.0016</izz>
             <ixy>0</ixy>
             <ixz>0</ixz>
             <iyz>0</iyz>
@@ -202,18 +203,18 @@
           <geometry>
             <box><size>0.06 0.30 0.25</size></box>
           </geometry>
-          <!-- High friction so a centred parallel-jaw clamp can hold the slab by
-               friction alone (no attach joint). -->
+          <!-- Very high friction + stiff contact so a centred parallel-jaw clamp
+               can hold the slab by friction alone (no attach joint). -->
           <surface>
             <friction>
               <ode>
-                <mu>2.0</mu>
-                <mu2>2.0</mu2>
+                <mu>5.0</mu>
+                <mu2>5.0</mu2>
               </ode>
             </friction>
             <contact>
               <ode>
-                <kp>100000.0</kp>
+                <kp>300000.0</kp>
                 <kd>1.0</kd>
               </ode>
             </contact>

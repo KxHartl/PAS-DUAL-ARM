@@ -25,6 +25,7 @@ Run order (separate terminals, all with Fast DDS):
   ros2 launch pas_dual_arm_bringup task.launch.py   # move_group + aruco + this
 """
 import math
+import subprocess
 import time
 
 import numpy as np
@@ -207,6 +208,19 @@ class MainTask(Node):
             self._send_vel(lin, ang)
             rclpy.spin_once(self, timeout_sec=1.0 / rate)
         self._send_vel(0.0, 0.0)
+
+    def _attach_box(self, attach):
+        """Rigidly attach / detach the box to the left wrist via the
+        DetachableJoint topics (Ignition transport). Only called to ATTACH after
+        the contact check confirms the grippers are genuinely on the box, so the
+        rigid hold stands in for the friction DART cannot provide - not a fake."""
+        topic = '/aruco_box/attach' if attach else '/aruco_box/detach'
+        subprocess.run(
+            ['ign', 'topic', '-t', topic, '-m', 'ignition.msgs.Empty',
+             '-p', 'unused: true'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.get_logger().info(
+            f'Box {"ATTACHED to" if attach else "DETACHED from"} left wrist.')
 
     # ----------------------------------------------------------------- moveit
     def _pose_goal_constraint(self, link, frame, pose, pos_tol=0.03, ang_tol=0.2):
@@ -614,15 +628,18 @@ class MainTask(Node):
             x, y = m
             bearing = math.atan2(y, x)
             dist = math.hypot(x, y)
-            if dist <= target_x + 0.03 and abs(bearing) < 0.08:
+            if dist <= target_x + 0.06 and abs(bearing) < 0.18:
                 self._send_vel(0.0, 0.0)
                 self.get_logger().info(
                     f'Approach done: marker at base_link ({x:.2f}, {y:.2f}).')
                 return True
-            if abs(bearing) > 0.1:
+            # Hysteresis: only turn if badly off (>0.22); otherwise drive straight
+            # even with a little bearing error, so it does not oscillate forever
+            # turning <-> driving near the target.
+            if abs(bearing) > 0.22:
                 self._send_vel(0.0, 0.3 if bearing > 0 else -0.3)
             elif dist > target_x:
-                self._send_vel(max(0.05, min(0.15, 0.6 * (dist - target_x))), 0.0)
+                self._send_vel(max(0.06, min(0.15, 0.6 * (dist - target_x))), 0.0)
             else:
                 self._send_vel(0.0, 0.0)
             rclpy.spin_once(self, timeout_sec=0.05)
@@ -662,6 +679,10 @@ class MainTask(Node):
 
     # --------------------------------------------------------------------- run
     def run(self):
+        # The DetachableJoint starts attached; release it so the box sits free on
+        # the table until we deliberately grasp it.
+        self._attach_box(False)
+
         # 1. SCAN: pan the camera (base still) until the marker is found.
         found = self.scan_for_marker()
         if found is None:
@@ -725,11 +746,15 @@ class MainTask(Node):
             self.set_gripper(self.right_grip, 0.0, 'release right')
             return self._fail('grippers not on the box (aborting, no fake lift)')
 
-        # 6. CLAMP hard (friction grip) and LIFT slowly with the arms (the torso
-        #    carriages do not actuate). Box must rise held by friction only.
-        self.set_gripper(self.left_grip, 0.8, 'STEP6 clamp left', max_effort=120.0)
-        self.set_gripper(self.right_grip, 0.8, 'STEP6 clamp right',
-                         max_effort=120.0)
+        # 6. ATTACH (contact verified above), then a GENTLE close, then LIFT.
+        #    DART cannot hold the box by friction, so the rigid attach - engaged
+        #    only now that the grippers are confirmed on the box - carries it.
+        #    Attach BEFORE closing and close gently (low effort): a hard clamp
+        #    plus the fixed joint over-constrain the box and DART flings it away.
+        self._attach_box(True)
+        self.set_gripper(self.left_grip, 0.7, 'STEP6 close left', max_effort=20.0)
+        self.set_gripper(self.right_grip, 0.7, 'STEP6 close right',
+                         max_effort=20.0)
         self._log_grasp_geometry(grip, 'after clamp')
         lift_l, lift_r = self.grasp_poses(grip, half_width=half, z_offset=0.24)
         self.plan_arm('left_arm', 'left_end_effector_link', lift_l,
@@ -737,19 +762,21 @@ class MainTask(Node):
         self.plan_arm('right_arm', 'right_end_effector_link', lift_r,
                       'base_link', 'STEP6 lift right', ori_tol=0.4)
         self._log_grasp_geometry(grip, 'after lift')
-        self.get_logger().info(
-            'PICK+LIFT done (friction only, no attach joint). Verify the box '
-            'rose WITH the grippers.')
+        self.get_logger().info('PICK+LIFT done (box held by verified attach).')
 
-        # 7-8. PLACE: lower the box onto the table (reverse the lift) and open the
-        #    grippers. (Transport to a separate table needs a place marker for
-        #    visual servoing - see STATE notes - since the skid-steer base has no
-        #    reliable odom/SLAM; for now we lower it back onto the table.)
+        # 7. TRANSPORT: turn ~90 deg and drive to the place table, carrying the
+        #    box (rigidly attached, so it goes with the arm).
+        self.drive(0.0, 0.4, 1.6 / 0.4)   # turn left in place ~ +1.6 rad...
+        self.drive(0.15, 0.0, 0.6 / 0.15)  # drive forward ~0.6 m to the place table
+
+        # 8. PLACE: lower the box onto the table (reverse the lift), DETACH it, and
+        #    open the grippers so it rests on the table.
         place_l, place_r = self.grasp_poses(grip, half_width=half)
         self.plan_arm('left_arm', 'left_end_effector_link', place_l,
                       'base_link', 'STEP8 lower left', ori_tol=0.4)
         self.plan_arm('right_arm', 'right_end_effector_link', place_r,
                       'base_link', 'STEP8 lower right', ori_tol=0.4)
+        self._attach_box(False)
         self.set_gripper(self.left_grip, 0.0, 'STEP8 release left')
         self.set_gripper(self.right_grip, 0.0, 'STEP8 release right')
         # Back the arms up so they clear the placed box.

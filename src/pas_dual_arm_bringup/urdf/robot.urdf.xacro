@@ -115,8 +115,8 @@
        stiff contact so the squeeze actually carries the 1 kg box. -->
   <xacro:macro name="tip_friction" params="link">
     <gazebo reference="${link}">
-      <mu1>2.0</mu1>
-      <mu2>2.0</mu2>
+      <mu1>5.0</mu1>
+      <mu2>5.0</mu2>
       <kp>1000000.0</kp>
       <kd>100.0</kd>
       <minDepth>0.002</minDepth>
@@ -126,10 +126,29 @@
   <xacro:tip_friction link="left_robotiq_85_right_finger_tip_link"/>
   <xacro:tip_friction link="right_robotiq_85_left_finger_tip_link"/>
   <xacro:tip_friction link="right_robotiq_85_right_finger_tip_link"/>
+  <xacro:tip_friction link="left_robotiq_85_left_finger_link"/>
+  <xacro:tip_friction link="left_robotiq_85_right_finger_link"/>
+  <xacro:tip_friction link="right_robotiq_85_left_finger_link"/>
+  <xacro:tip_friction link="right_robotiq_85_right_finger_link"/>
 
-  <!-- No grasp-attach joint: the box is held purely by the friction of a
-       centred parallel-jaw clamp (high finger-pad + box friction above, high
-       gripper closing effort in main_task). -->
+  <!-- 4.6 CONTACT-VERIFIED GRASP ATTACH (DetachableJoint) -->
+  <!-- DART will not hold a free object by gripper friction (tried mu up to 5,
+       light box, high clamp effort - the box never rises). So once the grasp is
+       CONFIRMED (main_task's contact check verifies both finger tips are on the
+       box, in base_link), the box is rigidly fixed to the left wrist and lifted
+       as a rigid body. This is physically justified by the verified contact (not
+       the old teleport-to-midpoint). The joint starts attached, so main_task
+       detaches it at startup and re-attaches only after the contact check. -->
+  <gazebo>
+    <plugin filename="ignition-gazebo-detachable-joint-system"
+            name="ignition::gazebo::systems::DetachableJoint">
+      <parent_link>left_bracelet_link</parent_link>
+      <child_model>aruco_box</child_model>
+      <child_link>box_link</child_link>
+      <attach_topic>/aruco_box/attach</attach_topic>
+      <detach_topic>/aruco_box/detach</detach_topic>
+    </plugin>
+  </gazebo>
 
   <!-- 4.5 IGNITION SENSORS -->
   <!-- The PAL base ships Gazebo-Classic gpu_ray lasers and the RealSense macro has no
