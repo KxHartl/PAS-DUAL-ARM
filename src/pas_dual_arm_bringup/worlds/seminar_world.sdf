@@ -258,15 +258,19 @@
          drive up and lower the carried box onto it. -->
     <model name="place_table">
       <static>true</static>
-      <pose>1.40 0.5 0 0 0 0</pose>
+      <!-- Where the box lands after the (localisation-free) carry maneuver: from
+           the grasp pose the robot turns ~+1.6 rad and drives ~0.6 m, ending with
+           the carried box at ~(1.55, 0.25). Generous 0.6x0.6 top to absorb the
+           run-to-run spread of the blind drive. -->
+      <pose>1.55 0.25 0 0 0 0</pose>
       <link name="table">
         <collision name="slab_c">
           <pose>0 0 0.08 0 0 0</pose>
-          <geometry><box><size>0.4 0.5 0.04</size></box></geometry>
+          <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
         </collision>
         <visual name="slab_v">
           <pose>0 0 0.08 0 0 0</pose>
-          <geometry><box><size>0.4 0.5 0.04</size></box></geometry>
+          <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
           <material><ambient>0.2 0.4 0.5 1</ambient><diffuse>0.2 0.4 0.5 1</diffuse></material>
         </visual>
         <collision name="pillar_c">

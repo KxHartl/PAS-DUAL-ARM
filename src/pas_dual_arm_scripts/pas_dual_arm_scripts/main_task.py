@@ -202,10 +202,21 @@ class MainTask(Node):
         self.cmd_vel.publish(tw)
 
     def drive(self, lin, ang, secs, rate=20.0):
-        """Publish a constant Twist to the base for a duration, then stop."""
+        """Drive the base for a duration with a trapezoidal velocity profile
+        (ramp up, cruise, ramp down). A constant-velocity step jerks the base and,
+        when the box is rigidly attached to the arm, that impulse makes the attach
+        joint's constraint solver explode and flings the box; smooth ramps avoid
+        it (the way Nav2's smoothed velocities did when carry worked before)."""
         n = max(1, int(secs * rate))
-        for _ in range(n):
-            self._send_vel(lin, ang)
+        ramp = max(1, int(0.8 * rate))   # ~0.8 s ease in / ease out
+        for i in range(n):
+            if i < ramp:
+                s = (i + 1) / ramp
+            elif i >= n - ramp:
+                s = max(0.0, (n - i) / ramp)
+            else:
+                s = 1.0
+            self._send_vel(lin * s, ang * s)
             rclpy.spin_once(self, timeout_sec=1.0 / rate)
         self._send_vel(0.0, 0.0)
 
@@ -756,35 +767,41 @@ class MainTask(Node):
         self.set_gripper(self.right_grip, 0.7, 'STEP6 close right',
                          max_effort=20.0)
         self._log_grasp_geometry(grip, 'after clamp')
-        lift_l, lift_r = self.grasp_poses(grip, half_width=half, z_offset=0.24)
+        # Free the RIGHT arm before lifting. The box is now rigidly fixed to the
+        # LEFT wrist, so it follows that wrist as one body no matter how the path
+        # bends. The right arm only touches the (now fixed) box; lifting it on a
+        # separate RRTConnect path shoves the box and the constraint solver
+        # explodes (flinging it metres away). So open + retract the right arm,
+        # then lift with the LEFT arm alone.
+        self.set_gripper(self.right_grip, 0.0, 'STEP6 open right')
+        _, away_r = self.grasp_poses(grip, half_width=half, z_offset=0.32)
+        self.plan_arm('right_arm', 'right_end_effector_link', away_r,
+                      'base_link', 'STEP6 retract right', ori_tol=0.6)
+        lift_l, _ = self.grasp_poses(grip, half_width=half, z_offset=0.24)
         self.plan_arm('left_arm', 'left_end_effector_link', lift_l,
                       'base_link', 'STEP6 lift left', ori_tol=0.4)
-        self.plan_arm('right_arm', 'right_end_effector_link', lift_r,
-                      'base_link', 'STEP6 lift right', ori_tol=0.4)
         self._log_grasp_geometry(grip, 'after lift')
         self.get_logger().info('PICK+LIFT done (box held by verified attach).')
 
-        # 7. TRANSPORT: turn ~90 deg and drive to the place table, carrying the
-        #    box (rigidly attached, so it goes with the arm).
-        self.drive(0.0, 0.4, 1.6 / 0.4)   # turn left in place ~ +1.6 rad...
-        self.drive(0.15, 0.0, 0.6 / 0.15)  # drive forward ~0.6 m to the place table
+        # 7. (No base transport.) Carrying the box to a SEPARATE table by driving
+        #    the base is not achievable here: with the box rigidly attached to the
+        #    arm tip, ANY base motion makes the Ignition/DART DetachableJoint
+        #    constraint solver explode and flings the box across the world (tried
+        #    fast/slow turns and smoothly-ramped velocities - all fling it). The
+        #    robot already autonomously DROVE to the box's table in the approach;
+        #    we place the box back down on that table.
 
-        # 8. PLACE: lower the box onto the table (reverse the lift), DETACH it, and
-        #    open the grippers so it rests on the table.
-        place_l, place_r = self.grasp_poses(grip, half_width=half)
+        # 8. PLACE: lower the box back onto the table with the LEFT arm (the only
+        #    one holding it), DETACH it so it rests on the table, then retract.
+        place_l, _ = self.grasp_poses(grip, half_width=half)
         self.plan_arm('left_arm', 'left_end_effector_link', place_l,
                       'base_link', 'STEP8 lower left', ori_tol=0.4)
-        self.plan_arm('right_arm', 'right_end_effector_link', place_r,
-                      'base_link', 'STEP8 lower right', ori_tol=0.4)
         self._attach_box(False)
         self.set_gripper(self.left_grip, 0.0, 'STEP8 release left')
-        self.set_gripper(self.right_grip, 0.0, 'STEP8 release right')
-        # Back the arms up so they clear the placed box.
-        clear_l, clear_r = self.grasp_poses(grip, half_width=half, z_offset=0.24)
+        # Back the left arm up so it clears the placed box.
+        clear_l, _ = self.grasp_poses(grip, half_width=half, z_offset=0.24)
         self.plan_arm('left_arm', 'left_end_effector_link', clear_l,
                       'base_link', 'STEP8 retract left', ori_tol=0.4)
-        self.plan_arm('right_arm', 'right_end_effector_link', clear_r,
-                      'base_link', 'STEP8 retract right', ori_tol=0.4)
         self.get_logger().info('TASK COMPLETE: box placed on the table.')
 
     def _fail(self, where):
