@@ -25,8 +25,8 @@ Run order (separate terminals, all with Fast DDS):
   ros2 launch pas_dual_arm_bringup task.launch.py   # move_group + aruco + this
 """
 import math
-import subprocess
 
+import numpy as np
 import rclpy
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory, GripperCommand
@@ -39,12 +39,37 @@ from moveit_msgs.msg import (
     PositionConstraint,
     BoundingVolume,
 )
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import NavigateToPose, Spin
 from rclpy.action import ActionClient
 from rclpy.node import Node
+from sensor_msgs.msg import PointCloud2
 from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+
+def quat_to_matrix(q):
+    """Quaternion (geometry_msgs) -> 3x3 rotation matrix."""
+    x, y, z, w = q.x, q.y, q.z, q.w
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ])
+
+
+def pointcloud2_xyz(msg):
+    """Extract finite XYZ points from a PointCloud2 as an (N,3) float array,
+    without PCL/sensor_msgs_py (numpy only, matching aruco_detector's style)."""
+    offs = {f.name: f.offset for f in msg.fields}
+    raw = np.frombuffer(msg.data, dtype=np.uint8).reshape(-1, msg.point_step)
+
+    def field(name):
+        o = offs[name]
+        return raw[:, o:o + 4].copy().view(np.float32).ravel()
+
+    pts = np.stack([field('x'), field('y'), field('z')], axis=1)
+    return pts[np.isfinite(pts).all(axis=1)]
 
 
 def yaw_to_quat(yaw):
@@ -111,6 +136,7 @@ class MainTask(Node):
 
         # --- action clients --------------------------------------------------
         self.nav = ActionClient(self, NavigateToPose, '/navigate_to_pose')
+        self.spin_act = ActionClient(self, Spin, '/spin')
         self.move = ActionClient(self, MoveGroup, '/move_action')
         self.left_grip = ActionClient(
             self, GripperCommand, '/left_gripper_controller/gripper_cmd')
@@ -126,8 +152,14 @@ class MainTask(Node):
         # --- perception ------------------------------------------------------
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+        self._last_cloud = None
+        self.create_subscription(PointCloud2, '/camera/points',
+                                 self._cloud_cb, 1)
 
         self.get_logger().info('Main task node ready.')
+
+    def _cloud_cb(self, msg):
+        self._last_cloud = msg
 
     # ------------------------------------------------------------------ utils
     def _wait_server(self, client, name, timeout=30.0):
@@ -299,12 +331,12 @@ class MainTask(Node):
         return self._send_and_wait(self.pan_tilt, goal, label)
 
     # ---------------------------------------------------------------- gripper
-    def set_gripper(self, client, position, label):
+    def set_gripper(self, client, position, label, max_effort=50.0):
         if not self._wait_server(client, label):
             return False
         goal = GripperCommand.Goal()
         goal.command.position = float(position)
-        goal.command.max_effort = 50.0
+        goal.command.max_effort = float(max_effort)
         return self._send_and_wait(client, goal, label)
 
     # ------------------------------------------------------------------ torso
@@ -322,20 +354,6 @@ class MainTask(Node):
         goal.trajectory = traj
         self.get_logger().info(f'{label}: torso -> {height} m over {secs}s')
         return self._send_and_wait(self.torso, goal, label)
-
-    # -------------------------------------------------- grasp attach (Ignition)
-    def _attach_box(self, attach):
-        """Attach/detach the bar to the left wrist via the DetachableJoint topics
-        (Ignition transport, not ROS). Used once the grippers are confirmed
-        closed on the bar so it lifts as a rigid body (DART will not hold it by
-        contact friction alone)."""
-        topic = '/aruco_box/attach' if attach else '/aruco_box/detach'
-        subprocess.run(
-            ['ign', 'topic', '-t', topic, '-m', 'ignition.msgs.Empty',
-             '-p', 'unused: true'],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self.get_logger().info(
-            f'Box {"ATTACHED to" if attach else "DETACHED from"} left wrist.')
 
     # ------------------------------------------------ grasp-geometry telemetry
     def _log_grasp_geometry(self, box, when):
@@ -394,11 +412,58 @@ class MainTask(Node):
                 'Aruco marker not seen; using nominal box pose.')
             return None
         n = len(xs)
-        center = Point(x=sum(xs) / n + 0.15, y=sum(ys) / n, z=sum(zs) / n)
+        center = Point(x=sum(xs) / n + 0.03, y=sum(ys) / n, z=sum(zs) / n)
         self.get_logger().info(
-            f'Aruco confirmed ({n} samples); box centre base_link '
+            f'Aruco confirmed ({n} samples); box face base_link '
             f'({center.x:.2f}, {center.y:.2f}, {center.z:.2f}).')
         return center
+
+    def measure_box(self, seed, timeout=6.0):
+        """Measure the box from the depth point cloud: returns (centre Point,
+        length, height) in base_link, or None. The camera sees only the front
+        face, so it measures length (Y) and height (Z) directly; the gripped
+        thickness (X, occluded back face) is handled by the gripper closing onto
+        the box. 'seed' is the approximate box centre (from the marker) used to
+        isolate the box cluster from the table/background."""
+        self._last_cloud = None
+        deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
+        while (rclpy.ok() and self._last_cloud is None
+               and self.get_clock().now().nanoseconds < deadline):
+            rclpy.spin_once(self, timeout_sec=0.1)
+        if self._last_cloud is None:
+            self.get_logger().warn('No point cloud; cannot measure box.')
+            return None
+        msg = self._last_cloud
+        pts = pointcloud2_xyz(msg)
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                'base_link', msg.header.frame_id, rclpy.time.Time())
+        except Exception:
+            self.get_logger().warn('No TF for cloud; cannot measure box.')
+            return None
+        tr = tf.transform.translation
+        P = pts @ quat_to_matrix(tf.transform.rotation).T \
+            + np.array([tr.x, tr.y, tr.z])
+        # Keep points above the table, in front, near the marker seed.
+        m = ((P[:, 2] > 0.12) & (P[:, 2] < 0.50)
+             & (P[:, 0] > 0.2) & (P[:, 0] < 1.0)
+             & (np.abs(P[:, 0] - seed.x) < 0.30)
+             & (np.abs(P[:, 1] - seed.y) < 0.35))
+        B = P[m]
+        if len(B) < 40:
+            self.get_logger().warn(
+                f'Too few box points ({len(B)}); cannot measure box.')
+            return None
+        ymin, ymax = float(B[:, 1].min()), float(B[:, 1].max())
+        zmin, zmax = float(B[:, 2].min()), float(B[:, 2].max())
+        length, height = ymax - ymin, zmax - zmin
+        center = Point(x=float(np.median(B[:, 0])) + 0.03,
+                       y=(ymin + ymax) / 2.0, z=(zmin + zmax) / 2.0)
+        self.get_logger().info(
+            f'Box measured from depth ({len(B)} pts): length={length:.3f} '
+            f'height={height:.3f} centre=({center.x:.2f}, {center.y:.2f}, '
+            f'{center.z:.2f}).')
+        return center, length, height
 
     # --------------------------------------------------------------- sequence
     def grasp_poses(self, center, half_width=None, z_offset=0.12):
@@ -416,106 +481,183 @@ class MainTask(Node):
             orientation=GRASP_DOWN)
         return left, right
 
-    def run(self):
-        # The DetachableJoint starts attached, so release the bar first thing so
-        # it rests free on the floor until we deliberately grasp it.
-        self._attach_box(False)
+    # ------------------------------------------------------------ base helpers
+    def _xy_in_map(self, frame, max_age=None):
+        """(x, y, yaw) of a frame in map, or None. If max_age is set, reject a
+        transform older than that (seconds) so we act only on a fresh detection."""
+        try:
+            tf = self.tf_buffer.lookup_transform('map', frame, rclpy.time.Time())
+        except Exception:
+            return None
+        if max_age is not None:
+            stamp = tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9
+            now = self.get_clock().now().nanoseconds * 1e-9
+            if now - stamp > max_age:
+                return None
+        t = tf.transform.translation
+        q = tf.transform.rotation
+        yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
+                         1 - 2 * (q.y * q.y + q.z * q.z))
+        return t.x, t.y, yaw
 
-        # 1. Navigate to the box.
-        if not self.navigate_to(self.pregrasp_xy, self.pregrasp_yaw,
-                                'STEP1 nav->box'):
-            return self._fail('navigation to box')
+    def spin_and_find(self, timeout=90.0):
+        """Rotate in place via the Nav2 /spin behavior (the base is owned by Nav2;
+        a direct cmd_vel fights the cmd_vel_relay), polling for the Aruco marker.
+        Returns its (x, y) in map, or None. The camera is levelled first. Only
+        fresh marker detections (<0.5 s old) count."""
+        self.look_down(0.15, 'SCAN level camera')
+        if not self._wait_server(self.spin_act, 'spin'):
+            return None
+        goal = Spin.Goal()
+        goal.target_yaw = 6.5  # a bit over a full turn
+        handle = self._spin_until_done(self.spin_act.send_goal_async(goal))
+        if handle is None or not handle.accepted:
+            self.get_logger().error('SCAN: spin goal rejected.')
+            return None
+        result_future = handle.get_result_async()
+        deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
+        hits = []
+        while (rclpy.ok() and not result_future.done()
+               and self.get_clock().now().nanoseconds < deadline):
+            m = self._xy_in_map('aruco_marker_frame', max_age=0.5)
+            if m is not None:
+                hits.append((m[0], m[1]))
+                if len(hits) >= 3:
+                    handle.cancel_goal_async()
+                    mx = sum(h[0] for h in hits) / len(hits)
+                    my = sum(h[1] for h in hits) / len(hits)
+                    self.get_logger().info(
+                        f'SCAN: marker found at map ({mx:.2f}, {my:.2f}).')
+                    return mx, my
+            rclpy.spin_once(self, timeout_sec=0.1)
+        self.get_logger().warn('SCAN: full turn without a marker.')
+        return None
 
-        # 2. Aim the camera down so the Aruco box enters the field of view.
-        self.look_down(0.6, 'STEP2 look down')
+    def approach_pose(self, marker, standoff=0.52):
+        """A base pose 'standoff' metres in front of the marker, facing it, on
+        the line from the robot's current position to the marker."""
+        mx, my = marker
+        rob = self._xy_in_map('base_link') or (0.0, 0.0, 0.0)
+        dx, dy = mx - rob[0], my - rob[1]
+        d = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / d, dy / d
+        return [mx - ux * standoff, my - uy * standoff], math.atan2(uy, ux)
 
-        # 3. Ready posture, lower the carriages so the arms can reach the floor
-        #    box, open grippers, then re-confirm the box pose (the base has now
-        #    settled) and plan each arm to its side of the perceived box.
-        self.move_arms_joint(ARM_HOME, 'STEP3 ready posture')
-        self.move_torso(0.05, 'STEP3 lower carriages')
-        self.set_gripper(self.left_grip, 0.0, 'STEP3 open left')
-        self.set_gripper(self.right_grip, 0.0, 'STEP3 open right')
-
-        # Use the perceived box centre; fall back to the nominal pose if the
-        # marker is not visible so the task still completes best-effort.
-        box = self.confirm_box()
-        if box is None:
-            box = Point(x=0.55, y=0.0, z=self.box_grasp_z)
-
-        # Pre-grasp: hover ~12 cm above each bar end (top-down), then descend onto
-        # the end and close. A tight orientation tolerance is enforced so the
-        # gripper actually points straight down and the fingers straddle the bar
-        # (a wide tolerance lets IK pick a skewed wrist that misses the grip).
-        pre_l, pre_r = self.grasp_poses(box, z_offset=0.20)
-        self.plan_arm('left_arm', 'left_end_effector_link', pre_l,
-                      'base_link', 'STEP3 pregrasp left', ori_tol=0.5)
-        self.plan_arm('right_arm', 'right_end_effector_link', pre_r,
-                      'base_link', 'STEP3 pregrasp right', ori_tol=0.5)
-        # Tight orientation on the final descent so the gripper is truly vertical
-        # and the two fingers close symmetrically across the bar's 0.06 m width
-        # (a loose tolerance let the wrist tilt, so the fingers closed off-centre
-        # beside the bar instead of clamping it, and the bar slipped on lift).
-        lp, rp = self.grasp_poses(box)
-        ok_l = self.plan_arm('left_arm', 'left_end_effector_link', lp,
-                             'base_link', 'STEP3 grasp left', ori_tol=0.15)
-        ok_r = self.plan_arm('right_arm', 'right_end_effector_link', rp,
-                             'base_link', 'STEP3 grasp right', ori_tol=0.15)
-        if not (ok_l and ok_r):
-            self.get_logger().warn(
-                'One arm could not reach the box; continuing best-effort.')
-        self.set_gripper(self.left_grip, 0.8, 'STEP3 close left')
-        self.set_gripper(self.right_grip, 0.8, 'STEP3 close right')
-        self._log_grasp_geometry(box, 'after close')
-        # Grippers are now closed around the bar ends (verified by the geometry
-        # above), so rigidly attach the bar to the wrist for a reliable lift.
-        self._attach_box(True)
-
-        # 4. Lift the bar with the arms. The prismatic carriages do not actuate
-        #    under the arm's weight in this sim, so instead raise both
-        #    end-effectors straight up (~15 cm) with the grippers still closed;
-        #    the bar rides up held by the form-closure grip on its two ends. A
-        #    tight orientation tolerance keeps the wrists pointing down so the
-        #    pull-up stays vertical and does not twist the bar out of the grip.
-        lift_l, lift_r = self.grasp_poses(box, z_offset=0.22)
-        self.plan_arm('left_arm', 'left_end_effector_link', lift_l,
-                      'base_link', 'STEP4 lift left', ori_tol=0.4)
-        self.plan_arm('right_arm', 'right_end_effector_link', lift_r,
-                      'base_link', 'STEP4 lift right', ori_tol=0.4)
-        self._log_grasp_geometry(box, 'after lift')
-
-        # CALIBRATION GATE: stop here so the real friction grasp+lift can be
-        # verified in isolation before re-enabling transport (which reconfigures
-        # the arms and would otherwise mask whether the squeeze actually held).
-        if self.get_parameter('pick_only').value:
+    def approach_box(self, marker, tries=3, standoff=0.52, tol=0.10):
+        """Navigate to the stand-off pose in front of the box, repeating from the
+        new pose each time so the base actually closes in despite Nav2
+        undershooting (a direct cmd_vel creep fights the cmd_vel_relay)."""
+        for i in range(tries):
+            xy, yaw = self.approach_pose(marker, standoff)
+            self.navigate_to(xy, yaw, f'STEP2 approach {i + 1}/{tries}')
+            rob = self._xy_in_map('base_link')
+            if rob is None:
+                continue
+            err = math.hypot(rob[0] - xy[0], rob[1] - xy[1])
             self.get_logger().info(
-                'PICK+LIFT done. Verify the box is held off the floor by the '
-                'squeeze (it must NOT be on the ground and NOT teleported).')
-            return
+                f'Approach {i + 1}: base ({rob[0]:.2f}, {rob[1]:.2f}), '
+                f'goal error {err:.2f} m.')
+            if err <= tol:
+                break
 
-        # 5. Stage square in front of the doorway, then drive through to the table.
-        self.navigate_to(self.door_xy, self.door_yaw, 'STEP5a stage at door')
-        if not self.navigate_to(self.preplace_xy, self.preplace_yaw,
-                                'STEP5b nav->table'):
-            return self._fail('navigation to table')
+    def verify_contact(self, center, half):
+        """Honest check that each gripper actually has a finger tip on the box (in
+        base_link), not in the air. Returns True only if BOTH grippers have a tip
+        within the box bounds. Prevents the old failure where the grippers closed
+        ~0.24 m in front of the box and an attach joint faked the lift."""
+        groups = {
+            'left': ['left_robotiq_85_left_finger_tip_link',
+                     'left_robotiq_85_right_finger_tip_link'],
+            'right': ['right_robotiq_85_left_finger_tip_link',
+                      'right_robotiq_85_right_finger_tip_link'],
+        }
+        got = {'left': False, 'right': False}
+        for side, links in groups.items():
+            for link in links:
+                try:
+                    tf = self.tf_buffer.lookup_transform(
+                        'base_link', link, rclpy.time.Time())
+                    t = tf.transform.translation
+                except Exception:
+                    continue
+                if (abs(t.x - center.x) < 0.08
+                        and abs(t.y - center.y) < half + 0.05
+                        and abs(t.z - center.z) < 0.12):
+                    got[side] = True
+        ok = got['left'] and got['right']
+        self.get_logger().info(
+            f'Contact check: left={got["left"]} right={got["right"]} -> '
+            f'{"ON BOX" if ok else "NOT on box"}.')
+        return ok
 
-        # 6. Lower onto the table and release. The box is held between the
-        #    grippers, so place at the nominal in-front-of-robot pose at table
-        #    height (no marker is visible while the box is carried).
-        place_center = Point(x=0.55, y=0.0, z=self.table_place_z)
-        lp, rp = self.grasp_poses(place_center)
+    # --------------------------------------------------------------------- run
+    def run(self):
+        # 1. SCAN: spin in place until the marker on the box is found.
+        marker = self.spin_and_find()
+        if marker is None:
+            return self._fail('scan: marker not found')
+
+        # 2. APPROACH: drive to a stand-off in front of the box, facing it
+        #    (repeated so the base actually closes in despite Nav2 undershoot).
+        self.approach_box(marker)
+        self.look_down(0.6, 'STEP3 look at box')
+
+        # 3. RECOGNISE: marker face (pose) + depth (dimensions).
+        face = self.confirm_box()
+        if face is None:
+            return self._fail('box not seen at the table')
+        meas = self.measure_box(face)
+        if meas is not None:
+            center, length, height = meas
+        else:
+            self.get_logger().warn('Depth measure failed; using nominal dims.')
+            center, length, height = face, 0.30, 0.20
+
+        # 4. GRASP PLAN: grip each end of the slab, in the upper third so it hangs
+        #    stably; thickness is taken up by the gripper closing onto the box.
+        half = min(max(length / 2.0 - 0.02, 0.08), 0.13)
+        grip = Point(x=center.x, y=center.y, z=center.z + height * 0.2)
+        self.get_logger().info(
+            f'Grasp plan: ends at y={center.y:.2f} +/- {half:.2f}, '
+            f'grip z={grip.z:.2f}.')
+
+        # 5. GRASP: ready, open, pre-grasp above, descend (tight orientation).
+        self.move_arms_joint(ARM_HOME, 'STEP5 ready posture')
+        self.set_gripper(self.left_grip, 0.0, 'STEP5 open left')
+        self.set_gripper(self.right_grip, 0.0, 'STEP5 open right')
+        pre_l, pre_r = self.grasp_poses(grip, half_width=half, z_offset=0.20)
+        self.plan_arm('left_arm', 'left_end_effector_link', pre_l,
+                      'base_link', 'STEP5 pregrasp left', ori_tol=0.5)
+        self.plan_arm('right_arm', 'right_end_effector_link', pre_r,
+                      'base_link', 'STEP5 pregrasp right', ori_tol=0.5)
+        lp, rp = self.grasp_poses(grip, half_width=half)
         self.plan_arm('left_arm', 'left_end_effector_link', lp,
-                      'base_link', 'STEP6 place left')
+                      'base_link', 'STEP5 grasp left', ori_tol=0.15)
         self.plan_arm('right_arm', 'right_end_effector_link', rp,
-                      'base_link', 'STEP6 place right')
-        self.set_gripper(self.left_grip, 0.0, 'STEP6 release left')
-        self.set_gripper(self.right_grip, 0.0, 'STEP6 release right')
-        # Box is released onto the table by opening the grippers; it rests there
-        # by physics (no teleport).
+                      'base_link', 'STEP5 grasp right', ori_tol=0.15)
+        self._log_grasp_geometry(grip, 'at grasp pose')
 
-        # 7. Retract.
-        self.move_torso(0.05, 'STEP7 retract torso')
-        self.get_logger().info('TASK COMPLETED SUCCESSFULLY.')
+        # Honest contact check BEFORE committing: no fake lift if not on the box.
+        if not self.verify_contact(grip, half):
+            self.set_gripper(self.left_grip, 0.0, 'release left')
+            self.set_gripper(self.right_grip, 0.0, 'release right')
+            return self._fail('grippers not on the box (aborting, no fake lift)')
+
+        # 6. CLAMP hard (friction grip) and LIFT slowly with the arms (the torso
+        #    carriages do not actuate). Box must rise held by friction only.
+        self.set_gripper(self.left_grip, 0.8, 'STEP6 clamp left', max_effort=120.0)
+        self.set_gripper(self.right_grip, 0.8, 'STEP6 clamp right',
+                         max_effort=120.0)
+        self._log_grasp_geometry(grip, 'after clamp')
+        lift_l, lift_r = self.grasp_poses(grip, half_width=half, z_offset=0.24)
+        self.plan_arm('left_arm', 'left_end_effector_link', lift_l,
+                      'base_link', 'STEP6 lift left', ori_tol=0.4)
+        self.plan_arm('right_arm', 'right_end_effector_link', lift_r,
+                      'base_link', 'STEP6 lift right', ori_tol=0.4)
+        self._log_grasp_geometry(grip, 'after lift')
+        self.get_logger().info(
+            'PICK+LIFT done (friction only, no attach joint). Verify the box '
+            'rose WITH the grippers.')
 
     def _fail(self, where):
         self.get_logger().error(f'Task aborted during: {where}')

@@ -142,81 +142,50 @@
       <!-- We can skip legs or add simple boxes for legs -->
     </model>
 
-    <!-- Pick table: a low table (top at Z=0.20) to the RIGHT of the robot, so
-         the robot must turn to find it. Square slab so the bar can sit at any
-         yaw; the box is found/measured by the depth camera, not assumed. -->
+    <!-- Pick table: a low table (top at Z=0.10) to the RIGHT of the robot, so
+         the robot must turn to find it. Low enough that the grasp stays within
+         the arms' reach. Square slab. -->
     <model name="pick_table">
       <static>true</static>
-      <pose>1.2 -2.0 0 0 0 0</pose>
+      <pose>1.0 -1.5 0 0 0 0</pose>
       <link name="table">
         <collision name="slab_c">
-          <pose>0 0 0.18 0 0 0</pose>
+          <pose>0 0 0.08 0 0 0</pose>
           <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
         </collision>
         <visual name="slab_v">
-          <pose>0 0 0.18 0 0 0</pose>
+          <pose>0 0 0.08 0 0 0</pose>
           <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
           <material><ambient>0.5 0.35 0.2 1</ambient><diffuse>0.5 0.35 0.2 1</diffuse></material>
         </visual>
         <collision name="pillar_c">
-          <pose>0 0 0.08 0 0 0</pose>
-          <geometry><box><size>0.12 0.12 0.16</size></box></geometry>
+          <pose>0 0 0.04 0 0 0</pose>
+          <geometry><box><size>0.12 0.12 0.08</size></box></geometry>
         </collision>
         <visual name="pillar_v">
-          <pose>0 0 0.08 0 0 0</pose>
-          <geometry><box><size>0.12 0.12 0.16</size></box></geometry>
+          <pose>0 0 0.04 0 0 0</pose>
+          <geometry><box><size>0.12 0.12 0.08</size></box></geometry>
           <material><ambient>0.4 0.28 0.16 1</ambient><diffuse>0.4 0.28 0.16 1</diffuse></material>
         </visual>
       </link>
     </model>
 
-    <!-- Marker sign: a large (0.195 m) Aruco panel on a post next to the table,
-         facing the robot's start so it is detectable from across the room during
-         the 360 scan (a small marker on the box is unreadable at ~2 m). It only
-         localises the table; the box itself is measured by the depth camera.
-         Panel +X face points toward the origin (yaw ~2.06 rad). -->
-    <model name="marker_sign">
-      <static>true</static>
-      <pose>1.0 -1.78 0 0 0 2.06</pose>
-      <link name="sign">
-        <visual name="post_v">
-          <pose>0 0 0.25 0 0 0</pose>
-          <geometry><box><size>0.04 0.04 0.5</size></box></geometry>
-          <material><ambient>0.2 0.2 0.2 1</ambient><diffuse>0.2 0.2 0.2 1</diffuse></material>
-        </visual>
-        <visual name="panel_v">
-          <pose>0 0 0.6 0 0 0</pose>
-          <geometry><box><size>0.01 0.26 0.26</size></box></geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <pbr>
-              <metal>
-                <albedo_map>materials/textures/aruco_marker_0.png</albedo_map>
-                <metalness>0.0</metalness>
-                <roughness>1.0</roughness>
-              </metal>
-            </pbr>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- The Pick Target: a bar on the pick table. No marker on it - the depth
-         camera measures its pose and dimensions for the grasp. Gripped
-         cross-section 0.07 m fits the 85 mm gripper. 0.07x0.30x0.10 m, 0.5 kg,
-         centre Z = table top 0.20 + half height 0.05 = 0.25. -->
+    <!-- The Pick Target: an upright slab (marker ON the box, per the assignment).
+         0.06 (X, the gripped thickness, fits the 85 mm gripper) x 0.30 (Y, length:
+         each arm grips one end) x 0.20 (Z, height: carries the marker and gives
+         the finger pads full contact). 0.4 kg. Sits on the table: centre Z =
+         table top 0.10 + half height 0.10 = 0.20. Yawed so the marked -X face
+         points toward the robot's start for easy detection during the spin. -->
     <model name="aruco_box">
-      <pose>1.2 -2.0 0.25 0 0 0</pose>
+      <pose>1.0 -1.5 0.20 0 0 -0.98</pose>
       <link name="box_link">
         <inertial>
-          <mass>0.5</mass>
-          <!-- Solid box 0.07(X) x 0.30(Y) x 0.10(Z), m=0.5 kg -->
+          <mass>0.4</mass>
+          <!-- Solid box 0.06(X) x 0.30(Y) x 0.20(Z), m=0.4 kg -->
           <inertia>
-            <ixx>0.0042</ixx>
-            <iyy>0.0006</iyy>
-            <izz>0.0040</izz>
+            <ixx>0.0043</ixx>
+            <iyy>0.0015</iyy>
+            <izz>0.0031</izz>
             <ixy>0</ixy>
             <ixz>0</ixz>
             <iyz>0</iyz>
@@ -224,13 +193,15 @@
         </inertial>
         <collision name="collision">
           <geometry>
-            <box><size>0.07 0.30 0.10</size></box>
+            <box><size>0.06 0.30 0.20</size></box>
           </geometry>
+          <!-- High friction so a centred parallel-jaw clamp can hold the slab by
+               friction alone (no attach joint). -->
           <surface>
             <friction>
               <ode>
-                <mu>1.5</mu>
-                <mu2>1.5</mu2>
+                <mu>2.0</mu>
+                <mu2>2.0</mu2>
               </ode>
             </friction>
             <contact>
@@ -243,11 +214,32 @@
         </collision>
         <visual name="visual">
           <geometry>
-            <box><size>0.07 0.30 0.10</size></box>
+            <box><size>0.06 0.30 0.20</size></box>
           </geometry>
           <material>
             <ambient>0.8 0.2 0.2 1</ambient>
             <diffuse>0.8 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+        <!-- Aruco marker on the -X face (0.30 x 0.20). A 0.18 m plate whose ±X
+             faces show the marker; the PNG has a 12.5% quiet zone so the marker
+             proper is 0.135 m -> detector marker_size must match. -->
+        <visual name="marker">
+          <pose>-0.0305 0 0 0 0 0</pose>
+          <geometry>
+            <box><size>0.001 0.18 0.18</size></box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0 0 0 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>materials/textures/aruco_marker_0.png</albedo_map>
+                <metalness>0.0</metalness>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
           </material>
         </visual>
       </link>

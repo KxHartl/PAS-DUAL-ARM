@@ -89,11 +89,15 @@
   <!-- 4.4 WHEEL FRICTION OVERRIDE -->
   <!-- PAL's wheel.gazebo.xacro sets mu1=mu2=0.0 on every wheel (their Classic sim
        drives the base kinematically with planar_move, so wheels are decorative).
-       Our diff_drive base actually rolls on the wheels, so give them traction. -->
+       Our diff_drive base actually rolls on the wheels, so give them rolling
+       traction (mu1) but LOW lateral friction (mu2): this is a rigid 4-wheel
+       skid-steer, so turning in place needs the wheels to slide sideways. With
+       high mu2 the base could only drive straight and would not rotate at all
+       (the 360 scan and all turns were impossible). -->
   <xacro:macro name="wheel_friction" params="side">
     <gazebo reference="wheel_${side}_link">
-      <mu1>1.5</mu1>
-      <mu2>1.5</mu2>
+      <mu1>1.0</mu1>
+      <mu2>0.0</mu2>
       <kp>1000000.0</kp>
       <kd>1000.0</kd>
       <minDepth>0.003</minDepth>
@@ -123,24 +127,9 @@
   <xacro:tip_friction link="right_robotiq_85_left_finger_tip_link"/>
   <xacro:tip_friction link="right_robotiq_85_right_finger_tip_link"/>
 
-  <!-- 4.6 GRASP ATTACH (DetachableJoint) -->
-  <!-- Gazebo Fortress/DART does not hold an object by gripper contact friction,
-       so once the arms are confirmed closed around the bar ends, the bar is
-       rigidly fixed to the left wrist with a DetachableJoint; the arms then lift
-       it as a rigid body. This is physically justified (the grippers really are
-       on the bar, verified from TF) rather than a teleport. The joint starts
-       attached, so main_task detaches it at startup (bar free on the floor),
-       attaches on grasp, and detaches again to place. -->
-  <gazebo>
-    <plugin filename="ignition-gazebo-detachable-joint-system"
-            name="ignition::gazebo::systems::DetachableJoint">
-      <parent_link>left_bracelet_link</parent_link>
-      <child_model>aruco_box</child_model>
-      <child_link>box_link</child_link>
-      <attach_topic>/aruco_box/attach</attach_topic>
-      <detach_topic>/aruco_box/detach</detach_topic>
-    </plugin>
-  </gazebo>
+  <!-- No grasp-attach joint: the box is held purely by the friction of a
+       centred parallel-jaw clamp (high finger-pad + box friction above, high
+       gripper closing effort in main_task). -->
 
   <!-- 4.5 IGNITION SENSORS -->
   <!-- The PAL base ships Gazebo-Classic gpu_ray lasers and the RealSense macro has no
