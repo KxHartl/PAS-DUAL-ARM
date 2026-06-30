@@ -25,12 +25,13 @@ Run order (separate terminals, all with Fast DDS):
   ros2 launch pas_dual_arm_bringup task.launch.py   # move_group + aruco + this
 """
 import math
+import time
 
 import numpy as np
 import rclpy
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory, GripperCommand
-from geometry_msgs.msg import Pose, PoseStamped, Point, Quaternion
+from geometry_msgs.msg import Pose, PoseStamped, Point, Quaternion, Twist
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (
     Constraints,
@@ -39,7 +40,6 @@ from moveit_msgs.msg import (
     PositionConstraint,
     BoundingVolume,
 )
-from nav2_msgs.action import NavigateToPose, Spin
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
@@ -135,8 +135,6 @@ class MainTask(Node):
         self.grasp_half_width = self.get_parameter('grasp_half_width').value
 
         # --- action clients --------------------------------------------------
-        self.nav = ActionClient(self, NavigateToPose, '/navigate_to_pose')
-        self.spin_act = ActionClient(self, Spin, '/spin')
         self.move = ActionClient(self, MoveGroup, '/move_action')
         self.left_grip = ActionClient(
             self, GripperCommand, '/left_gripper_controller/gripper_cmd')
@@ -149,12 +147,21 @@ class MainTask(Node):
             self, FollowJointTrajectory,
             '/pan_tilt_controller/follow_joint_trajectory')
 
+        # --- base velocity ---------------------------------------------------
+        # Drive the base directly (no Nav2): the skid-steer base rotates by wheel
+        # slip, which breaks wheel odometry and SLAM during an in-place turn, so
+        # Nav2/SLAM navigation is unreliable. Instead we visual-servo to the
+        # marker with direct cmd_vel (no relay is running without Nav2).
+        self.cmd_vel = self.create_publisher(
+            Twist, '/base_controller/cmd_vel_unstamped', 10)
+
         # --- perception ------------------------------------------------------
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+        # The 640x480 point cloud is heavy; subscribing all the time starves the
+        # /clock callback in the busy servo loops (sim time then never advances
+        # and the loops hang). Subscribe only while measuring the box.
         self._last_cloud = None
-        self.create_subscription(PointCloud2, '/camera/points',
-                                 self._cloud_cb, 1)
 
         self.get_logger().info('Main task node ready.')
 
@@ -186,18 +193,20 @@ class MainTask(Node):
         self.get_logger().info(f'{name}: {"OK" if ok else "FAILED"}')
         return ok
 
-    # ------------------------------------------------------------------- nav2
-    def navigate_to(self, xy, yaw, label):
-        if not self._wait_server(self.nav, 'navigate_to_pose'):
-            return False
-        goal = NavigateToPose.Goal()
-        goal.pose = PoseStamped()
-        goal.pose.header.frame_id = 'map'
-        goal.pose.header.stamp = self.get_clock().now().to_msg()
-        goal.pose.pose.position = Point(x=float(xy[0]), y=float(xy[1]), z=0.0)
-        goal.pose.pose.orientation = yaw_to_quat(yaw)
-        self.get_logger().info(f'{label}: navigating to {xy} yaw={yaw:.2f}')
-        return self._send_and_wait(self.nav, goal, label)
+    # ------------------------------------------------------------ base (cmd_vel)
+    def _send_vel(self, lin, ang):
+        tw = Twist()
+        tw.linear.x = float(lin)
+        tw.angular.z = float(ang)
+        self.cmd_vel.publish(tw)
+
+    def drive(self, lin, ang, secs, rate=20.0):
+        """Publish a constant Twist to the base for a duration, then stop."""
+        n = max(1, int(secs * rate))
+        for _ in range(n):
+            self._send_vel(lin, ang)
+            rclpy.spin_once(self, timeout_sec=1.0 / rate)
+        self._send_vel(0.0, 0.0)
 
     # ----------------------------------------------------------------- moveit
     def _pose_goal_constraint(self, link, frame, pose, pos_tol=0.03, ang_tol=0.2):
@@ -432,10 +441,15 @@ class MainTask(Node):
         the box. 'seed' is the approximate box centre (from the marker) used to
         isolate the box cluster from the table/background."""
         self._last_cloud = None
-        deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
-        while (rclpy.ok() and self._last_cloud is None
-               and self.get_clock().now().nanoseconds < deadline):
-            rclpy.spin_once(self, timeout_sec=0.1)
+        sub = self.create_subscription(PointCloud2, '/camera/points',
+                                       self._cloud_cb, 1)
+        try:
+            for _ in range(int(timeout / 0.1)):  # wall-clock bounded
+                if self._last_cloud is not None:
+                    break
+                rclpy.spin_once(self, timeout_sec=0.1)
+        finally:
+            self.destroy_subscription(sub)
         if self._last_cloud is None:
             self.get_logger().warn('No point cloud; cannot measure box.')
             return None
@@ -487,97 +501,134 @@ class MainTask(Node):
             orientation=GRASP_DOWN)
         return left, right
 
-    # ------------------------------------------------------------ base helpers
-    def _xy_in_map(self, frame, max_age=None):
-        """(x, y, yaw) of a frame in map, or None. If max_age is set, reject a
-        transform older than that (seconds) so we act only on a fresh detection."""
+    # ------------------------------------------------ marker-relative servoing
+    def aim_camera(self, pan, pitch, label):
+        """Point the pan-tilt camera (pan + pitch)."""
+        if not self._wait_server(self.pan_tilt, 'pan_tilt_controller'):
+            return False
+        goal = FollowJointTrajectory.Goal()
+        traj = JointTrajectory()
+        traj.joint_names = ['pan_tilt_yaw_joint', 'pan_tilt_pitch_joint']
+        pt = JointTrajectoryPoint()
+        pt.positions = [float(pan), float(pitch)]
+        pt.time_from_start.sec = 2
+        traj.points.append(pt)
+        goal.trajectory = traj
+        self.get_logger().info(f'{label}: camera pan={pan:.2f} pitch={pitch:.2f}')
+        return self._send_and_wait(self.pan_tilt, goal, label)
+
+    def marker_in_base(self, max_age=0.5):
+        """(x, y) of the marker in base_link from a FRESH detection, or None.
+        Independent of camera pan/tilt and of SLAM (pure robot TF + detector), so
+        it is reliable feedback for visual servoing."""
         try:
-            tf = self.tf_buffer.lookup_transform('map', frame, rclpy.time.Time())
+            tf = self.tf_buffer.lookup_transform(
+                'base_link', 'aruco_marker_frame', rclpy.time.Time())
         except Exception:
             return None
-        if max_age is not None:
-            stamp = tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9
-            now = self.get_clock().now().nanoseconds * 1e-9
-            if now - stamp > max_age:
-                return None
-        t = tf.transform.translation
-        q = tf.transform.rotation
-        yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
-                         1 - 2 * (q.y * q.y + q.z * q.z))
-        return t.x, t.y, yaw
-
-    def spin_and_find(self, steps=12):
-        """Search for the marker by STEP-spinning: rotate ~30 deg via Nav2 /spin,
-        stop, and take a static detection, repeating up to a full turn. Stopping
-        to look (vs detecting mid-rotation) is far more reliable with the ~2 Hz
-        camera and a small/oblique marker, and gives an unsmeared map estimate.
-        Returns the marker (x, y) in map, or None."""
-        # Tilt well down (~0.5 rad): the camera sits ~1 m up and the box marker is
-        # low (~0.22 m), so a near-level scan looks right over it.
-        self.look_down(0.5, 'SCAN tilt camera down')
-        if not self._wait_server(self.spin_act, 'spin', timeout=60.0):
+        age = (self.get_clock().now().nanoseconds * 1e-9
+               - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9))
+        if age > max_age:
             return None
-        for i in range(steps):
-            # Look from the current heading (several frames while stationary).
-            est = self._marker_map_static(samples=4, timeout=1.8)
-            if est is not None:
-                self.get_logger().info(
-                    f'SCAN: marker found at map ({est[0]:.2f}, {est[1]:.2f}) '
-                    f'on step {i + 1}/{steps}.')
-                return est
-            # Rotate one step and wait for it to finish, then settle.
-            goal = Spin.Goal()
-            goal.target_yaw = 2.0 * math.pi / steps
-            handle = self._spin_until_done(self.spin_act.send_goal_async(goal))
-            if handle is not None and handle.accepted:
-                self._spin_until_done(handle.get_result_async())
-            settle = self.get_clock().now().nanoseconds + int(0.6 * 1e9)
-            while rclpy.ok() and self.get_clock().now().nanoseconds < settle:
+        t = tf.transform.translation
+        return t.x, t.y
+
+    def scan_for_marker(self):
+        """Find the marker by PANNING the camera across its yaw range while the
+        base stays still (so the skid-steer turn does not disturb odom/SLAM).
+        Returns (x, y, pan) - marker in base_link and the camera pan it was found
+        at (so the approach can keep the camera on it) - or None."""
+        for pan in [0.0, -0.5, -1.0, 0.5, 1.0]:
+            self.aim_camera(pan, 0.7, 'SCAN pan')
+            hits = []
+            for _ in range(20):  # ~2 s wall, iteration-bounded (clock-safe)
+                if not rclpy.ok():
+                    break
+                m = self.marker_in_base(max_age=0.4)
+                if m is not None:
+                    hits.append(m)
+                    if len(hits) >= 3:
+                        mx = sum(h[0] for h in hits) / len(hits)
+                        my = sum(h[1] for h in hits) / len(hits)
+                        self.get_logger().info(
+                            f'SCAN: marker found at base_link ({mx:.2f}, '
+                            f'{my:.2f}) [pan={pan:.1f}].')
+                        return mx, my, pan
                 rclpy.spin_once(self, timeout_sec=0.1)
-        self.get_logger().warn('SCAN: full turn without a marker.')
+        self.get_logger().warn('SCAN: marker not found by panning.')
         return None
 
-    def _marker_map_static(self, samples=8, timeout=3.0):
-        """Average fresh marker map (x, y) readings while stationary, or None."""
-        deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
-        xs, ys = [], []
-        while (rclpy.ok() and len(xs) < samples
-               and self.get_clock().now().nanoseconds < deadline):
-            m = self._xy_in_map('aruco_marker_frame', max_age=0.4)
-            if m is not None:
-                xs.append(m[0])
-                ys.append(m[1])
-            rclpy.spin_once(self, timeout_sec=0.1)
-        if not xs:
-            return None
-        return sum(xs) / len(xs), sum(ys) / len(ys)
+    def visual_approach(self, scan_pan=0.0, target_x=0.55, timeout=60.0):
+        """Drive to the marker by visual servoing on its base_link position (no
+        Nav2/SLAM). Two phases, both closed-loop on the marker (robust to
+        skid-steer slip): (1) turn the base to face the marker while the camera
+        stays at the pan it was found at (so it stays in view); (2) recentre the
+        camera and creep forward to target_x. Pitch 0.7 keeps the low box in the
+        field of view across the whole distance. Returns True on success."""
+        # Phase 1: turn to face the marker (camera held at scan_pan).
+        self.aim_camera(scan_pan, 0.7, 'APPROACH hold camera')
+        if not self._servo_turn(timeout):
+            return False
+        # Phase 2: camera forward, creep in.
+        self.aim_camera(0.0, 0.7, 'APPROACH camera forward')
+        return self._servo_creep(target_x, timeout)
 
-    def approach_pose(self, marker, standoff=0.52):
-        """A base pose 'standoff' metres in front of the marker, facing it, on
-        the line from the robot's current position to the marker."""
-        mx, my = marker
-        rob = self._xy_in_map('base_link') or (0.0, 0.0, 0.0)
-        dx, dy = mx - rob[0], my - rob[1]
-        d = math.hypot(dx, dy) or 1.0
-        ux, uy = dx / d, dy / d
-        return [mx - ux * standoff, my - uy * standoff], math.atan2(uy, ux)
-
-    def approach_box(self, marker, tries=3, standoff=0.52, tol=0.10):
-        """Navigate to the stand-off pose in front of the box, repeating from the
-        new pose each time so the base actually closes in despite Nav2
-        undershooting (a direct cmd_vel creep fights the cmd_vel_relay)."""
-        for i in range(tries):
-            xy, yaw = self.approach_pose(marker, standoff)
-            self.navigate_to(xy, yaw, f'STEP2 approach {i + 1}/{tries}')
-            rob = self._xy_in_map('base_link')
-            if rob is None:
+    def _servo_turn(self, timeout):
+        """Turn the base in place until the marker is dead ahead."""
+        end = time.monotonic() + timeout
+        last_seen = time.monotonic()
+        while rclpy.ok() and time.monotonic() < end:
+            m = self.marker_in_base(max_age=0.6)
+            if m is None:
+                self._send_vel(0.0, 0.0)
+                if time.monotonic() - last_seen > 6.0:
+                    self.get_logger().warn('Approach: lost marker (turn).')
+                    return False
+                rclpy.spin_once(self, timeout_sec=0.1)
                 continue
-            err = math.hypot(rob[0] - xy[0], rob[1] - xy[1])
-            self.get_logger().info(
-                f'Approach {i + 1}: base ({rob[0]:.2f}, {rob[1]:.2f}), '
-                f'goal error {err:.2f} m.')
-            if err <= tol:
-                break
+            last_seen = time.monotonic()
+            bearing = math.atan2(m[1], m[0])
+            if abs(bearing) < 0.08:
+                self._send_vel(0.0, 0.0)
+                return True
+            self._send_vel(0.0, max(-0.4, min(0.4, 1.0 * bearing)))
+            rclpy.spin_once(self, timeout_sec=0.05)
+        self._send_vel(0.0, 0.0)
+        return False
+
+    def _servo_creep(self, target_x, timeout):
+        """Creep to the marker: turn in place when off-bearing, else drive
+        straight (never both - with mu2=0 the skid-steer base crabs if it does)."""
+        end = time.monotonic() + timeout
+        last_seen = time.monotonic()
+        while rclpy.ok() and time.monotonic() < end:
+            m = self.marker_in_base(max_age=0.6)
+            if m is None:
+                self._send_vel(0.0, 0.0)
+                if time.monotonic() - last_seen > 6.0:
+                    self.get_logger().warn('Approach: lost marker (creep).')
+                    return False
+                rclpy.spin_once(self, timeout_sec=0.1)
+                continue
+            last_seen = time.monotonic()
+            x, y = m
+            bearing = math.atan2(y, x)
+            dist = math.hypot(x, y)
+            if dist <= target_x + 0.03 and abs(bearing) < 0.08:
+                self._send_vel(0.0, 0.0)
+                self.get_logger().info(
+                    f'Approach done: marker at base_link ({x:.2f}, {y:.2f}).')
+                return True
+            if abs(bearing) > 0.1:
+                self._send_vel(0.0, 0.3 if bearing > 0 else -0.3)
+            elif dist > target_x:
+                self._send_vel(max(0.05, min(0.15, 0.6 * (dist - target_x))), 0.0)
+            else:
+                self._send_vel(0.0, 0.0)
+            rclpy.spin_once(self, timeout_sec=0.05)
+        self._send_vel(0.0, 0.0)
+        self.get_logger().warn('Approach: timed out.')
+        return False
 
     def verify_contact(self, center, half):
         """Honest check that each gripper actually has a finger tip on the box (in
@@ -611,28 +662,38 @@ class MainTask(Node):
 
     # --------------------------------------------------------------------- run
     def run(self):
-        # 1. SCAN: spin in place until the marker on the box is found.
-        marker = self.spin_and_find()
-        if marker is None:
+        # 1. SCAN: pan the camera (base still) until the marker is found.
+        found = self.scan_for_marker()
+        if found is None:
             return self._fail('scan: marker not found')
+        _, _, scan_pan = found
 
-        # 2. APPROACH: drive to a stand-off in front of the box, facing it
-        #    (repeated so the base actually closes in despite Nav2 undershoot).
-        self.approach_box(marker)
-        # Steep tilt (~0.9 rad, near the -1.047 limit): the box is low and now
-        # close (~0.55 m), so the camera must look well down to keep it in view.
-        self.look_down(0.9, 'STEP3 look at box')
-
-        # 3. RECOGNISE: marker face (pose) + depth (dimensions).
+        # 2. APPROACH: visual-servo only to ~0.9 m. Closer, the low marker forces
+        #    such a steep camera tilt that the vertical marker foreshortens and
+        #    ArUco drops it, so we stop where it is still readable, record the box
+        #    pose, then close the last bit open-loop + measure with depth.
+        if not self.visual_approach(scan_pan=scan_pan, target_x=0.90):
+            return self._fail('visual approach to box failed')
+        self.look_down(0.65, 'STEP3 look at box')
         face = self.confirm_box()
         if face is None:
             return self._fail('box not seen at the table')
-        meas = self.measure_box(face)
+
+        # 3. CLOSE IN: drive straight the remaining distance so the box sits at
+        #    ~0.55 m (in reach), then measure it with the depth camera (depth does
+        #    not foreshorten, so it works at the steep close-up angle the marker
+        #    cannot).
+        close = max(0.0, face.x - 0.55)
+        if close > 0.03:
+            self.drive(0.12, 0.0, close / 0.12)
+        self.look_down(0.95, 'STEP3 look down close')
+        seed = Point(x=0.55, y=face.y, z=face.z)
+        meas = self.measure_box(seed)
         if meas is not None:
             center, length, height = meas
         else:
-            self.get_logger().warn('Depth measure failed; using nominal dims.')
-            center, length, height = face, 0.30, 0.20
+            self.get_logger().warn('Depth measure failed; using marker + nominal.')
+            center, length, height = seed, 0.30, 0.20
 
         # 4. GRASP PLAN: grip each end of the slab, in the upper third so it hangs
         #    stably; thickness is taken up by the gripper closing onto the box.
@@ -680,15 +741,10 @@ class MainTask(Node):
             'PICK+LIFT done (friction only, no attach joint). Verify the box '
             'rose WITH the grippers.')
 
-        # 7. TRANSPORT to the place table (front edge at map X=1.20, Y=0.5) and
-        #    keep the elbows tucked? No - hold the grasp pose so the friction grip
-        #    is not disturbed; just drive there.
-        if not self.navigate_to([0.70, 0.5], 0.0, 'STEP7 to place table'):
-            self.get_logger().warn('Could not reach place table; placing here.')
-
-        # 8. PLACE: lower the box back onto the table (reverse the lift) and open
-        #    the grippers. The grip pose is the same in base_link, so the box
-        #    lands on the place table now in front of the robot.
+        # 7-8. PLACE: lower the box onto the table (reverse the lift) and open the
+        #    grippers. (Transport to a separate table needs a place marker for
+        #    visual servoing - see STATE notes - since the skid-steer base has no
+        #    reliable odom/SLAM; for now we lower it back onto the table.)
         place_l, place_r = self.grasp_poses(grip, half_width=half)
         self.plan_arm('left_arm', 'left_end_effector_link', place_l,
                       'base_link', 'STEP8 lower left', ori_tol=0.4)

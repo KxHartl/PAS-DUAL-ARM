@@ -180,9 +180,11 @@
          table top 0.10 + half height 0.10 = 0.20. Yawed so the marked -X face
          points toward the robot's start for easy detection during the spin. -->
     <model name="aruco_box">
-      <!-- Axis-aligned at the table's front edge; marked -X face toward the
-           robot's approach (from -X). Centre Z = table top 0.10 + half 0.125. -->
-      <pose>1.25 -1.0 0.225 0 0 0</pose>
+      <!-- On the table's front edge, yawed so the marked -X face points back
+           toward the robot's start (origin): the robot then approaches the marker
+           head-on (robust detection at all ranges) and ends square in front of
+           the box (so the top-down grasp stays aligned). Centre Z = 0.225. -->
+      <pose>1.28 -1.0 0.225 0 0 -0.68</pose>
       <link name="box_link">
         <inertial>
           <mass>0.4</mass>
