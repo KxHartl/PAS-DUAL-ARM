@@ -135,8 +135,10 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      # Tightened from 0.25: the approach pose must be reached precisely so the
+      # box ends up within the arms' reach (loose tol left the base ~0.23 m short).
+      xy_goal_tolerance: 0.10
+      yaw_goal_tolerance: 0.10
     # DWB parameters
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
@@ -197,7 +199,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        inflation_radius: 0.15
+        inflation_radius: 0.05
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -258,7 +260,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        inflation_radius: 0.15
+        inflation_radius: 0.05
       always_send_full_costmap: True
 
 map_server:
@@ -318,9 +320,11 @@ behavior_server:
     transform_tolerance: 0.1
     use_sim_time: true
     simulate_ahead_time: 2.0
-    max_rotational_vel: 1.0
-    min_rotational_vel: 0.4
-    rotational_acc_lim: 3.2
+    # Slow the /spin scan so the ~2 Hz RGBD camera reliably catches the marker as
+    # it sweeps the FOV (a fast spin skipped past the marker between frames).
+    max_rotational_vel: 0.35
+    min_rotational_vel: 0.2
+    rotational_acc_lim: 1.0
 
 robot_state_publisher:
   ros__parameters:

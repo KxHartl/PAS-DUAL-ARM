@@ -398,6 +398,12 @@ class MainTask(Node):
                 tf = self.tf_buffer.lookup_transform(
                     'base_link', 'aruco_marker_frame',
                     rclpy.time.Time())
+                # Reject stale detections: a leftover TF from the scan would give
+                # a garbage pose now that the robot has moved.
+                age = (self.get_clock().now().nanoseconds * 1e-9
+                       - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9))
+                if age > 0.5:
+                    raise RuntimeError('stale marker')
                 t = tf.transform.translation
                 xs.append(t.x)
                 ys.append(t.y)
@@ -500,38 +506,51 @@ class MainTask(Node):
                          1 - 2 * (q.y * q.y + q.z * q.z))
         return t.x, t.y, yaw
 
-    def spin_and_find(self, timeout=90.0):
-        """Rotate in place via the Nav2 /spin behavior (the base is owned by Nav2;
-        a direct cmd_vel fights the cmd_vel_relay), polling for the Aruco marker.
-        Returns its (x, y) in map, or None. The camera is levelled first. Only
-        fresh marker detections (<0.5 s old) count."""
-        self.look_down(0.15, 'SCAN level camera')
-        if not self._wait_server(self.spin_act, 'spin'):
+    def spin_and_find(self, steps=12):
+        """Search for the marker by STEP-spinning: rotate ~30 deg via Nav2 /spin,
+        stop, and take a static detection, repeating up to a full turn. Stopping
+        to look (vs detecting mid-rotation) is far more reliable with the ~2 Hz
+        camera and a small/oblique marker, and gives an unsmeared map estimate.
+        Returns the marker (x, y) in map, or None."""
+        # Tilt well down (~0.5 rad): the camera sits ~1 m up and the box marker is
+        # low (~0.22 m), so a near-level scan looks right over it.
+        self.look_down(0.5, 'SCAN tilt camera down')
+        if not self._wait_server(self.spin_act, 'spin', timeout=60.0):
             return None
-        goal = Spin.Goal()
-        goal.target_yaw = 6.5  # a bit over a full turn
-        handle = self._spin_until_done(self.spin_act.send_goal_async(goal))
-        if handle is None or not handle.accepted:
-            self.get_logger().error('SCAN: spin goal rejected.')
-            return None
-        result_future = handle.get_result_async()
-        deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
-        hits = []
-        while (rclpy.ok() and not result_future.done()
-               and self.get_clock().now().nanoseconds < deadline):
-            m = self._xy_in_map('aruco_marker_frame', max_age=0.5)
-            if m is not None:
-                hits.append((m[0], m[1]))
-                if len(hits) >= 3:
-                    handle.cancel_goal_async()
-                    mx = sum(h[0] for h in hits) / len(hits)
-                    my = sum(h[1] for h in hits) / len(hits)
-                    self.get_logger().info(
-                        f'SCAN: marker found at map ({mx:.2f}, {my:.2f}).')
-                    return mx, my
-            rclpy.spin_once(self, timeout_sec=0.1)
+        for i in range(steps):
+            # Look from the current heading (several frames while stationary).
+            est = self._marker_map_static(samples=4, timeout=1.8)
+            if est is not None:
+                self.get_logger().info(
+                    f'SCAN: marker found at map ({est[0]:.2f}, {est[1]:.2f}) '
+                    f'on step {i + 1}/{steps}.')
+                return est
+            # Rotate one step and wait for it to finish, then settle.
+            goal = Spin.Goal()
+            goal.target_yaw = 2.0 * math.pi / steps
+            handle = self._spin_until_done(self.spin_act.send_goal_async(goal))
+            if handle is not None and handle.accepted:
+                self._spin_until_done(handle.get_result_async())
+            settle = self.get_clock().now().nanoseconds + int(0.6 * 1e9)
+            while rclpy.ok() and self.get_clock().now().nanoseconds < settle:
+                rclpy.spin_once(self, timeout_sec=0.1)
         self.get_logger().warn('SCAN: full turn without a marker.')
         return None
+
+    def _marker_map_static(self, samples=8, timeout=3.0):
+        """Average fresh marker map (x, y) readings while stationary, or None."""
+        deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
+        xs, ys = [], []
+        while (rclpy.ok() and len(xs) < samples
+               and self.get_clock().now().nanoseconds < deadline):
+            m = self._xy_in_map('aruco_marker_frame', max_age=0.4)
+            if m is not None:
+                xs.append(m[0])
+                ys.append(m[1])
+            rclpy.spin_once(self, timeout_sec=0.1)
+        if not xs:
+            return None
+        return sum(xs) / len(xs), sum(ys) / len(ys)
 
     def approach_pose(self, marker, standoff=0.52):
         """A base pose 'standoff' metres in front of the marker, facing it, on
@@ -600,7 +619,9 @@ class MainTask(Node):
         # 2. APPROACH: drive to a stand-off in front of the box, facing it
         #    (repeated so the base actually closes in despite Nav2 undershoot).
         self.approach_box(marker)
-        self.look_down(0.6, 'STEP3 look at box')
+        # Steep tilt (~0.9 rad, near the -1.047 limit): the box is low and now
+        # close (~0.55 m), so the camera must look well down to keep it in view.
+        self.look_down(0.9, 'STEP3 look at box')
 
         # 3. RECOGNISE: marker face (pose) + depth (dimensions).
         face = self.confirm_box()
@@ -658,6 +679,30 @@ class MainTask(Node):
         self.get_logger().info(
             'PICK+LIFT done (friction only, no attach joint). Verify the box '
             'rose WITH the grippers.')
+
+        # 7. TRANSPORT to the place table (front edge at map X=1.20, Y=0.5) and
+        #    keep the elbows tucked? No - hold the grasp pose so the friction grip
+        #    is not disturbed; just drive there.
+        if not self.navigate_to([0.70, 0.5], 0.0, 'STEP7 to place table'):
+            self.get_logger().warn('Could not reach place table; placing here.')
+
+        # 8. PLACE: lower the box back onto the table (reverse the lift) and open
+        #    the grippers. The grip pose is the same in base_link, so the box
+        #    lands on the place table now in front of the robot.
+        place_l, place_r = self.grasp_poses(grip, half_width=half)
+        self.plan_arm('left_arm', 'left_end_effector_link', place_l,
+                      'base_link', 'STEP8 lower left', ori_tol=0.4)
+        self.plan_arm('right_arm', 'right_end_effector_link', place_r,
+                      'base_link', 'STEP8 lower right', ori_tol=0.4)
+        self.set_gripper(self.left_grip, 0.0, 'STEP8 release left')
+        self.set_gripper(self.right_grip, 0.0, 'STEP8 release right')
+        # Back the arms up so they clear the placed box.
+        clear_l, clear_r = self.grasp_poses(grip, half_width=half, z_offset=0.24)
+        self.plan_arm('left_arm', 'left_end_effector_link', clear_l,
+                      'base_link', 'STEP8 retract left', ori_tol=0.4)
+        self.plan_arm('right_arm', 'right_end_effector_link', clear_r,
+                      'base_link', 'STEP8 retract right', ori_tol=0.4)
+        self.get_logger().info('TASK COMPLETE: box placed on the table.')
 
     def _fail(self, where):
         self.get_logger().error(f'Task aborted during: {where}')
