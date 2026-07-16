@@ -40,3 +40,33 @@
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "ignition.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
+
+# --- Fingertip contact sensors (defined in robot.urdf.xacro) ---
+# Real finger-on-box contact for honest grasp verification before the attach.
+# NOTE: the Fortress Contact system IGNORES the sensor's custom <topic> tag and
+# always publishes on the default /world/<w>/model/<m>/link/<l>/sensor/<s>/contact
+# path (verified live: the short topics had no publisher while these did), so the
+# bridge maps the long gz names onto the short ROS names main_task subscribes to.
+- ros_topic_name: "/contact/left_left_tip"
+  gz_topic_name: "/world/seminar_world/model/dual_arm_robot/link/left_robotiq_85_left_finger_tip_link/sensor/left_left_tip_contact/contact"
+  ros_type_name: "ros_gz_interfaces/msg/Contacts"
+  gz_type_name: "ignition.msgs.Contacts"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/contact/left_right_tip"
+  gz_topic_name: "/world/seminar_world/model/dual_arm_robot/link/left_robotiq_85_right_finger_tip_link/sensor/left_right_tip_contact/contact"
+  ros_type_name: "ros_gz_interfaces/msg/Contacts"
+  gz_type_name: "ignition.msgs.Contacts"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/contact/right_left_tip"
+  gz_topic_name: "/world/seminar_world/model/dual_arm_robot/link/right_robotiq_85_left_finger_tip_link/sensor/right_left_tip_contact/contact"
+  ros_type_name: "ros_gz_interfaces/msg/Contacts"
+  gz_type_name: "ignition.msgs.Contacts"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/contact/right_right_tip"
+  gz_topic_name: "/world/seminar_world/model/dual_arm_robot/link/right_robotiq_85_right_finger_tip_link/sensor/right_right_tip_contact/contact"
+  ros_type_name: "ros_gz_interfaces/msg/Contacts"
+  gz_type_name: "ignition.msgs.Contacts"
+  direction: GZ_TO_ROS

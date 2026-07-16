@@ -13,6 +13,10 @@
        The base is instead driven by the Ignition MecanumDrive plugin (see section 5). -->
   <xacro:property name="namespace" value=""/>
   <xacro:property name="is_public_sim" value="true"/>
+  <!-- pal_urdf_utils laser/sensor macros branch on this; we skip omni_base.urdf.xacro
+       (see note above) so it's never set upstream. Anything != 'classic' is correct
+       here since we run on Ignition/gz sim, not Gazebo Classic. -->
+  <xacro:property name="gazebo_version" value="gazebo"/>
   <xacro:include filename="$(find pal_urdf_utils)/urdf/materials.urdf.xacro"/>
   <xacro:include filename="$(find pal_urdf_utils)/urdf/deg_to_rad.urdf.xacro"/>
   <xacro:include filename="$(find omni_base_description)/urdf/base/base_sensors.urdf.xacro"/>
@@ -130,6 +134,34 @@
   <xacro:tip_friction link="left_robotiq_85_right_finger_link"/>
   <xacro:tip_friction link="right_robotiq_85_left_finger_link"/>
   <xacro:tip_friction link="right_robotiq_85_right_finger_link"/>
+
+  <!-- 4.5b FINGER-TIP CONTACT SENSORS -->
+  <!-- Ignition contact sensor on each finger tip so the grasp is confirmed by a
+       REAL finger-on-box contact ("small contact force"), not by geometry alone.
+       main_task fuses these with the depth check and the gripper stall before it
+       commits the rigid attach. The collision name is sdformat's default for an
+       unnamed URDF collision: <link>_collision. Needs the world's Contact system
+       plugin. If a sensor never fires, the grasp still verifies via depth+stall. -->
+  <xacro:macro name="tip_contact" params="link sensor topic">
+    <gazebo reference="${link}">
+      <sensor name="${sensor}" type="contact">
+        <always_on>1</always_on>
+        <update_rate>50</update_rate>
+        <contact>
+          <collision>${link}_collision</collision>
+        </contact>
+        <topic>${topic}</topic>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+  <xacro:tip_contact link="left_robotiq_85_left_finger_tip_link"
+                     sensor="left_left_tip_contact" topic="/contact/left_left_tip"/>
+  <xacro:tip_contact link="left_robotiq_85_right_finger_tip_link"
+                     sensor="left_right_tip_contact" topic="/contact/left_right_tip"/>
+  <xacro:tip_contact link="right_robotiq_85_left_finger_tip_link"
+                     sensor="right_left_tip_contact" topic="/contact/right_left_tip"/>
+  <xacro:tip_contact link="right_robotiq_85_right_finger_tip_link"
+                     sensor="right_right_tip_contact" topic="/contact/right_right_tip"/>
 
   <!-- 4.6 CONTACT-VERIFIED GRASP ATTACH (DetachableJoint) -->
   <!-- DART will not hold a free object by gripper friction (tried mu up to 5,

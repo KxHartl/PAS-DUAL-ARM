@@ -1,9 +1,127 @@
 # Stanje Projekta (State)
 
-**Trenutna faza**: Autonomni find → prilaz → hvat → podizanje → spuštanje na stol
-radi end-to-end u GUI-ju (pošteno, bez varke). Transport do ZASEBNOG stola nije
-izvediv (DART DetachableJoint + gibanje baze izbacuje kutiju).
-**Datum zadnje izmjene**: 2026-06-30
+**Trenutna faza**: KOCKA PO ZADATKU (0.3×0.3×0.3 m, 1 kg) — autonomni
+find → prilaz → centriranje → DVORUČNI SQUEEZE hvat (kontaktom verificiran)
+→ podizanje radi (3 uspješna end-to-end ciklusa u GUI-ju). Spuštanje još
+zna ispustiti kocku par cm previsoko (prevrne se) — vidi TODO. Transport do
+ZASEBNOG stola i dalje otvoren (Faza 1/3 plana).
+**Datum zadnje izmjene**: 2026-07-16
+
+## Dvoručni SQUEEZE hvat kocke po zadatku (2026-07-15/16, GUI provjereno)
+Zadatak traži kocku 0.3 m / 1 kg; hvataljke 2f_85 (85 mm) je ne mogu obuhvatiti,
+pa OBJE ruke ZATVORENIM hvataljkama (vrhovi prstiju = jastučići s gz Contact
+senzorima) istovremeno pritisnu suprotne bočne strane; attach (DetachableJoint,
+lijevi zglob) TEK nakon dokazanog obostranog kontakta s kutijom. Ključni dizajn:
+- **Slijed**: scan → vizualni prilaz (0.95 m) → mjerenje dubinom S TE UDALJENOSTI
+  (bliže, kamera vidi vlastito tijelo u prozoru → junk klasteri) → cross-check
+  vs marker → dovoz (odometrijski korigiran; `drive()` tempira SIM vremenom,
+  RTF<1 inače prepolovi put) → **centrirajući okret** na y≈-0.075 (asimetrično:
+  sweet-spot zone lijeve i desne ruke se NE poklapaju — desna savršena s kockom
+  na y=-0.13, lijeva na y=-0.02; sredina služi objema) → planning scena (pod,
+  stol, kocka — MoveIt inače zamahuje rukom KROZ stol, reakcija odgurne bazu!)
+  → IK/pre-squeeze → SIMULTANI press (direktno na oba JTC kontrolera; jednostrani
+  press buldožira kocku 0.3 m po stolu) → gate → attach → desna popusti prva
+  (nikad dva kruta držanja) → lijeva digne 15 cm → spusti → detach → odmakni.
+- **Press = ravna kartezijska linija** (`compute_cartesian_path` +
+  `execute_trajectory`): RRTConnect za 10 cm zna vratiti metarske obilaske koji
+  ruše ruku kroz kocku. Nužno: (1) VREMENSKA parametrizacija (servis vraća
+  neparametriranu putanju → kontroler inače "skoči" bilo kamo); (2) **2π unwrap**
+  kontinuiranih zglobova na granu najbližu stvarnom stanju (IK vraća [-π,π],
+  zglob akumulira okretaje → inače puni krug "odmotavanja" usred hvata — TO su
+  bile "čudne rotacije"); (3) guard prve točke (putanja iz zastarjelog stanja →
+  JTC lansira ruku metar dalje); (4) settle-wait prije računanja (JTC javi
+  "gotovo" na ISTEK VREMENA putanje, a sim ruka dopuzava još sekundama).
+- **Fallback lanac pritiska**: čista linija (fraction≥0.9) → re-roll pre-squeeze
+  konfiguracije (лutrija IK grana; do 4×, uz 180° roll varijantu) → RRT na pozu
+  ~2 cm ispred lica (uvijek plannabilna) → per-arm linearni RE-PRESS koji
+  konvergira pouzdano (mjereno Δ=0.001–0.005 m).
+- **Gate (pošten)**: placement (obje ruke REACHED ili pad-kontakt s kutijom +
+  `fingertips_on_box` s dimenzijama kocke, nezavisno od naredbi) **I** fizički
+  kontakt na OBJE strane, pri čemu se broji SAMO kontakt s `aruco_box`
+  (imena kolizija iz poruke; dodir stola/sebe NIJE dokaz). Stall izbačen
+  (pritisak na ravnu plohu ga nema). Press meta 3 cm U kocki — kocka (ne
+  poza) zaustavlja jastučić pa je kontakt garantiran za manjak ≤3.5 cm.
+- **Contact senzori**: Fortress IGNORIRA `<topic>` tag — objavljuju na
+  `/world/<w>/model/<m>/link/<l>/sensor/<s>/contact`; bridge mapira te duge
+  putanje na kratke (`bridge.yaml`). Poruka nosi imena kolizija (za box-only).
+- Provjereno: 3 puna ciklusa hvat+lift (kocka visi na lijevom zglobu, ne
+  odlijeće); SVIH ~15 neuspješnih runova završilo POŠTENIM abortom (nikad
+  fake attach) — gate-ovi rade po dizajnu.
+
+### Popravci infrastrukture (2026-07-15/16)
+- **apt upgrade slomio okoliš**: (1) `pal_urdf_utils` sad traži `gazebo_version`
+  xacro svojstvo → definirano u `robot.urdf.xacro`; (2) source-build MoveIt
+  (`~/ws_moveit2`) linkan na `libgeometric_shapes.so.2.3.2`, apt donio 2.3.4 →
+  kompat symlink u `~/.local/lib/compat` + `LD_LIBRARY_PATH` u RUNNING.md.
+- **spin_once NIJE pacing**: vraća se čim obradi BILO KOJI callback (/clock je
+  ~1 kHz) — sve petlje "čekaj N s" pretvorene u monotone/sim-time deadline
+  (mjerenje oblaka, `drive()`); posljedica starog buga: "vožnje" od 4 s su se
+  izvršavale u milisekundama (seed x=0.55 fantomi iz starih runova).
+- **Oblak kamere u tjelesnoj konvenciji**: gz rgbd stampa optički frame, podaci
+  su x-naprijed → `measure_box()` transformira preko `camera_link`.
+- **Odometrija**: `/base_controller/odom` za stvarno prevaljeni dovoz i stvarni
+  kut centrirajućeg okreta (percept se rotira/translatira za IZMJERENO).
+
+### TODO (sljedeća sesija)
+1. **Spuštanje**: kocka se ispusti par cm previsoko i prevrne. Fix: (a) nakon
+   attacha MAKNUTI kocku iz planning scene (postala je dio "ruke"; njen
+   kolizijski objekt sad blokira re-lower/retreat RRT fallbackove), (b)
+   spuštanje do kontakta (detach tek kad z-visina EE potvrdi plohu ±2 cm).
+2. **Negativni test**: kocka izvan dohvata → mora abortirati (gate-ovi to već
+   rade za promašaje, formalno potvrditi scenarij).
+3. **Faza 1 (blokator)**: DART transport eksperiment A–E (STATE plan) — vožnja
+   baze s attachanom kockom; probati otvorene jastučiće (nema kontakta uz kruti
+   zglob), masa sad 1 kg (bolji omjer), re-parent na torzo.
+4. **Faza 3**: Nav2 retest (kotači popravljeni NAKON napuštanja) ili waypoint
+   vožnja; odlaganje na `target_table` (ploha 0.775 m!) u drugoj prostoriji.
+5. **Faza 4**: vrata sa sadašnjih 2.0 m suziti prema 0.8 m po zadatku.
+
+## (starije) Stanje prije kocke — pločica 0.06×0.30×0.25
+**Napomena**: svijet sad ima KOCKU po zadatku; sekcije ispod opisuju stariju
+pločicu i vrijede povijesno.
+
+## Pošten, kontaktom-verificiran hvat — redizajn (implementirano 2026-06-30, JOŠ NEPROVJERENO u sim)
+Razlog: hvataljke su dolazile ~50 cm ISPRED kutije, zatvarale se u prazno i kutija
+se "fake" zavarivala iz daljine. Plan: `~/.claude/plans/ne-radi-hvatanje-kutije-bright-boot.md`.
+
+### NAPRAVLJENO (kod izmijenjen, build/flake8/xacro čisti)
+Datoteke: `pas_dual_arm_scripts/.../main_task.py`, `pas_dual_arm_bringup/urdf/robot.urdf.xacro`,
+`.../worlds/seminar_world.sdf`, `.../config/bridge.yaml`, `pas_dual_arm_scripts/package.xml`.
+- **Cirkularna provjera uklonjena** — stara `verify_contact(grip,half)` mjerila je
+  vrhove protiv ISTOG naređenog centra. Zamijenjeno neovisnim signalima.
+- **Tihi fallback na x=0.55 uklonjen** — ako `measure_box()` padne → `_fail`.
+- **`verify_reached()`** — čita STVARNU EE pozu iz TF-a vs naredbena (tol 5 cm);
+  ruka nije stigla → abort. Direktno hvata "50 cm ispred".
+- **Yaw-svjesno**: `measure_box()` PCA → duga os `u`; `grasp_poses(center,u,…)`
+  poravna poze + orijentaciju prstiju s pravom osi/debljinom.
+- **`measure_tip_standoff()`** — wrist→vrh iz TF-a (~0.145 m); vrhovi (ne zglob)
+  slijeću na šipku (zamijenjen magični `z_offset=0.12`).
+- **Fuzija osjeta kontakta**: (1) gz **Contact senzori** na 4 vrha (`tip_contact`
+  makro + `Contact` plugin u svijetu + bridge `ros_gz_interfaces/Contacts`);
+  (2) **stall** hvataljke (knuckle position); (3) wrist **effort** — samo LOGIRAN.
+  Gejt za attach: **placement (reached + `fingertips_on_box` na PRED-grasp
+  percepciji, otporno na okluziju) I fizički signal (senzor ILI stall)** — inače
+  otpusti + abort. Ako contact senzor šuti → graceful fallback na depth+stall.
+
+### ZA TESTIRATI (sljedeća sesija — sim još NIJE pokrenut)
+1. `ros2 launch pas_dual_arm_bringup sim.launch.py` + `task.launch.py`.
+2. **Contact topici objavljuju?** `ros2 topic echo /contact/left_left_tip --once`.
+   Ako šute → krivo ime kolizije (`<link>_collision`); naći pravo ime u spawnanom
+   SDF-u i ispraviti `tip_contact` makro (hvat dotad radi preko depth+stall).
+3. **Pozitivni**: log mora pokazati izmjereni centar+yaw (ne abort), `EE … REACHED`,
+   `Grasp evidence: placement=True physical=…`, pa `Box ATTACHED`; kutija se digne.
+4. **Negativni**: makni kutiju izvan dohvata → mora ABORTIRATI ("did not reach" /
+   "no real contact"), NE fake-attach.
+
+### ZA NAPRAVITI / OTVORENO
+- Fino podesiti pragove: `verify_reached` tol (5 cm), stall prag (`target-0.06`),
+  `fingertips_on_box` tolerancije, contact `max_age`.
+- Ako contact senzor radi: razmotriti zatvaranje hvataljke DO kontakta (ranije
+  zaustavljanje) umjesto fiksne mete 0.7.
+- Provjeriti ne ruši li attach-poslije-stiska (gentle effort 20) DART solver pri
+  dizanju (prije je bio attach-prije-stiska); ako izbaci kutiju → vratiti redoslijed.
+- `_log_grasp_geometry` još koristi hardkodirani 0.15/Y (samo telemetrija, ne gejt).
+- Transport do ZASEBNOG stola i dalje otvoren (DART + gibanje baze izbacuje kutiju).
 
 ## Autonomni pick→lift→place bez Nav2/SLAM (provjereno u GUI 2026-06-30)
 Slijed (`main_task.py`, sve preko stvarnih akcija, bez Nav2/SLAM):

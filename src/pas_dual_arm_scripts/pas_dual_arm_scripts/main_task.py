@@ -32,21 +32,33 @@ import numpy as np
 import rclpy
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory, GripperCommand
-from geometry_msgs.msg import Pose, PoseStamped, Point, Quaternion, Twist
-from moveit_msgs.action import MoveGroup
+from geometry_msgs.msg import Pose, Point, Quaternion, Twist
+from moveit_msgs.action import ExecuteTrajectory, MoveGroup
+from moveit_msgs.srv import GetCartesianPath, GetPositionIK
 from moveit_msgs.msg import (
+    CollisionObject,
     Constraints,
     JointConstraint,
     OrientationConstraint,
+    PlanningScene,
     PositionConstraint,
     BoundingVolume,
 )
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from sensor_msgs.msg import PointCloud2
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import JointState, PointCloud2
 from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+# Optional Ignition contact-sensor feedback. Bridged via ros_gz_interfaces; if the
+# package or the sensor is missing, the grasp verification falls back to depth +
+# gripper-stall + arm-effort (see fingertips_on_box / close_until_contact).
+try:
+    from ros_gz_interfaces.msg import Contacts as _Contacts
+except Exception:  # pragma: no cover - bridge/package may be absent
+    _Contacts = None
 
 
 def quat_to_matrix(q):
@@ -57,6 +69,28 @@ def quat_to_matrix(q):
         [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
     ])
+
+
+def quat_from_matrix(R):
+    """3x3 rotation matrix -> geometry_msgs Quaternion (Shepperd's method)."""
+    t = R[0, 0] + R[1, 1] + R[2, 2]
+    if t > 0:
+        s = math.sqrt(t + 1.0) * 2
+        w, x = 0.25 * s, (R[2, 1] - R[1, 2]) / s
+        y, z = (R[0, 2] - R[2, 0]) / s, (R[1, 0] - R[0, 1]) / s
+    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+        s = math.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2
+        w, x = (R[2, 1] - R[1, 2]) / s, 0.25 * s
+        y, z = (R[0, 1] + R[1, 0]) / s, (R[0, 2] + R[2, 0]) / s
+    elif R[1, 1] > R[2, 2]:
+        s = math.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2
+        w, x = (R[0, 2] - R[2, 0]) / s, (R[0, 1] + R[1, 0]) / s
+        y, z = 0.25 * s, (R[1, 2] + R[2, 1]) / s
+    else:
+        s = math.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2
+        w, x = (R[1, 0] - R[0, 1]) / s, (R[0, 2] + R[2, 0]) / s
+        y, z = (R[1, 2] + R[2, 1]) / s, 0.25 * s
+    return Quaternion(x=float(x), y=float(y), z=float(z), w=float(w))
 
 
 def pointcloud2_xyz(msg):
@@ -75,6 +109,15 @@ def pointcloud2_xyz(msg):
 
 def yaw_to_quat(yaw):
     return Quaternion(x=0.0, y=0.0, z=math.sin(yaw / 2.0), w=math.cos(yaw / 2.0))
+
+
+def quat_mul(a, b):
+    """Hamilton product a*b of two geometry_msgs Quaternions (apply b, then a)."""
+    return Quaternion(
+        x=a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+        y=a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+        z=a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+        w=a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z)
 
 
 # Reachable 'ready' posture (SRDF Home state) used as a known-good joint-space
@@ -137,6 +180,27 @@ class MainTask(Node):
 
         # --- action clients --------------------------------------------------
         self.move = ActionClient(self, MoveGroup, '/move_action')
+        # Straight-line Cartesian moves (press/lift): a 10 cm press must be a
+        # 10 cm motion - RRTConnect happily returns metre-long detours that
+        # sweep the unmodelled box mid-path.
+        self.cart_srv = self.create_client(
+            GetCartesianPath, '/compute_cartesian_path')
+        self.ik_srv = self.create_client(GetPositionIK, '/compute_ik')
+        self.exec_traj = ActionClient(self, ExecuteTrajectory,
+                                      '/execute_trajectory')
+        # Direct arm-controller clients: move_group executes ONE trajectory at
+        # a time, but the squeeze needs BOTH arms pressing simultaneously.
+        self.left_jtc = ActionClient(
+            self, FollowJointTrajectory,
+            '/left_arm_controller/follow_joint_trajectory')
+        self.right_jtc = ActionClient(
+            self, FollowJointTrajectory,
+            '/right_arm_controller/follow_joint_trajectory')
+        # Planning-scene diffs: MoveIt knows NOTHING about the world by
+        # default, so RRT paths sweep the arms straight through the table (the
+        # reaction shoved the whole base metres away, seen live in the GUI).
+        self.scene_pub = self.create_publisher(
+            PlanningScene, '/planning_scene', 10)
         self.left_grip = ActionClient(
             self, GripperCommand, '/left_gripper_controller/gripper_cmd')
         self.right_grip = ActionClient(
@@ -164,10 +228,105 @@ class MainTask(Node):
         # and the loops hang). Subscribe only while measuring the box.
         self._last_cloud = None
 
+        # Wrist->fingertip stand-off along the gripper approach axis, measured once
+        # from TF after the arms reach a known posture (so end_effector goals place
+        # the FINGER TIPS - not the wrist - on the bar). Nominal until measured.
+        self.tip_standoff = 0.145
+
+        # --- contact / force feedback ---------------------------------------
+        # The arm joints expose an 'effort' state interface (Gen3 joint-torque
+        # sensors); the gripper exposes position+velocity. We read both from
+        # /joint_states: gripper position drives the grasp-stall signal (finger
+        # stops short of the full stroke), and wrist effort is logged for context
+        # (not a hard gate - a top-down grasp loads the wrist mostly with gravity).
+        self._joint = {}            # name -> (position, effort)
+        self.create_subscription(JointState, '/joint_states',
+                                 self._joint_cb, 10)
+        # Wheel odometry: used to measure the ACTUAL close-in drive distance
+        # (the trapezoidal open-loop drive has cm-level error, enough for the
+        # grippers to close beside the bar).
+        self._last_odom = None
+        self.create_subscription(Odometry, '/base_controller/odom',
+                                 self._odom_cb, 10)
+        # Optional Ignition fingertip contact sensors (bridged Contacts msgs). Each
+        # entry holds the wall-clock time a non-empty contact was last seen;
+        # _tip_box_contact_t only counts contacts whose other collider is the box.
+        self._tip_contact_t = {}
+        self._tip_box_contact_t = {}
+        self.tip_contact_topics = {
+            'left_left': '/contact/left_left_tip',
+            'left_right': '/contact/left_right_tip',
+            'right_left': '/contact/right_left_tip',
+            'right_right': '/contact/right_right_tip',
+        }
+        if _Contacts is not None:
+            for key, topic in self.tip_contact_topics.items():
+                self.create_subscription(
+                    _Contacts, topic,
+                    lambda msg, k=key: self._contact_cb(k, msg), 10)
+            self.get_logger().info('Fingertip contact sensors subscribed.')
+        else:
+            self.get_logger().warn(
+                'ros_gz_interfaces/Contacts unavailable; contact-sensor signal '
+                'disabled (depth + stall + effort still used).')
+
         self.get_logger().info('Main task node ready.')
 
     def _cloud_cb(self, msg):
         self._last_cloud = msg
+
+    def _joint_cb(self, msg):
+        for i, name in enumerate(msg.name):
+            pos = msg.position[i] if i < len(msg.position) else 0.0
+            eff = msg.effort[i] if i < len(msg.effort) else 0.0
+            self._joint[name] = (pos, eff)
+
+    def _contact_cb(self, key, msg):
+        if msg.contacts:
+            self._tip_contact_t[key] = time.monotonic()
+            # Track WHAT was touched: only a contact whose other collider is
+            # the target box may count as grasp evidence - a pad brushing the
+            # table or the robot itself must not pass the gate.
+            for c in msg.contacts:
+                names = (getattr(c.collision1, 'name', '') + '|'
+                         + getattr(c.collision2, 'name', ''))
+                if 'aruco_box' in names:
+                    self._tip_box_contact_t[key] = time.monotonic()
+                    break
+
+    def _odom_cb(self, msg):
+        self._last_odom = msg
+
+    def _odom_xy(self, timeout=2.0):
+        """A FRESH wheel-odometry XY sample (odom frame), or None."""
+        self._last_odom = None
+        deadline = time.monotonic() + timeout
+        while self._last_odom is None and time.monotonic() < deadline:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        if self._last_odom is None:
+            return None
+        p = self._last_odom.pose.pose.position
+        return (p.x, p.y)
+
+    def _odom_yaw(self, timeout=2.0):
+        """A FRESH wheel-odometry yaw sample (odom frame), or None."""
+        self._last_odom = None
+        deadline = time.monotonic() + timeout
+        while self._last_odom is None and time.monotonic() < deadline:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        if self._last_odom is None:
+            return None
+        q = self._last_odom.pose.pose.orientation
+        return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+    def _tip_in_contact(self, key, max_age=0.4, box_only=False):
+        """True if the named fingertip contact sensor fired within max_age s.
+        With box_only=True only contacts AGAINST THE BOX count (a pad brushing
+        the table or the robot itself is not grasp evidence)."""
+        t = (self._tip_box_contact_t if box_only
+             else self._tip_contact_t).get(key)
+        return t is not None and (time.monotonic() - t) < max_age
 
     # ------------------------------------------------------------------ utils
     def _wait_server(self, client, name, timeout=30.0):
@@ -209,6 +368,15 @@ class MainTask(Node):
         it (the way Nav2's smoothed velocities did when carry worked before)."""
         n = max(1, int(secs * rate))
         ramp = max(1, int(0.8 * rate))   # ~0.8 s ease in / ease out
+        period = 1.0 / rate
+        # Pace the ticks by SIM time, not wall time: `secs` of commanded motion
+        # only integrates `secs` of sim time worth of distance, and the GUI sim
+        # runs below real-time (measured RTF ~0.5: commanded 0.48 m, driven
+        # 0.24 m with wall pacing). spin_once() alone is no pacing at all - it
+        # returns per serviced callback and /clock runs at ~1 kHz. The wall
+        # deadline is a safety net so a paused sim cannot hang us forever.
+        t0_ns = self.get_clock().now().nanoseconds
+        wall_deadline = time.monotonic() + 4.0 * secs + 5.0
         for i in range(n):
             if i < ramp:
                 s = (i + 1) / ramp
@@ -217,7 +385,10 @@ class MainTask(Node):
             else:
                 s = 1.0
             self._send_vel(lin * s, ang * s)
-            rclpy.spin_once(self, timeout_sec=1.0 / rate)
+            target_ns = t0_ns + int((i + 1) * period * 1e9)
+            while (self.get_clock().now().nanoseconds < target_ns
+                   and time.monotonic() < wall_deadline):
+                rclpy.spin_once(self, timeout_sec=0.02)
         self._send_vel(0.0, 0.0)
 
     def _attach_box(self, attach):
@@ -232,6 +403,406 @@ class MainTask(Node):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.get_logger().info(
             f'Box {"ATTACHED to" if attach else "DETACHED from"} left wrist.')
+
+    # ------------------------------------------------------------ TF / reach
+    def _tf_point(self, target, source):
+        """Translation (np.array xyz) of source frame in target frame, or None."""
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                target, source, rclpy.time.Time())
+            t = tf.transform.translation
+            return np.array([t.x, t.y, t.z])
+        except Exception:
+            return None
+
+    def measure_tip_standoff(self):
+        """Measure the wrist->fingertip distance along the gripper approach axis
+        from TF (end_effector_link -> finger_tip_link) so grasp goals can place the
+        finger tips, not the wrist, on the bar. Updates self.tip_standoff."""
+        vals = []
+        for side in ('left', 'right'):
+            for f in ('left', 'right'):
+                try:
+                    tf = self.tf_buffer.lookup_transform(
+                        f'{side}_end_effector_link',
+                        f'{side}_robotiq_85_{f}_finger_tip_link',
+                        rclpy.time.Time())
+                    t = tf.transform.translation
+                    vals.append(math.sqrt(t.x * t.x + t.y * t.y + t.z * t.z))
+                except Exception:
+                    continue
+        if vals:
+            self.tip_standoff = sum(vals) / len(vals)
+            self.get_logger().info(
+                f'Measured wrist->fingertip stand-off = {self.tip_standoff:.3f} m '
+                f'({len(vals)} tips).')
+        else:
+            self.get_logger().warn(
+                f'Could not measure fingertip stand-off; using nominal '
+                f'{self.tip_standoff:.3f} m.')
+        return self.tip_standoff
+
+    def _linear_traj(self, group, ee, pose, label, min_frac=0.7):
+        """Timed straight-line RobotTrajectory of `ee` to `pose` (base_link)
+        via MoveIt's compute_cartesian_path, or None. avoid_collisions=False:
+        press goals deliberately touch the box."""
+        if not self.cart_srv.wait_for_service(timeout_sec=10.0):
+            self.get_logger().warn(f'{label}: cartesian service unavailable.')
+            return None
+        req = GetCartesianPath.Request()
+        req.header.frame_id = 'base_link'
+        req.start_state.is_diff = True
+        req.group_name = group
+        req.link_name = ee
+        req.waypoints = [pose]
+        req.max_step = 0.01
+        req.jump_threshold = 0.0
+        req.avoid_collisions = False
+        fut = self.cart_srv.call_async(req)
+        self._spin_until_done(fut)
+        res = fut.result()
+        if res is None or res.error_code.val != 1 or res.fraction < 0.3:
+            frac = -1.0 if res is None else res.fraction
+            self.get_logger().warn(
+                f'{label}: cartesian path failed (fraction {frac:.2f}).')
+            return None
+        if res.fraction < min_frac:
+            # A partial straight segment is still useful: the caller's
+            # verify/contact/retry loop iterates from wherever it ends.
+            self.get_logger().warn(
+                f'{label}: partial linear path (fraction {res.fraction:.2f}).')
+        else:
+            self.get_logger().info(
+                f'{label}: linear path fraction {res.fraction:.2f}.')
+        traj = res.solution.joint_trajectory
+        # Unwrap continuous joints onto the branch NEAREST the current state:
+        # IK returns angles in [-pi,pi] while the physical Kinova joints
+        # accumulate turns (seen live: state 3.28 vs IK -3.00 - the same
+        # angle). Executed raw, the JTC unwinds the joint a full 2*pi
+        # mid-grasp (the 'weird slow rotations' in the GUI) or flings the arm.
+        for j, name in enumerate(traj.joint_names):
+            cur = self._joint.get(name)
+            if cur is None:
+                continue
+            ref = cur[0]
+            for pt in traj.points:
+                val = float(pt.positions[j])
+                while val - ref > math.pi:
+                    val -= 2.0 * math.pi
+                while ref - val > math.pi:
+                    val += 2.0 * math.pi
+                pt.positions[j] = val
+                ref = val
+        # compute_cartesian_path returns an UNTIMED path (time_from_start all
+        # zero) - executing it as-is makes the controller lurch anywhere (seen
+        # live: a '0.89-fraction straight line' ended 0.4 m from goal). Apply a
+        # simple constant-velocity time parameterization and let the JTC
+        # interpolate positions.
+        t = 0.0
+        prev = None
+        for pt in traj.points:
+            if prev is None:
+                t = 0.2
+            else:
+                delta = max(abs(a - b) for a, b in zip(pt.positions, prev))
+                t += max(0.1, delta / 0.4)      # <= ~0.4 rad/s per joint
+            pt.time_from_start.sec = int(t)
+            pt.time_from_start.nanosec = int((t - int(t)) * 1e9)
+            pt.velocities = []
+            pt.accelerations = []
+            prev = list(pt.positions)
+        return res.solution, res.fraction
+
+    def move_linear(self, group, ee, pose, label, min_frac=0.7):
+        """Straight-line Cartesian move (single arm), executed via move_group.
+        Returns True on execution."""
+        got = self._linear_traj(group, ee, pose, label, min_frac=min_frac)
+        if got is None:
+            return False
+        sol, _ = got
+        goal = ExecuteTrajectory.Goal()
+        goal.trajectory = sol
+        if not self._wait_server(self.exec_traj, 'execute_trajectory'):
+            return False
+        return self._send_and_wait(self.exec_traj, goal, label)
+
+    def _ik(self, group, ee, pose, seed=None, avoid_collisions=False):
+        """Joint solution {name: position} for `ee` at `pose`, or None. With
+        `seed` (a prior solution dict) the solver starts on that BRANCH, so
+        pre-pose and press-pose solutions stay a small joint motion apart."""
+        if not self.ik_srv.wait_for_service(timeout_sec=10.0):
+            return None
+        req = GetPositionIK.Request()
+        r = req.ik_request
+        r.group_name = group
+        r.ik_link_name = ee
+        r.pose_stamped.header.frame_id = 'base_link'
+        r.pose_stamped.pose = pose
+        r.avoid_collisions = avoid_collisions
+        r.timeout.sec = 3
+        if seed is None:
+            r.robot_state.is_diff = True
+        else:
+            r.robot_state.is_diff = True
+            r.robot_state.joint_state.name = list(seed.keys())
+            r.robot_state.joint_state.position = [float(v)
+                                                  for v in seed.values()]
+        fut = self.ik_srv.call_async(req)
+        self._spin_until_done(fut)
+        res = fut.result()
+        if res is None or res.error_code.val != 1:
+            return None
+        arm_prefix = group.split('_')[0]
+        return {n: p for n, p in zip(res.solution.joint_state.name,
+                                     res.solution.joint_state.position)
+                if n.startswith(f'{arm_prefix}_joint_')}
+
+    def move_arm_joints(self, group, joints, label):
+        """Joint-space plan+execute of ONE arm to explicit joint targets."""
+        if not self._wait_server(self.move, 'move_action'):
+            return False
+        goal = MoveGroup.Goal()
+        req = goal.request
+        req.group_name = group
+        req.num_planning_attempts = 10
+        req.allowed_planning_time = 5.0
+        req.max_velocity_scaling_factor = 0.2
+        req.max_acceleration_scaling_factor = 0.2
+        c = Constraints(name=label)
+        for name, val in joints.items():
+            jc = JointConstraint()
+            jc.joint_name = name
+            jc.position = float(val)
+            jc.tolerance_above = 0.02
+            jc.tolerance_below = 0.02
+            jc.weight = 1.0
+            c.joint_constraints.append(jc)
+        req.goal_constraints.append(c)
+        goal.planning_options.plan_only = False
+        self.get_logger().info(f'{label}: planning {group} (joint-space)')
+        return self._send_and_wait(self.move, goal, label)
+
+    @staticmethod
+    def _roll180(pose):
+        """The same pose with the tool rolled 180 deg about its approach axis.
+        The fingertip pads are symmetric, so the press is identical - but the
+        IK lands in a different wrist branch (the left arm's straight press
+        line is chronically infeasible in the primary branch)."""
+        p = Pose()
+        p.position = pose.position
+        p.orientation = quat_mul(pose.orientation,
+                                 Quaternion(x=0.0, y=0.0, z=1.0, w=0.0))
+        return p
+
+    def _traj_starts_here(self, traj, label, tol=0.15):
+        """True if the trajectory's FIRST point matches the arm's CURRENT
+        joint positions (within tol rad per joint). A mismatch means the path
+        was computed from a stale state or a flipped IK branch - executing it
+        makes the controller lurch the arm across the workspace."""
+        if not traj.points:
+            return False
+        for name, target in zip(traj.joint_names, traj.points[0].positions):
+            cur = self._joint.get(name)
+            if cur is None:
+                continue
+            if abs(cur[0] - float(target)) > tol:
+                self.get_logger().warn(
+                    f'{label}: trajectory start differs from the actual state '
+                    f'({name}: {cur[0]:.2f} vs {float(target):.2f}) - '
+                    'discarding.')
+                return False
+        return True
+
+    def press_both_linear(self, lp, rp, pre_l, pre_r):
+        """Compute straight press lines for BOTH arms, then execute them
+        SIMULTANEOUSLY by sending the trajectories directly to the two arm
+        controllers. A lone press bulldozes the 1 kg cube across the table
+        (~0.3 m, seen live) - only opposed simultaneous presses balance out.
+        Per arm: if the line is IK-infeasible from the current configuration,
+        re-roll the pre-squeeze pose (new RRT configuration) and retry."""
+        trajs = {}
+        for side, group, ee, pre_pose, press_pose in (
+                ('left', 'left_arm', 'left_end_effector_link', pre_l, lp),
+                ('right', 'right_arm', 'right_end_effector_link', pre_r, rp)):
+            # Try the primary roll and the 180deg-rolled variant (identical
+            # press, different IK branch) from each pre-squeeze configuration.
+            # Whether a CLEAN straight line exists is a lottery over the arm
+            # configuration the pose-goal RRT lands in (fractions swing
+            # 0.0-1.0 run to run), so keep RE-ROLLING the pre-squeeze until a
+            # configuration with fraction >= 0.9 shows up; only the final
+            # attempt settles for a partial line.
+            variants = [press_pose, self._roll180(press_pose)]
+            attempts = 4
+            for attempt in range(attempts):
+                # The line must start from where the arm ACTUALLY is: computing
+                # it while the arm still creeps after the previous motion gave
+                # a trajectory from a stale state (possibly a different IK
+                # branch) - the JTC then lurches the arm a metre away.
+                self._wait_settle(ee)
+                got = self._linear_traj(group, ee, variants[attempt % 2],
+                                        f'STEP5 press {side}')
+                if got is not None:
+                    sol, frac = got
+                    if self._traj_starts_here(sol.joint_trajectory,
+                                              f'STEP5 press {side}') and (
+                            frac >= 0.9 or attempt == attempts - 1):
+                        trajs[side] = sol.joint_trajectory
+                        break
+                if attempt % 2 == 1 and attempt < attempts - 1:
+                    self.plan_arm(group, ee, pre_pose, 'base_link',
+                                  f'STEP5 re-pre-squeeze {side}', ori_tol=0.4)
+        outs = {'left': False, 'right': False}
+        # A side that never got a usable line is brought NEAR the face by an
+        # ordinary (collision-checked) RRT pose goal instead - a target ~2 cm
+        # off the face is always plannable, and the per-arm linear re-press
+        # afterwards converges reliably from there (measured dl=0.001-0.005 m
+        # in consecutive runs). The opposite pad bounds any cube shove.
+        for side, group, ee, pre_pose, press_pose in (
+                ('left', 'left_arm', 'left_end_effector_link', pre_l, lp),
+                ('right', 'right_arm', 'right_end_effector_link', pre_r, rp)):
+            if side in trajs:
+                continue
+            near = Pose()
+            near.position = Point(
+                x=press_pose.position.x
+                + 0.4 * (pre_pose.position.x - press_pose.position.x),
+                y=press_pose.position.y
+                + 0.4 * (pre_pose.position.y - press_pose.position.y),
+                z=press_pose.position.z)
+            near.orientation = press_pose.orientation
+            outs[side] = self.plan_arm(
+                group, ee, near, 'base_link',
+                f'STEP5 press {side} (RRT near-face)', ori_tol=0.3)
+        if trajs:
+            clients = {'left': self.left_jtc, 'right': self.right_jtc}
+            goals = {}
+            for side, traj in trajs.items():
+                if not self._wait_server(clients[side], f'{side} JTC'):
+                    return False, False
+                g = FollowJointTrajectory.Goal()
+                g.trajectory = traj
+                goals[side] = clients[side].send_goal_async(g)
+            handles = {}
+            for side, fut in goals.items():
+                self._spin_until_done(fut)
+                h = fut.result()
+                handles[side] = h if (h is not None and h.accepted) else None
+            for side, h in handles.items():
+                if h is None:
+                    continue
+                rf = h.get_result_async()
+                self._spin_until_done(rf)
+                r = rf.result()
+                outs[side] = (r is not None
+                              and r.status == GoalStatus.STATUS_SUCCEEDED)
+                self.get_logger().info(
+                    f'STEP5 press {side} (simultaneous): '
+                    f'{"OK" if outs[side] else "FAILED"}')
+        return outs['left'], outs['right']
+
+    def publish_collision_scene(self, center, table_top_z):
+        """Add the floor, the pick table and the target cube to the MoveIt
+        planning scene (base_link frame). Without them RRT freely plans arm
+        sweeps THROUGH the table - the physical snag then shoves the whole
+        base. The deliberate press still touches the cube because it runs via
+        compute_cartesian_path with avoid_collisions=False."""
+        def box_object(name, cx, cy, cz, sx, sy, sz):
+            co = CollisionObject()
+            co.header.frame_id = 'base_link'
+            co.id = name
+            prim = SolidPrimitive()
+            prim.type = SolidPrimitive.BOX
+            prim.dimensions = [float(sx), float(sy), float(sz)]
+            pose = Pose()
+            pose.position = Point(x=float(cx), y=float(cy), z=float(cz))
+            pose.orientation.w = 1.0
+            co.primitives = [prim]
+            co.primitive_poses = [pose]
+            co.operation = CollisionObject.ADD
+            return co
+
+        scene = PlanningScene()
+        scene.is_diff = True
+        scene.world.collision_objects = [
+            box_object('floor', 0.7, 0.0, -0.10, 4.0, 4.0, 0.02),
+            box_object('pick_table', center.x, center.y,
+                       table_top_z - 0.05, 0.55, 0.65, 0.10),
+            box_object('target_cube', center.x, center.y,
+                       table_top_z + 0.15, 0.30, 0.30, 0.30),
+        ]
+        self.scene_pub.publish(scene)
+        # Give the move_group monitor a moment to apply the diff.
+        end = time.monotonic() + 1.0
+        while time.monotonic() < end:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        self.get_logger().info(
+            'Planning scene: floor + pick_table + cube published.')
+
+    def _wait_settle(self, link, timeout=8.0):
+        """Block until `link` stops moving (<4 mm over 0.4 s) or timeout. The
+        JTC reports SUCCEEDED when the trajectory CLOCK ends, but the simulated
+        arm lags and keeps creeping toward the last point for seconds (seen
+        live: EE error improved 0.20->0.05 m AFTER the action result) - any
+        readback verification must wait for the mechanism to settle first."""
+        deadline = time.monotonic() + timeout
+        prev = None
+        while time.monotonic() < deadline:
+            cur = self._tf_point('base_link', link)
+            if cur is not None and prev is not None:
+                d = math.hypot(cur[0] - prev[0], cur[1] - prev[1])
+                if d < 0.004 and abs(cur[2] - prev[2]) < 0.004:
+                    return
+            prev = cur
+            end = time.monotonic() + 0.4
+            while time.monotonic() < end:
+                rclpy.spin_once(self, timeout_sec=0.05)
+
+    def _ee_pose(self, link):
+        """Current full pose of `link` in base_link from TF, or None."""
+        try:
+            tf = self.tf_buffer.lookup_transform('base_link', link,
+                                                 rclpy.time.Time())
+        except Exception:
+            return None
+        p = Pose()
+        p.position = Point(x=tf.transform.translation.x,
+                           y=tf.transform.translation.y,
+                           z=tf.transform.translation.z)
+        p.orientation = tf.transform.rotation
+        return p
+
+    def retreat_linear(self, group, ee, v, dist, label):
+        """Retreat straight by dist along the XY direction v from the CURRENT
+        pose, KEEPING the current orientation. After a press the wrist has
+        deflected from the commanded orientation, so a waypoint built from the
+        ideal pre-pose is IK-infeasible from here (seen live: fraction 0.00);
+        a pure translation of the actual pose always has a nearby solution."""
+        cur = self._ee_pose(ee)
+        if cur is None:
+            return False
+        tgt = Pose()
+        tgt.position = Point(x=cur.position.x + dist * float(v[0]),
+                             y=cur.position.y + dist * float(v[1]),
+                             z=cur.position.z)
+        tgt.orientation = cur.orientation
+        return self.move_linear(group, ee, tgt, label, min_frac=0.5)
+
+    def verify_reached(self, link, pose, tol=0.04, label=''):
+        """Read the ACTUAL end-effector pose from TF after a motion and compare it
+        to the commanded pose. Independent of perception, so it catches the failure
+        where the arm could not reach and stayed short (the '50 cm in front' bug).
+        Returns True only if the wrist is within tol of the goal position."""
+        actual = self._tf_point('base_link', link)
+        if actual is None:
+            self.get_logger().warn(f'{label}: no TF for {link}; cannot verify.')
+            return False
+        tgt = np.array([pose.position.x, pose.position.y, pose.position.z])
+        d = float(np.linalg.norm(actual - tgt))
+        ok = d <= tol
+        self.get_logger().info(
+            f'{label}: EE at ({actual[0]:.3f}, {actual[1]:.3f}, {actual[2]:.3f}) '
+            f'vs goal Δ={d:.3f} m -> {"REACHED" if ok else "OFF TARGET"}.')
+        return ok
 
     # ----------------------------------------------------------------- moveit
     def _pose_goal_constraint(self, link, frame, pose, pos_tol=0.03, ang_tol=0.2):
@@ -452,26 +1023,32 @@ class MainTask(Node):
                 'Aruco marker not seen; using nominal box pose.')
             return None
         n = len(xs)
-        center = Point(x=sum(xs) / n + 0.03, y=sum(ys) / n, z=sum(zs) / n)
+        # Marker face -> cube centre: half the assignment cube (0.30 m) inward.
+        center = Point(x=sum(xs) / n + 0.15, y=sum(ys) / n, z=sum(zs) / n)
         self.get_logger().info(
-            f'Aruco confirmed ({n} samples); box face base_link '
+            f'Aruco confirmed ({n} samples); box centre base_link '
             f'({center.x:.2f}, {center.y:.2f}, {center.z:.2f}).')
         return center
 
-    def measure_box(self, seed, timeout=6.0):
+    def measure_box(self, seed, timeout=8.0):
         """Measure the box from the depth point cloud: returns (centre Point,
-        length, height) in base_link, or None. The camera sees only the front
-        face, so it measures length (Y) and height (Z) directly; the gripped
-        thickness (X, occluded back face) is handled by the gripper closing onto
-        the box. 'seed' is the approximate box centre (from the marker) used to
-        isolate the box cluster from the table/background."""
+        length, height, u) in base_link, or None - where u is the bar's long-axis
+        unit XY direction from PCA. The camera sees the front face + top, so it
+        measures length and height directly and the long-axis orientation; the
+        gripped thickness (occluded back face) is taken as the known 0.06 m. 'seed'
+        is the approximate box centre (from the marker) used to isolate the box
+        cluster from the table/background."""
         self._last_cloud = None
         sub = self.create_subscription(PointCloud2, '/camera/points',
                                        self._cloud_cb, 1)
         try:
-            for _ in range(int(timeout / 0.1)):  # wall-clock bounded
-                if self._last_cloud is not None:
-                    break
+            # Wait for a FRESH cloud. spin_once() returns as soon as it services
+            # ANY callback, and this node has high-rate subscriptions (/clock,
+            # TF, contacts), so a fixed iteration count burns through in well
+            # under a second - the 6 Hz cloud never gets its turn. Bound the
+            # wait by a real wall-clock deadline instead.
+            deadline = time.monotonic() + timeout
+            while self._last_cloud is None and time.monotonic() < deadline:
                 rclpy.spin_once(self, timeout_sec=0.1)
         finally:
             self.destroy_subscription(sub)
@@ -480,51 +1057,151 @@ class MainTask(Node):
             return None
         msg = self._last_cloud
         pts = pointcloud2_xyz(msg)
+        # The Fortress rgbd_camera stamps every output with ignition_frame_id
+        # (the optical frame, which Aruco needs for the image), but the point
+        # cloud DATA is in the sensor BODY frame (x forward, z up) - verified
+        # empirically: transformed via the optical frame the whole cloud lands
+        # ~90 deg off to the side. Transform via the mounting link instead.
         try:
             tf = self.tf_buffer.lookup_transform(
-                'base_link', msg.header.frame_id, rclpy.time.Time())
+                'base_link', 'camera_link', rclpy.time.Time())
         except Exception:
             self.get_logger().warn('No TF for cloud; cannot measure box.')
             return None
         tr = tf.transform.translation
         P = pts @ quat_to_matrix(tf.transform.rotation).T \
             + np.array([tr.x, tr.y, tr.z])
-        # Keep points above the table, in front, near the marker seed.
-        m = ((P[:, 2] > 0.12) & (P[:, 2] < 0.50)
-             & (P[:, 0] > 0.2) & (P[:, 0] < 1.0)
-             & (np.abs(P[:, 0] - seed.x) < 0.30)
-             & (np.abs(P[:, 1] - seed.y) < 0.35))
+        # Keep points above the table, in front, near the marker seed. The lower
+        # x bound is 0.35, NOT 0.2: after the close-in drive the tilted camera
+        # also sees the robot's own front (torso/base structures at x~0.25-0.35),
+        # and once those points merge with the box the PCA axis/length are junk
+        # (seen live: length 0.63 for the 0.30 bar, grippers closed on air).
+        # The marker sits on the box face, so nothing of the box can be higher
+        # than the face centre + ~box height; points above that are arms/other.
+        m = ((P[:, 2] > 0.12) & (P[:, 2] < min(0.50, seed.z + 0.20))
+             & (P[:, 0] > 0.35) & (P[:, 0] < 1.0)
+             & (np.abs(P[:, 0] - seed.x) < 0.25)
+             & (np.abs(P[:, 1] - seed.y) < 0.30))
         B = P[m]
         if len(B) < 40:
             self.get_logger().warn(
                 f'Too few box points ({len(B)}); cannot measure box.')
             return None
-        ymin, ymax = float(B[:, 1].min()), float(B[:, 1].max())
         zmin, zmax = float(B[:, 2].min()), float(B[:, 2].max())
-        length, height = ymax - ymin, zmax - zmin
-        center = Point(x=float(np.median(B[:, 0])) + 0.03,
-                       y=(ymin + ymax) / 2.0, z=(zmin + zmax) / 2.0)
+        height = zmax - zmin
+        # PCA on the XY footprint: the dominant eigenvector is the bar's long axis
+        # (its 0.30 m length), so the grasp aligns to the real bar instead of
+        # assuming it lies along base_link Y (the bar is yawed in the world).
+        xy = B[:, :2]
+        mean = xy.mean(axis=0)
+        cov = np.cov((xy - mean).T)
+        w, V = np.linalg.eigh(cov)
+        u = V[:, int(np.argmax(w))]
+        u = u / (np.linalg.norm(u) + 1e-9)
+        if u[1] < 0:                       # consistent sign (point +Y-ish)
+            u = -u
+        p = np.array([-u[1], u[0]])        # perpendicular = thickness axis
+        if p[0] < 0:                       # point away from the robot (+X)
+            p = -p
+        proj_u = (xy - mean) @ u
+        proj_p = (xy - mean) @ p
+        length = float(proj_u.max() - proj_u.min())
+        u_mid = float(proj_u.max() + proj_u.min()) / 2.0
+        # Camera sees only the front face along the thickness axis; the centre is
+        # half the assignment cube (0.30 m) inward from the nearest face.
+        p_center = float(proj_p.min()) + 0.15
+        cxy = mean + u * u_mid + p * p_center
+        center = Point(x=float(cxy[0]), y=float(cxy[1]), z=(zmin + zmax) / 2.0)
+        yaw = math.atan2(float(u[1]), float(u[0]))
         self.get_logger().info(
             f'Box measured from depth ({len(B)} pts): length={length:.3f} '
-            f'height={height:.3f} centre=({center.x:.2f}, {center.y:.2f}, '
+            f'height={height:.3f} long-axis yaw={yaw:.2f} rad '
+            f'u=({u[0]:.2f},{u[1]:.2f}) centre=({center.x:.2f}, {center.y:.2f}, '
             f'{center.z:.2f}).')
-        return center, length, height
+        # The target's dimensions are given by the assignment, so a cluster that
+        # does not measure like the box IS NOT the box (stray geometry merged
+        # in) - reject it rather than send the grippers to a junk pose.
+        if not (0.15 < length < 0.45) or not (0.06 < height < 0.32):
+            self.get_logger().warn(
+                f'Measured extent {length:.2f}x{height:.2f} m does not match '
+                'the target box; rejecting this measurement.')
+            return None
+        return center, length, height, (float(u[0]), float(u[1]))
 
     # --------------------------------------------------------------- sequence
-    def grasp_poses(self, center, half_width=None, z_offset=0.12):
+    def grasp_poses(self, center, u=None, half_width=None, z_offset=None):
         """Left/right end-effector poses (base_link) for a top-down grasp of the
-        two bar ends. Each wrist sits directly above its end (no inward offset,
-        so the grippers do not converge), pointing straight down; z_offset is the
-        wrist-above-fingertip gripper length, so the fingertips land at the bar.
-        Pass a larger z_offset for a higher pre-grasp stand-off."""
+        two bar ends, aligned to the bar's long axis u (unit XY direction).
+
+        Each wrist sits above one end along u; the gripper is yawed so its
+        finger-opening axis crosses the bar's thickness (perpendicular to u), and
+        points straight down. z_offset defaults to the measured wrist->fingertip
+        stand-off so the FINGER TIPS land at the bar; pass a larger z_offset for a
+        higher pre-grasp stand-off. For u=+Y this reduces to the plain top-down
+        GRASP_DOWN pose."""
         half = self.grasp_half_width if half_width is None else half_width
+        if z_offset is None:
+            z_offset = self.tip_standoff
+        if u is None:
+            u = (0.0, 1.0)
+        ux, uy = float(u[0]), float(u[1])
+        gripper_yaw = math.atan2(uy, ux) - math.pi / 2.0
+        ori = quat_mul(yaw_to_quat(gripper_yaw), GRASP_DOWN)
         left = Pose(
-            position=Point(x=center.x, y=center.y + half, z=center.z + z_offset),
-            orientation=GRASP_DOWN)
+            position=Point(x=center.x + half * ux, y=center.y + half * uy,
+                           z=center.z + z_offset),
+            orientation=ori)
         right = Pose(
-            position=Point(x=center.x, y=center.y - half, z=center.z + z_offset),
-            orientation=GRASP_DOWN)
+            position=Point(x=center.x - half * ux, y=center.y - half * uy,
+                           z=center.z + z_offset),
+            orientation=ori)
         return left, right
+
+    def marker_tangent(self):
+        """Horizontal unit tangent of the marker face in base_link XY, or None.
+        For the assignment cube this IS the squeeze axis: the marker face's
+        square footprint makes depth-PCA yaw degenerate, but the marker's
+        solvePnP orientation is exact, and the two faces ADJACENT to the marker
+        are the ones the arms press."""
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                'base_link', 'aruco_marker_frame', rclpy.time.Time())
+        except Exception:
+            return None
+        R = quat_to_matrix(tf.transform.rotation)
+        n = R[:, 2]                              # marker normal (out of the face)
+        v = np.array([-n[1], n[0]])              # horizontal, perpendicular to n
+        norm = float(np.linalg.norm(v))
+        if norm < 1e-6:
+            return None
+        v = v / norm
+        if v[1] < 0:                             # consistent sign (+Y-ish)
+            v = -v
+        return (float(v[0]), float(v[1]))
+
+    def squeeze_poses(self, center, v, pre=0.0):
+        """Left/right EE poses for the dual-arm SQUEEZE of the assignment cube:
+        each CLOSED gripper (fingertip pads) approaches horizontally along -/+v
+        and presses one of the two opposite side faces. pre>0 hovers off the
+        face; pre<0 commands a slight interference so the pads genuinely press.
+        Approach axis is tool +Z (same convention as the top-down grasp, where
+        the tips extend along +Z from the wrist); tool +X is kept horizontal so
+        the two pads contact side by side (stable against yaw torque)."""
+        off = 0.15 + self.tip_standoff + pre
+        vv = np.array([float(v[0]), float(v[1]), 0.0])
+        poses = []
+        for sgn in (+1.0, -1.0):        # left presses from +v, right from -v
+            z_ax = -sgn * vv                             # approach: into the box
+            x_ax = np.array([-z_ax[1], z_ax[0], 0.0])    # horizontal, ⟂ approach
+            x_ax = x_ax / np.linalg.norm(x_ax)
+            y_ax = np.cross(z_ax, x_ax)
+            R = np.column_stack([x_ax, y_ax, z_ax])
+            poses.append(Pose(
+                position=Point(x=center.x + sgn * off * vv[0],
+                               y=center.y + sgn * off * vv[1],
+                               z=center.z),
+                orientation=quat_from_matrix(R)))
+        return poses[0], poses[1]
 
     # ------------------------------------------------ marker-relative servoing
     def aim_camera(self, pan, pitch, label):
@@ -658,35 +1335,84 @@ class MainTask(Node):
         self.get_logger().warn('Approach: timed out.')
         return False
 
-    def verify_contact(self, center, half):
-        """Honest check that each gripper actually has a finger tip on the box (in
-        base_link), not in the air. Returns True only if BOTH grippers have a tip
-        within the box bounds. Prevents the old failure where the grippers closed
-        ~0.24 m in front of the box and an attach joint faked the lift."""
-        groups = {
-            'left': ['left_robotiq_85_left_finger_tip_link',
-                     'left_robotiq_85_right_finger_tip_link'],
-            'right': ['right_robotiq_85_left_finger_tip_link',
-                      'right_robotiq_85_right_finger_tip_link'],
-        }
+    _TIP_LINKS = {
+        'left': ['left_robotiq_85_left_finger_tip_link',
+                 'left_robotiq_85_right_finger_tip_link'],
+        'right': ['right_robotiq_85_left_finger_tip_link',
+                  'right_robotiq_85_right_finger_tip_link'],
+    }
+
+    def fingertips_on_box(self, center, u, half_len,
+                          half_thick=0.05, half_h=0.11):
+        """Geometric check, INDEPENDENT of the commanded grasp: are both grippers'
+        finger tips inside the box volume? center/u come from a FRESH depth (or
+        marker) reading, not from the pose the arms were told to reach, so a
+        perception or reach error cannot pass it (this is what makes it honest -
+        the old check compared tips against the very point they were commanded to).
+        Returns (ok, {side: bool})."""
+        uv = np.array([u[0], u[1]])
+        pv = np.array([-u[1], u[0]])       # thickness axis
         got = {'left': False, 'right': False}
-        for side, links in groups.items():
+        for side, links in self._TIP_LINKS.items():
             for link in links:
-                try:
-                    tf = self.tf_buffer.lookup_transform(
-                        'base_link', link, rclpy.time.Time())
-                    t = tf.transform.translation
-                except Exception:
+                t = self._tf_point('base_link', link)
+                if t is None:
                     continue
-                if (abs(t.x - center.x) < 0.08
-                        and abs(t.y - center.y) < half + 0.05
-                        and abs(t.z - center.z) < 0.12):
+                d = np.array([t[0] - center.x, t[1] - center.y])
+                along = abs(float(d @ uv))
+                across = abs(float(d @ pv))
+                dz = abs(float(t[2] - center.z))
+                if (along < half_len + 0.04 and across < half_thick + 0.04
+                        and dz < half_h):
                     got[side] = True
         ok = got['left'] and got['right']
         self.get_logger().info(
-            f'Contact check: left={got["left"]} right={got["right"]} -> '
-            f'{"ON BOX" if ok else "NOT on box"}.')
-        return ok
+            f'Fingertips-in-box (independent): left={got["left"]} '
+            f'right={got["right"]} -> {"ON BOX" if ok else "NOT on box"}.')
+        return ok, got
+
+    def _knuckle_pos(self, side):
+        """Gripper knuckle joint position (0=open .. 0.8=closed), or None."""
+        v = self._joint.get(f'{side}_robotiq_85_left_knuckle_joint')
+        return None if v is None else v[0]
+
+    def close_until_contact(self, side, client, target=0.7, max_effort=20.0,
+                            settle=2.5):
+        """Command the gripper closed and watch for a genuine stop signal while it
+        moves: (1) fingertip contact sensors firing, (2) the knuckle stalling short
+        of the commanded close (an object is between the pads). Returns a dict of
+        the signals observed, for fusion in the caller."""
+        keys = (f'{side}_left', f'{side}_right')
+        before = self._knuckle_pos(side)
+        # Issue the close (non-blocking send; we poll while it executes).
+        goal = GripperCommand.Goal()
+        goal.command.position = float(target)
+        goal.command.max_effort = float(max_effort)
+        self._wait_server(client, f'{side} gripper')
+        send_future = client.send_goal_async(goal)
+        self._spin_until_done(send_future)
+        contact = False
+        end = time.monotonic() + settle
+        while rclpy.ok() and time.monotonic() < end:
+            if self._tip_in_contact(keys[0]) or self._tip_in_contact(keys[1]):
+                contact = True
+                break
+            rclpy.spin_once(self, timeout_sec=0.05)
+        # Let motion settle, then read the final knuckle position for stall.
+        for _ in range(10):
+            rclpy.spin_once(self, timeout_sec=0.05)
+        after = self._knuckle_pos(side)
+        stalled = (after is not None and after < target - 0.06)
+        # Arm wrist joint effort (Gen3 joint-torque sensors) is monitored for
+        # context, but NOT used as a hard gate: a top-down straddle grasp loads the
+        # wrist mostly with gravity, so an uncalibrated threshold would false-fire.
+        eff = self._joint.get(f'{side}_joint_7')
+        wrist_eff = abs(eff[1]) if eff else float('nan')
+        self.get_logger().info(
+            f'{side} close: contact_sensor={contact} '
+            f'knuckle {before}->{after} stalled={stalled} '
+            f'wrist|effort|={wrist_eff:.2f}.')
+        return {'contact': contact, 'stalled': bool(stalled)}
 
     # --------------------------------------------------------------------- run
     def run(self):
@@ -711,98 +1437,317 @@ class MainTask(Node):
         if face is None:
             return self._fail('box not seen at the table')
 
-        # 3. CLOSE IN: drive straight the remaining distance so the box sits at
-        #    ~0.55 m (in reach), then measure it with the depth camera (depth does
-        #    not foreshorten, so it works at the steep close-up angle the marker
-        #    cannot).
-        close = max(0.0, face.x - 0.55)
-        if close > 0.03:
-            self.drive(0.12, 0.0, close / 0.12)
-        self.look_down(0.95, 'STEP3 look down close')
-        seed = Point(x=0.55, y=face.y, z=face.z)
+        # 3. MEASURE from here (~0.95 m), BEFORE closing in: at this range the
+        #    seed window (within 0.25 m of the box) cannot contain any part of
+        #    the robot itself, so the cluster is clean by construction. Depth
+        #    does not foreshorten, so range is no problem for the cloud - the
+        #    close-up was only ever needed for the MARKER. The camera is already
+        #    aimed at the box from confirm_box (pitch 0.65). Measuring AFTER the
+        #    drive was tried twice and both arm postures (spawn and ARM_CARRY)
+        #    put the wrists inside the close-range window -> junk clusters.
+        seed = Point(x=face.x, y=face.y, z=face.z)
         meas = self.measure_box(seed)
-        if meas is not None:
-            center, length, height = meas
+        if meas is None:
+            # No silent fall-back to a guessed x=0.55: a phantom centre is exactly
+            # what made the arms close ~0.5 m in front of the box. Abort honestly.
+            return self._fail('depth measurement of the box failed (no fake grasp)')
+        center, length, height, u = meas
+
+        # Cross-check the depth centre against the marker - same vantage point,
+        # nothing moved in between. A bad cluster must not silently send the
+        # arms to the wrong place.
+        if abs(center.x - face.x) > 0.15 or abs(center.y - face.y) > 0.15:
+            self.get_logger().warn(
+                f'Depth centre ({center.x:.2f},{center.y:.2f}) disagrees with '
+                f'marker ({face.x:.2f},{face.y:.2f}); re-measuring once.')
+            meas2 = self.measure_box(seed)
+            if meas2 is None:
+                return self._fail('box measurement disagreement, not confirmed')
+            center, length, height, u = meas2
+            if abs(center.x - face.x) > 0.15 or abs(center.y - face.y) > 0.15:
+                # Accepting an unverified re-measure is how a phantom cluster
+                # (e.g. the robot's own arms) walks straight into the grasp.
+                return self._fail(
+                    'depth centre disagrees with the marker twice (no fake grasp)')
+
+        # 4. CLOSE IN: drive straight so the box sits at ~0.50 m (well within
+        #    reach). The drive is straight ahead, so the measured centre simply
+        #    shifts by the driven distance along base x. The +0.8 s compensates
+        #    the trapezoidal ramps (each ramp loses half its duration of travel,
+        #    2 x 0.4 s at 0.12 m/s ~ 0.10 m otherwise undershot). Any residual
+        #    open-loop error is caught by the later INDEPENDENT gates (EE reach
+        #    readback, fingertip geometry, physical contact) - a miss ends in an
+        #    abort, never a fake grasp.
+        close = max(0.0, face.x - 0.50)
+        if close > 0.03:
+            o0 = self._odom_xy()
+            self.drive(0.12, 0.0, close / 0.12 + 0.8)
+            o1 = self._odom_xy()
+            # Shift the percept by the ACTUALLY driven distance (wheel odometry
+            # over a straight segment, wheels tuned for negligible slip), not by
+            # the commanded one: cm-level open-loop error was enough for the
+            # grippers to close cleanly beside the bar (box untouched, live).
+            if o0 is not None and o1 is not None:
+                driven = math.hypot(o1[0] - o0[0], o1[1] - o0[1])
+            else:
+                driven = close
+                self.get_logger().warn(
+                    'No odometry sample; assuming the commanded close-in.')
+            self.get_logger().info(
+                f'Close-in: commanded {close:.3f} m, odometry {driven:.3f} m.')
+            center = Point(x=center.x - driven, y=center.y, z=center.z)
+
+        # Squeeze axis from the MARKER's orientation (depth PCA is degenerate
+        # on the cube's square top). marker_tangent() reads the last marker TF
+        # (pre-drive) - still valid: the close-in drive did not rotate the base.
+        vt = self.marker_tangent()
+        if vt is not None:
+            u = vt
         else:
-            self.get_logger().warn('Depth measure failed; using marker + nominal.')
-            center, length, height = seed, 0.30, 0.20
+            self.get_logger().warn(
+                'No marker orientation; falling back to the depth PCA axis.')
 
-        # 4. GRASP PLAN: grip each end of the slab, in the upper third so it hangs
-        #    stably; thickness is taken up by the gripper closing onto the box.
-        half = min(max(length / 2.0 - 0.02, 0.08), 0.13)
-        grip = Point(x=center.x, y=center.y, z=center.z + height * 0.2)
+        # 4b. CENTER the cube: turn in place until it sits dead ahead. The
+        #     approach leaves it at y~-0.13, so the LEFT arm would press across
+        #     the torso centre where its straight line is chronically
+        #     IK-infeasible (partial fractions run after run), while the right
+        #     arm pressing comfortably outside was perfect every time. The
+        #     actual turn is measured by odometry and the percept (centre AND
+        #     squeeze axis) is rotated by it.
+        # Aim the cube at y ~ -0.075, NOT dead centre: the two arms' feasible
+        # straight-press regions don't overlap at one bearing (right was
+        # perfect with the cube at y=-0.13 but chronically line-infeasible at
+        # y=-0.02; left exactly the opposite) - the midpoint serves both.
+        bearing = math.atan2(center.y + 0.075, center.x)
+        if abs(bearing) > 0.05:
+            o0 = self._odom_yaw()
+            self.drive(0.0, 0.3 * (1.0 if bearing > 0 else -1.0),
+                       abs(bearing) / 0.3 + 0.8)
+            o1 = self._odom_yaw()
+            if o0 is not None and o1 is not None:
+                dyaw = math.atan2(math.sin(o1 - o0), math.cos(o1 - o0))
+            else:
+                dyaw = bearing
+                self.get_logger().warn('No odometry yaw; assuming commanded.')
+            c, s = math.cos(-dyaw), math.sin(-dyaw)
+            center = Point(x=c * center.x - s * center.y,
+                           y=s * center.x + c * center.y, z=center.z)
+            u = (c * u[0] - s * u[1], s * u[0] + c * u[1])
+            self.get_logger().info(
+                f'Centering turn {math.degrees(dyaw):.1f} deg; cube now at '
+                f'({center.x:.2f},{center.y:.2f}), v=({u[0]:.2f},{u[1]:.2f}).')
+
+        # 4c. SQUEEZE PLAN: the assignment cube (0.30 m, 1 kg) cannot be
+        #     enclosed by the 85 mm grippers, so BOTH arms press opposite side
+        #     faces with their CLOSED grippers (fingertip pads) and the
+        #     contact-verified attach joint carries it.
+        self.measure_tip_standoff()
+        grip = Point(x=center.x, y=center.y, z=face.z)  # marker sits mid-face
         self.get_logger().info(
-            f'Grasp plan: ends at y={center.y:.2f} +/- {half:.2f}, '
-            f'grip z={grip.z:.2f}.')
+            f'Squeeze plan: centre=({grip.x:.2f},{grip.y:.2f},{grip.z:.2f}) '
+            f'faces +/-0.15 along v=({u[0]:.2f},{u[1]:.2f}).')
+        # Let MoveIt SEE the world before any arm planning: floor, table and
+        # cube as collision objects (cube bottom = marker height - half cube).
+        self.publish_collision_scene(grip, table_top_z=grip.z - 0.15)
 
-        # 5. GRASP: ready, open, pre-grasp above, descend (tight orientation).
+        # 5. SQUEEZE: ready posture, CLOSE both grippers so the fingertips act
+        #    as pressing pads (contact sensors stay live on the tips), pre-pose
+        #    beside each face, then press horizontally with 5 mm interference.
         self.move_arms_joint(ARM_HOME, 'STEP5 ready posture')
-        self.set_gripper(self.left_grip, 0.0, 'STEP5 open left')
-        self.set_gripper(self.right_grip, 0.0, 'STEP5 open right')
-        pre_l, pre_r = self.grasp_poses(grip, half_width=half, z_offset=0.20)
-        self.plan_arm('left_arm', 'left_end_effector_link', pre_l,
-                      'base_link', 'STEP5 pregrasp left', ori_tol=0.5)
-        self.plan_arm('right_arm', 'right_end_effector_link', pre_r,
-                      'base_link', 'STEP5 pregrasp right', ori_tol=0.5)
-        lp, rp = self.grasp_poses(grip, half_width=half)
-        self.plan_arm('left_arm', 'left_end_effector_link', lp,
-                      'base_link', 'STEP5 grasp left', ori_tol=0.15)
-        self.plan_arm('right_arm', 'right_end_effector_link', rp,
-                      'base_link', 'STEP5 grasp right', ori_tol=0.15)
-        self._log_grasp_geometry(grip, 'at grasp pose')
+        self.set_gripper(self.left_grip, 0.7, 'STEP5 close left pad')
+        self.set_gripper(self.right_grip, 0.7, 'STEP5 close right pad')
+        # Pre-squeeze goes through IK EXPLICITLY: solve IK for the PRESS pose
+        # first, then for the pre-pose SEEDED by that solution (same branch),
+        # and command the pre-pose as a JOINT goal. A plain pose-goal RRT
+        # parks the arm in an arbitrary IK branch, and from most of them the
+        # straight press line is infeasible (left arm: fractions 0.09-0.30
+        # across every roll, run after run).
+        pre_l, pre_r = self.squeeze_poses(grip, u, pre=0.10)
+        lp, rp = self.squeeze_poses(grip, u, pre=-0.030)
+        for side, group, ee, pre_pose, press_pose in (
+                ('left', 'left_arm', 'left_end_effector_link', pre_l, lp),
+                ('right', 'right_arm', 'right_end_effector_link', pre_r, rp)):
+            sol_press = self._ik(group, ee, press_pose)
+            sol_pre = (self._ik(group, ee, pre_pose, seed=sol_press,
+                                avoid_collisions=True)
+                       if sol_press is not None else None)
+            if sol_pre is not None:
+                self.move_arm_joints(group, sol_pre,
+                                     f'STEP5 pre-squeeze {side}')
+            else:
+                self.get_logger().warn(
+                    f'STEP5 pre-squeeze {side}: IK chain failed, falling back '
+                    'to a pose goal.')
+                self.plan_arm(group, ee, pre_pose, 'base_link',
+                              f'STEP5 pre-squeeze {side}', ori_tol=0.5)
+        # The press is a STRAIGHT Cartesian segment (~13 cm) for EACH arm, and
+        # both arms press SIMULTANEOUSLY (opposed forces cancel; a lone press
+        # bulldozed the cube 0.3 m across the table). The 3 cm interference is
+        # deliberate: the cube (not the goal pose) stops the pads, so contact
+        # is guaranteed for any tracking shortfall up to ~3.5 cm - with a 5 mm
+        # target the pads regularly hovered 1-3 cm off the face. The squeeze
+        # force stays bounded by the joint effort limits.
+        ok_l, ok_r = self.press_both_linear(lp, rp, pre_l, pre_r)
+        self._log_grasp_geometry(grip, 'at press pose')
 
-        # Honest contact check BEFORE committing: no fake lift if not on the box.
-        if not self.verify_contact(grip, half):
-            self.set_gripper(self.left_grip, 0.0, 'release left')
-            self.set_gripper(self.right_grip, 0.0, 'release right')
-            return self._fail('grippers not on the box (aborting, no fake lift)')
+        # 5b. REACH CHECK (independent of perception): both wrists must ACTUALLY
+        #     be at the press poses (TF readback vs commanded). One corrective
+        #     retry per arm: the tracking regularly leaves 4-10 cm of residual
+        #     (worst on the right arm), so re-command the goal shifted by the
+        #     measured error, then re-verify against the ORIGINAL goal.
+        def pad_contact(side, settle=1.5):
+            end = time.monotonic() + settle
+            while time.monotonic() < end:
+                if (self._tip_in_contact(f'{side}_left', max_age=1.0,
+                                         box_only=True)
+                        or self._tip_in_contact(f'{side}_right', max_age=1.0,
+                                                box_only=True)):
+                    return True
+                rclpy.spin_once(self, timeout_sec=0.05)
+            return False
 
-        # 6. ATTACH (contact verified above), then a GENTLE close, then LIFT.
-        #    DART cannot hold the box by friction, so the rigid attach - engaged
-        #    only now that the grippers are confirmed on the box - carries it.
-        #    Attach BEFORE closing and close gently (low effort): a hard clamp
-        #    plus the fixed joint over-constrain the box and DART flings it away.
+        def press_reached(side, group, ee, goal_pose, ok_flag):
+            if not ok_flag:
+                return False
+            # The JTC reports success at trajectory-end TIME while the sim arm
+            # still creeps toward the goal for seconds - settle before reading.
+            self._wait_settle(ee)
+            if self.verify_reached(ee, goal_pose, tol=0.05,
+                                   label=f'STEP5b reach {side}'):
+                return True
+            # A press is INTENDED contact: once the pad is on the face the
+            # wrist CANNOT converge to the interference pose - the residual is
+            # the press force, not a miss (seen live: tips exactly on the face
+            # plane, wrist 8 cm 'short'). Accept a live pad contact as reached;
+            # the two-sided physical gate below still has the final word.
+            if pad_contact(side):
+                self.get_logger().info(
+                    f'STEP5b {side}: wrist short of goal but the pad IS in '
+                    'contact - press OK.')
+                return True
+            # Re-target the ORIGINAL goal: move_linear replans from the current
+            # pose, so no error-mirroring is needed - and mirroring OVERSHOOTS
+            # (a 10 cm shortfall became a target 10 cm INSIDE the cube; the
+            # stiff position-controlled arm then tunnels straight through it,
+            # seen live in the GUI).
+            self.move_linear(group, ee, goal_pose, f'STEP5b re-press {side}')
+            self._wait_settle(ee)
+            if self.verify_reached(ee, goal_pose, tol=0.05,
+                                   label=f'STEP5b re-check {side}'):
+                return True
+            if pad_contact(side):
+                self.get_logger().info(
+                    f'STEP5b {side}: re-press ended in pad contact - press OK.')
+                return True
+            return False
+
+        reached_l = press_reached('left', 'left_arm',
+                                  'left_end_effector_link', lp, ok_l)
+        reached_r = press_reached('right', 'right_arm',
+                                  'right_end_effector_link', rp, ok_r)
+        if not (reached_l and reached_r):
+            return self._fail('arms did not reach the press poses (no fake grasp)')
+
+        # 5c. GEOMETRY check with the cube's dimensions: both grippers' tips at
+        #     the perceived cube volume (tips from TF, cube from the independent
+        #     depth+marker percept), plus one corrective nudge per failing arm
+        #     (MoveIt+controller tracking leaves up to ~4 cm residual error).
+        on_box_geom, tips = self.fingertips_on_box(
+            grip, u, 0.15, half_thick=0.15, half_h=0.16)
+        if not on_box_geom:
+            for side, goal_pose, group, ee in (
+                    ('left', lp, 'left_arm', 'left_end_effector_link'),
+                    ('right', rp, 'right_arm', 'right_end_effector_link')):
+                if tips.get(side):
+                    continue
+                # Straight-line nudge to the ORIGINAL press goal, WITHOUT
+                # collision checking (the goal deliberately touches the cube,
+                # which is now a planning-scene obstacle) and WITHOUT error-
+                # mirroring (that overshoots the target into the cube and the
+                # stiff arm tunnels through it).
+                self.move_linear(group, ee, goal_pose, f'STEP5c nudge {side}')
+                self._wait_settle(ee)
+            on_box_geom, tips = self.fingertips_on_box(
+                grip, u, 0.15, half_thick=0.15, half_h=0.16)
+
+        # 5d. PHYSICAL evidence: the press itself must register on the fingertip
+        #     contact sensors of BOTH sides. A flat-face press produces no
+        #     gripper stall (the fingers are already closed), so the sensors are
+        #     the physical signal; sample them over a short settle window.
+        deadline = time.monotonic() + 3.0
+        contact_l = contact_r = False
+        while time.monotonic() < deadline and not (contact_l and contact_r):
+            contact_l = (contact_l
+                         or self._tip_in_contact('left_left', box_only=True)
+                         or self._tip_in_contact('left_right', box_only=True))
+            contact_r = (contact_r
+                         or self._tip_in_contact('right_left', box_only=True)
+                         or self._tip_in_contact('right_right', box_only=True))
+            rclpy.spin_once(self, timeout_sec=0.05)
+        self._log_grasp_geometry(grip, 'after press')
+
+        # FUSE the evidence honestly: geometry says WHERE the pads are; the
+        # two-sided contact says a real object is actually between them. Commit
+        # the rigid hold only if BOTH hold - this catches both failure classes:
+        # arms short (reach gate) and a perception ghost (no physical contact).
+        placement_ok = on_box_geom            # reach already gated above (5b)
+        physical_ok = contact_l and contact_r
+        self.get_logger().info(
+            f'Squeeze evidence: placement(depth_geom)={placement_ok} '
+            f'physical(contact L={contact_l}, R={contact_r})={physical_ok}.')
+        if not (placement_ok and physical_ok):
+            # Retreat both arms off the faces before aborting.
+            self.plan_arm('left_arm', 'left_end_effector_link', pre_l,
+                          'base_link', 'release left', ori_tol=0.5)
+            self.plan_arm('right_arm', 'right_end_effector_link', pre_r,
+                          'base_link', 'release right', ori_tol=0.5)
+            return self._fail(
+                'squeeze not confirmed (need placement AND contact on BOTH '
+                'pads; no fake lift)')
+
+        # 6. ATTACH (contact-verified), then LIFT. DART cannot hold the cube by
+        #    pad friction alone, so the rigid attach - engaged only after the
+        #    verified two-sided press - carries it (physically justified, not a
+        #    teleport). NEVER two rigid holds: the RIGHT arm releases its
+        #    pressure and retreats FIRST; a second rigid path shoving the fixed
+        #    cube explodes the constraint solver (flings it metres away).
         self._attach_box(True)
-        self.set_gripper(self.left_grip, 0.7, 'STEP6 close left', max_effort=20.0)
-        self.set_gripper(self.right_grip, 0.7, 'STEP6 close right',
-                         max_effort=20.0)
-        self._log_grasp_geometry(grip, 'after clamp')
-        # Free the RIGHT arm before lifting. The box is now rigidly fixed to the
-        # LEFT wrist, so it follows that wrist as one body no matter how the path
-        # bends. The right arm only touches the (now fixed) box; lifting it on a
-        # separate RRTConnect path shoves the box and the constraint solver
-        # explodes (flinging it metres away). So open + retract the right arm,
-        # then lift with the LEFT arm alone.
-        self.set_gripper(self.right_grip, 0.0, 'STEP6 open right')
-        _, away_r = self.grasp_poses(grip, half_width=half, z_offset=0.32)
-        self.plan_arm('right_arm', 'right_end_effector_link', away_r,
-                      'base_link', 'STEP6 retract right', ori_tol=0.6)
-        lift_l, _ = self.grasp_poses(grip, half_width=half, z_offset=0.24)
-        self.plan_arm('left_arm', 'left_end_effector_link', lift_l,
-                      'base_link', 'STEP6 lift left', ori_tol=0.4)
+        # Right pad retreats along -v FROM ITS ACTUAL POSE (post-press wrist
+        # orientation differs from the ideal one - a retreat to the ideal
+        # pre-pose is IK-infeasible from here).
+        if not self.retreat_linear('right_arm', 'right_end_effector_link',
+                                   u, -0.10, 'STEP6 release right'):
+            away_r = self.squeeze_poses(grip, u, pre=0.10)[1]
+            self.plan_arm('right_arm', 'right_end_effector_link', away_r,
+                          'base_link', 'STEP6 release right (RRT)', ori_tol=0.6)
+        lift_l = Pose()
+        lift_l.position = Point(x=lp.position.x, y=lp.position.y,
+                                z=lp.position.z + 0.15)
+        lift_l.orientation = lp.orientation
+        self.move_linear('left_arm', 'left_end_effector_link', lift_l,
+                         'STEP6 lift left')
         self._log_grasp_geometry(grip, 'after lift')
-        self.get_logger().info('PICK+LIFT done (box held by verified attach).')
+        self.get_logger().info('PICK+LIFT done (cube held by verified attach).')
 
-        # 7. (No base transport.) Carrying the box to a SEPARATE table by driving
-        #    the base is not achievable here: with the box rigidly attached to the
-        #    arm tip, ANY base motion makes the Ignition/DART DetachableJoint
-        #    constraint solver explode and flings the box across the world (tried
-        #    fast/slow turns and smoothly-ramped velocities - all fling it). The
-        #    robot already autonomously DROVE to the box's table in the approach;
-        #    we place the box back down on that table.
+        # 7. (No base transport yet - the DART carry stability experiment is the
+        #    next phase.) Place the cube back down on the same table.
 
-        # 8. PLACE: lower the box back onto the table with the LEFT arm (the only
-        #    one holding it), DETACH it so it rests on the table, then retract.
-        place_l, _ = self.grasp_poses(grip, half_width=half)
-        self.plan_arm('left_arm', 'left_end_effector_link', place_l,
-                      'base_link', 'STEP8 lower left', ori_tol=0.4)
+        # 8. PLACE: lower with the LEFT arm (the only one holding it), DETACH so
+        #    the cube rests on the table, then retreat horizontally off the face.
+        self.move_linear('left_arm', 'left_end_effector_link', lp,
+                         'STEP8 lower left')
+        self._wait_settle('left_end_effector_link')
+        # If the lowering line was partial the cube would DROP on detach and
+        # tip over (seen: released ~5 cm high, landed tilted) - re-lower once.
+        if not self.verify_reached('left_end_effector_link', lp, tol=0.03,
+                                   label='STEP8 lower check'):
+            self.move_linear('left_arm', 'left_end_effector_link', lp,
+                             'STEP8 re-lower left')
+            self._wait_settle('left_end_effector_link')
         self._attach_box(False)
-        self.set_gripper(self.left_grip, 0.0, 'STEP8 release left')
-        # Back the left arm up so it clears the placed box.
-        clear_l, _ = self.grasp_poses(grip, half_width=half, z_offset=0.24)
-        self.plan_arm('left_arm', 'left_end_effector_link', clear_l,
-                      'base_link', 'STEP8 retract left', ori_tol=0.4)
-        self.get_logger().info('TASK COMPLETE: box placed on the table.')
+        self.retreat_linear('left_arm', 'left_end_effector_link',
+                            u, 0.10, 'STEP8 retreat left')
+        self.get_logger().info('TASK COMPLETE: cube placed on the table.')
 
     def _fail(self, where):
         self.get_logger().error(f'Task aborted during: {where}')
