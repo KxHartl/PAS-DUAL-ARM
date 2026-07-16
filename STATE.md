@@ -62,19 +62,50 @@ lijevi zglob) TEK nakon dokazanog obostranog kontakta s kutijom. Ključni dizajn
 - **Odometrija**: `/base_controller/odom` za stvarno prevaljeni dovoz i stvarni
   kut centrirajućeg okreta (percept se rotira/translatira za IZMJERENO).
 
-### TODO (sljedeća sesija)
-1. **Spuštanje**: kocka se ispusti par cm previsoko i prevrne. Fix: (a) nakon
-   attacha MAKNUTI kocku iz planning scene (postala je dio "ruke"; njen
-   kolizijski objekt sad blokira re-lower/retreat RRT fallbackove), (b)
-   spuštanje do kontakta (detach tek kad z-visina EE potvrdi plohu ±2 cm).
-2. **Negativni test**: kocka izvan dohvata → mora abortirati (gate-ovi to već
-   rade za promašaje, formalno potvrditi scenarij).
-3. **Faza 1 (blokator)**: DART transport eksperiment A–E (STATE plan) — vožnja
-   baze s attachanom kockom; probati otvorene jastučiće (nema kontakta uz kruti
-   zglob), masa sad 1 kg (bolji omjer), re-parent na torzo.
-4. **Faza 3**: Nav2 retest (kotači popravljeni NAKON napuštanja) ili waypoint
-   vožnja; odlaganje na `target_table` (ploha 0.775 m!) u drugoj prostoriji.
-5. **Faza 4**: vrata sa sadašnjih 2.0 m suziti prema 0.8 m po zadatku.
+## Sesija 2026-07-16b: place-fix + transport proba IMPLEMENTIRANI, NEPROVJERENI
+Kod je napisan, build čist, ali NIJEDAN run s ovim izmjenama još nije prošao
+hvat (runovi 29-30 pali na PREstrogoj geometriji prije nego su nove stvari
+došle na red; run 31 prekinut krajem sesije). Izmjene u `main_task.py`:
+1. **Spuštanje s kontaktom** (STEP8): meta z = visina uzimanja − 2 cm — STOL
+   (ne poza) zaustavlja kocku pa je pad pri detachu ~0 (isti interferencijski
+   trik kao press); do 3 pokušaja spuštanja s provjerom (tol 4 cm).
+2. **Kocka SE MIČE iz planning scene odmah nakon attacha** (CollisionObject
+   REMOVE) — postala je dio "ruke"; njen zamrznuti kolizijski objekt je
+   blokirao SVE kasnije RRT fallbackove (release/lower/retreat frac 0.0x).
+3. **`probe_transport` ROS param** (Faza 1 eksperiment B): nakon attach+lift
+   preskoči place, OTVORI oba jastučića (ukloni kontakt prsti↔kutija koji se
+   tuče s krutim zglobom = glavna hipoteza eksplozije), vozi 0.4 m ravno +
+   okret ~60° u mjestu; kocka visi samo na zglobu. Pokretanje:
+   `ros2 launch ... task.launch.py` uz param `probe_transport:=true`
+   (proslijediti kroz launch ili `ros2 param set` prije runa — provjeriti!
+   task.launch.py trenutno NE prosljeđuje parametre main_tasku).
+4. **Gate pošteno popušten**: primarni dokaz = SVJEŽ box-only kontakt na OBA
+   jastučića (imena kolizija iz poruke — stari fake-hvat to ne može
+   proizvesti); placement = stroga geometrija ILI oba EE unutar 12 cm od
+   press ciljeva (sanity protiv okrznuća iz daljine).
+
+### Naučeno u sesiji 2026-07-16b
+- Runovi 29/30: OBA imala stvaran obostrani kontakt s kutijom, a pali su na
+  fingertips-geometriji (ruke 6-13 cm od idealne poze zbog IK/tracking
+  lutrije) → zato popuštanje gate-a (točka 4). Očekivani skok uspješnosti
+  s ~35% (3/9 runova s kockom) na blizu 100% — ZA POTVRDITI sutra.
+- Promašeni press zna ZBACITI kocku sa stola pri retreatu (run 29: kocka
+  završila na podu metar dalje) → nakon takvog aborta treba restart sima.
+- 5c nudge: izvrši liniju (frac 0.86) ali re-check trči prerano/prestrogo —
+  ako gate-popuštanje ne riješi, dodati settle+recheck petlju u 5c.
+
+### TODO (sutra)
+1. **Run 31+**: potvrditi hvat s popuštenim gateom + RAVNO odlaganje
+   (kocka na stolu, ne prevrnuta) — checkpoint s korisnikom.
+2. **Transport proba** (`probe_transport:=true`): prvo provjeriti kako
+   proslijediti param kroz task.launch.py (možda treba dodati u launch);
+   pratiti pozu kocke izvana (`ign topic -e -t .../dynamic_pose/info`).
+   Ishod A (preživi) → integrirati vožnju do target_table (Faza 3).
+   Ishod B (odleti) → matrica C-E iz plana (masa/fizika/re-parent torzo).
+3. **Negativni test**: kocka izvan dohvata → formalno potvrditi abort.
+4. **Faza 3**: Nav2 retest ili waypoint vožnja; odlaganje na `target_table`
+   (ploha 0.775 m — provjeriti doseg!).
+5. **Faza 4**: vrata 2.0 m → 0.8 m po zadatku.
 
 ## (starije) Stanje prije kocke — pločica 0.06×0.30×0.25
 **Napomena**: svijet sad ima KOCKU po zadatku; sekcije ispod opisuju stariju

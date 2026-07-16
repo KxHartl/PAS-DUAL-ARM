@@ -146,6 +146,10 @@ class MainTask(Node):
         # Pre-grasp: stop short of the pick table (table front edge at X~0.85, the
         # bar's near face at X~0.865). Kept back so the base does not jam the
         # table and Nav2 can reach the goal; the bar then sits at base_link X~0.55.
+        # Transport stability probe (Phase 1): after a verified attach+lift,
+        # skip the place and instead drive the base (straight + in-place turn)
+        # to test whether the DART DetachableJoint survives base motion.
+        self.declare_parameter('probe_transport', False)
         self.declare_parameter('pregrasp_xy', [0.35, 0.0])
         self.declare_parameter('pregrasp_yaw', 0.0)
         # Pre-place: just in front of the table (table front face at X~3.5).
@@ -1686,14 +1690,27 @@ class MainTask(Node):
             rclpy.spin_once(self, timeout_sec=0.05)
         self._log_grasp_geometry(grip, 'after press')
 
-        # FUSE the evidence honestly: geometry says WHERE the pads are; the
-        # two-sided contact says a real object is actually between them. Commit
-        # the rigid hold only if BOTH hold - this catches both failure classes:
-        # arms short (reach gate) and a perception ghost (no physical contact).
-        placement_ok = on_box_geom            # reach already gated above (5b)
+        # FUSE the evidence honestly. The PHYSICAL signal is primary: BOTH pads
+        # report a fresh contact whose other collider is literally `aruco_box`
+        # (collision names from the message) - the historical failure mode
+        # (grippers closing on air 0.5 m away + fake weld) cannot produce that.
+        # Placement is the sanity layer: the strict fingertips-in-volume check
+        # OR both wrists within 12 cm of their press goals (guards against a
+        # pad merely grazing the cube while the arm is wildly displaced).
+        def ee_near(ee, goal_pose, tol=0.12):
+            a = self._tf_point('base_link', ee)
+            return a is not None and math.sqrt(
+                (a[0] - goal_pose.position.x) ** 2
+                + (a[1] - goal_pose.position.y) ** 2
+                + (a[2] - goal_pose.position.z) ** 2) < tol
+
+        near_ok = (ee_near('left_end_effector_link', lp)
+                   and ee_near('right_end_effector_link', rp))
+        placement_ok = on_box_geom or near_ok
         physical_ok = contact_l and contact_r
         self.get_logger().info(
-            f'Squeeze evidence: placement(depth_geom)={placement_ok} '
+            f'Squeeze evidence: placement(geom={on_box_geom}, '
+            f'near={near_ok})={placement_ok} '
             f'physical(contact L={contact_l}, R={contact_r})={physical_ok}.')
         if not (placement_ok and physical_ok):
             # Retreat both arms off the faces before aborting.
@@ -1712,6 +1729,18 @@ class MainTask(Node):
         #    pressure and retreats FIRST; a second rigid path shoving the fixed
         #    cube explodes the constraint solver (flings it metres away).
         self._attach_box(True)
+        # The cube now moves WITH the hand: drop its (stale) collision object
+        # from the planning scene - it otherwise blocks every later RRT
+        # fallback (release/lower/retreat plans kept failing against the copy
+        # of the cube frozen at the grasp spot).
+        drop = PlanningScene()
+        drop.is_diff = True
+        co = CollisionObject()
+        co.header.frame_id = 'base_link'
+        co.id = 'target_cube'
+        co.operation = CollisionObject.REMOVE
+        drop.world.collision_objects = [co]
+        self.scene_pub.publish(drop)
         # Right pad retreats along -v FROM ITS ACTUAL POSE (post-press wrist
         # orientation differs from the ideal one - a retreat to the ideal
         # pre-pose is IK-infeasible from here).
@@ -1729,21 +1758,43 @@ class MainTask(Node):
         self._log_grasp_geometry(grip, 'after lift')
         self.get_logger().info('PICK+LIFT done (cube held by verified attach).')
 
-        # 7. (No base transport yet - the DART carry stability experiment is the
-        #    next phase.) Place the cube back down on the same table.
+        # 7. TRANSPORT PROBE (Phase 1, gated by the probe_transport param):
+        #    open the pads so ONLY the rigid joint holds the cube (no gripper
+        #    contact left to fight the constraint - the leading explosion
+        #    hypothesis), then drive straight and turn in place while the cube
+        #    hangs on the left wrist. The cube's world pose is watched from
+        #    outside (gz) - if the solver explodes, it flies off visibly.
+        if self.get_parameter('probe_transport').value:
+            self.set_gripper(self.left_grip, 0.0, 'PROBE open left pad')
+            self.set_gripper(self.right_grip, 0.0, 'PROBE open right pad')
+            self.get_logger().info('TRANSPORT PROBE: straight 0.4 m.')
+            self.drive(0.10, 0.0, 4.0 + 0.8)
+            self.get_logger().info('TRANSPORT PROBE: settling 3 s.')
+            end = time.monotonic() + 3.0
+            while time.monotonic() < end:
+                rclpy.spin_once(self, timeout_sec=0.05)
+            self.get_logger().info('TRANSPORT PROBE: turn ~60 deg in place.')
+            self.drive(0.0, 0.3, 3.5 + 0.8)
+            self.get_logger().info(
+                'TRANSPORT PROBE done - check the cube pose externally.')
+            return
 
-        # 8. PLACE: lower with the LEFT arm (the only one holding it), DETACH so
-        #    the cube rests on the table, then retreat horizontally off the face.
-        self.move_linear('left_arm', 'left_end_effector_link', lp,
-                         'STEP8 lower left')
-        self._wait_settle('left_end_effector_link')
-        # If the lowering line was partial the cube would DROP on detach and
-        # tip over (seen: released ~5 cm high, landed tilted) - re-lower once.
-        if not self.verify_reached('left_end_effector_link', lp, tol=0.03,
-                                   label='STEP8 lower check'):
-            self.move_linear('left_arm', 'left_end_effector_link', lp,
-                             'STEP8 re-lower left')
+        # 8. PLACE with CONTACT: lower with the LEFT arm to a target 2 cm
+        #    BELOW the pick height - the TABLE (not the goal pose) stops the
+        #    cube, so at detach the drop height is ~zero (the same interference
+        #    trick as the press; releasing a few cm high tipped the cube over).
+        place_l = Pose()
+        place_l.position = Point(x=lp.position.x, y=lp.position.y,
+                                 z=lp.position.z - 0.02)
+        place_l.orientation = lp.orientation
+        for attempt in ('STEP8 lower left', 'STEP8 re-lower left',
+                        'STEP8 re-lower left (2)'):
+            self.move_linear('left_arm', 'left_end_effector_link', place_l,
+                             attempt)
             self._wait_settle('left_end_effector_link')
+            if self.verify_reached('left_end_effector_link', lp, tol=0.04,
+                                   label=f'{attempt} check'):
+                break
         self._attach_box(False)
         self.retreat_linear('left_arm', 'left_end_effector_link',
                             u, 0.10, 'STEP8 retreat left')
