@@ -8,8 +8,8 @@ Trenutno sam u procesu generiranja URDF modela robota (`robot.urdf.xacro`). Budu
 2. Pozicionirajte se u workspace i pokrenite build:
    ```bash
    cd ~/FSB/PAS-DUAL-ARM
-   colcon build --symlink-install
-   source install/setup.bash
+   ./scripts/run_native.sh colcon build --symlink-install
+   ./scripts/run_native.sh
    ```
 3. Pokrenite testnu launch datoteku koja će otvoriti **RViz2** i **Joint State Publisher GUI**:
    ```bash

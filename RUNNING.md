@@ -1,16 +1,19 @@
 # Kako pokrenuti simulaciju i zadatak
 
-## 0. Preduvjet (jednom po sesiji terminala)
+## 0. Projektno okruženje (jednom po terminalu)
 ```bash
 cd ~/FSB/PAS-DUAL-ARM
-source install/setup.bash
+./scripts/run_native.sh
 ```
+Ova naredba otvara izolirani PAS-DUAL-ARM shell. Svaki terminal koji sudjeluje u istom ROS grafu
+otvorite na isti način. Za prijelaz u drugi ROS projekt prvo izađite naredbom `exit`.
+
 Ako si mijenjao kod (Python čvorove) ili xacro/URDF/world/config fajlove, prvo rebuild:
 ```bash
-colcon build --symlink-install
-source install/setup.bash
+./scripts/run_native.sh colcon build --symlink-install
 ```
-(Za brzi rebuild samo jednog paketa: `colcon build --packages-select <ime_paketa>`.)
+(Za brzi rebuild samo jednog paketa:
+`./scripts/run_native.sh colcon build --packages-select <ime_paketa>`.)
 
 ## 1. Pokreni simulaciju (Gazebo + ros2_control + senzori)
 ```bash
@@ -26,16 +29,9 @@ ros2 launch pas_dual_arm_bringup sim.launch.py
 U novom terminalu:
 ```bash
 cd ~/FSB/PAS-DUAL-ARM
-source install/setup.bash
-# NUŽNO dok je ~/ws_moveit2 build star: apt je podigao geometric_shapes na
-# 2.3.4, a source-build MoveIt traži .so.2.3.2 (kompat symlink u ~/.local).
-export LD_LIBRARY_PATH=$HOME/.local/lib/compat:$LD_LIBRARY_PATH
+./scripts/run_native.sh
 ros2 launch pas_dual_arm_bringup task.launch.py
 ```
-(Symlink se kreira jednom: `mkdir -p ~/.local/lib/compat && ln -sf
-/opt/ros/humble/lib/libgeometric_shapes.so.2.3.4
-~/.local/lib/compat/libgeometric_shapes.so.2.3.2`. Trajno rješenje: rebuild
-`~/ws_moveit2`.)
 Ovo pokreće `main_task.py` state machine: SCAN → vizualni prilaz → mjerenje
 dubinom → dvoručni top-down hvat → contact-check → attach → podizanje →
 spuštanje na stol.
@@ -67,11 +63,10 @@ zadano sdformat ime.
   Ako se ponovno pojavi nakon `apt upgrade` paketa `ros-humble-pal-urdf-utils`,
   provjeri je li svojstvo i dalje definirano prije `base_sensors.urdf.xacro`
   include-a.
-- **Zenoh vs Fast DDS**: globalni `~/.bashrc` postavlja `rmw_zenoh_cpp` s
-  `ZENOH_CONFIG_OVERRIDE` prema vanjskom routeru koji lokalno nije dostupan.
-  Launch fajlovi to interno guraju na `RMW_IMPLEMENTATION=rmw_fastrtps_cpp` pa
-  ovo ne bi trebalo trebati ručnu intervenciju — ako vidiš DDS discovery
-  probleme, provjeri je li neki launch fajl to promijenio.
+- **Middleware i domena**: `scripts/run_native.sh` postavlja Fast DDS, ROS domenu 5 i lokalno
+  otkrivanje čvorova. Globalni `~/.bashrc` namjerno ne postavlja ROS varijable. Ako je potreban
+  mrežni ili hardverski profil, definiraj ga zasebno; ne postavljaj router ili adresu robota
+  globalno.
 - **Transport do zasebnog stola ne radi**: DART DetachableJoint + gibanje baze
   izbaci kutiju iz hvataljki. Trenutno testirano samo pick+lift+place na ISTI
   stol (vidi STATE.md).

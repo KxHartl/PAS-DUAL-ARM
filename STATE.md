@@ -52,7 +52,9 @@ lijevi zglob) TEK nakon dokazanog obostranog kontakta s kutijom. Ključni dizajn
 - **apt upgrade slomio okoliš**: (1) `pal_urdf_utils` sad traži `gazebo_version`
   xacro svojstvo → definirano u `robot.urdf.xacro`; (2) source-build MoveIt
   (`~/ws_moveit2`) linkan na `libgeometric_shapes.so.2.3.2`, apt donio 2.3.4 →
-  kompat symlink u `~/.local/lib/compat` + `LD_LIBRARY_PATH` u RUNNING.md.
+  privremeno je korišten kompatibilnosni symlink. **Razriješeno 10. 9. 2026.** Projekt je čisto
+  rebuildan samo na `/opt/ros/humble`, a zastarjeli `LD_LIBRARY_PATH` workaround uklonjen je iz
+  radnih uputa.
 - **spin_once NIJE pacing**: vraća se čim obradi BILO KOJI callback (/clock je
   ~1 kHz) — sve petlje "čekaj N s" pretvorene u monotone/sim-time deadline
   (mjerenje oblaka, `drive()`); posljedica starog buga: "vožnje" od 4 s su se
