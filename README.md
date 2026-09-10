@@ -28,12 +28,23 @@ rosdep install --from-paths src --ignore-src -y -r
 ```
 
 ### 2. Kompilacija
-Nakon kloniranja svih repozitorija (`omni_base`, `ros2_kortex`, itd.) unutar `src/`, prevedite sve s:
+Nakon kloniranja svih repozitorija (`omni_base`, `ros2_kortex`, itd.) unutar `src/`, prevedite sve
+iz eksplicitnog projektnog okruženja:
 ```bash
 cd ~/FSB/PAS-DUAL-ARM
-colcon build --symlink-install
-source install/setup.bash
+./scripts/run_native.sh colcon build --symlink-install
 ```
+
+Za interaktivni rad otvorite projektni shell:
+
+```bash
+./scripts/run_native.sh
+```
+
+Shell učitava samo `/opt/ros/humble` i lokalni PAS-DUAL-ARM overlay, koristi Fast DDS, ROS domenu 5
+i lokalno otkrivanje čvorova. Prije prelaska u drugi ROS projekt izađite naredbom `exit`; nemojte
+učitavati njegov `setup.bash` u isti shell. Globalni `~/.bashrc` ne smije učitavati ROS distribuciju,
+workspace, middleware, domenu ni adresu robota.
 
 ### 3. Vizualna Verifikacija (RViz2)
 Kako biste pregledali statični model (bez Gazeba, služi za provjeru URDF-a i spajanja ruku):

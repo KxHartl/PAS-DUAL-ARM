@@ -272,9 +272,9 @@ ispravan hvat. Ključni nalazi i rješenja:
   (INFO, tranzijentno) dok mu se TF buffer ne napuni; sam se razriješi za ~1 s i ne utječe na rad.
 
 ## Napomena za lokalno pokretanje
-Globalni `~/.bashrc` postavlja `rmw_zenoh_cpp` s `ZENOH_CONFIG_OVERRIDE` koji cilja vanjski
-router (192.168.0.14:7447) nedostupan lokalno. Launch fajlovi zato interno forsiraju
-Fast DDS (`RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, prazan `ZENOH_CONFIG_OVERRIDE`).
+Globalni shell je neutralan. Za build i pokretanje koristi se `scripts/run_native.sh`, koji učitava
+samo `/opt/ros/humble` i PAS-DUAL-ARM lokalni overlay te eksplicitno postavlja Fast DDS, ROS domenu
+5 i lokalno otkrivanje čvorova. Mrežni ili hardverski profil mora biti zaseban i eksplicitno odabran.
 
 ## Preuzeti Repozitoriji (src/)
 `omni_base_simulation`, `ros2_kortex`, `pan_tilt_ros`, `realsense-ros`, `aruco_ros`
