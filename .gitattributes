@@ -9,4 +9,8 @@
 *.pptx binary
 *.xlsx binary
 
+# Patches must keep their exact bytes (incl. CRLF context lines) so they still
+# apply to CRLF-origin sources after a fresh checkout; no EOL normalization.
+patches/*.patch -text
+
 *.ipynb linguist-generated=true

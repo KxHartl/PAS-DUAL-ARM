@@ -27,9 +27,23 @@ sudo apt install ignition-fortress ros-humble-ros-gz ...
 rosdep install --from-paths src --ignore-src -y -r
 ```
 
-### 2. Kompilacija
-Nakon kloniranja svih repozitorija (`omni_base`, `ros2_kortex`, itd.) unutar `src/`, prevedite sve
-iz eksplicitnog projektnog okruženja:
+### 2. Dohvat izvornih ovisnosti (provenance)
+Pet paketa u `src/` (`aruco_ros`, `omni_base_simulation`, `pan_tilt_ros`, `realsense-ros`,
+`ros2_kortex`) su vanjski repozitoriji. Svježi `clone` ovog repozitorija ih ne povlači, pa su njihov
+točan URL i commit pinani u `ros2.repos`. Za rekonstrukciju radnog prostora iz čistog checkouta:
+```bash
+cd ~/FSB/PAS-DUAL-ARM
+vcs import src < ros2.repos        # klonira svih 5 paketa na pinane commitove
+./scripts/apply_patches.sh         # ponovno primijeni lokalne zakrpe iz patches/
+rosdep install --from-paths src --ignore-src -y -r
+```
+Verzije su pinane na točan commit (ne granu) da build ne odluta kad upstream krene naprijed.
+Namjerne lokalne izmjene upstream paketa žive kao zakrpe u `patches/` (trenutno jedna: uklanjanje
+Isaac-Sim xacro argumenata iz `robotiq_2f_85_macro.xacro` koji nisu definirani u ovoj verziji
+Kortexa) i `apply_patches.sh` ih ponovno primjenjuje; skripta je idempotentna.
+
+### 3. Kompilacija
+Nakon dohvata izvora prevedite sve iz eksplicitnog projektnog okruženja:
 ```bash
 cd ~/FSB/PAS-DUAL-ARM
 ./scripts/run_native.sh colcon build --symlink-install
@@ -46,14 +60,14 @@ i lokalno otkrivanje čvorova. Prije prelaska u drugi ROS projekt izađite nared
 učitavati njegov `setup.bash` u isti shell. Globalni `~/.bashrc` ne smije učitavati ROS distribuciju,
 workspace, middleware, domenu ni adresu robota.
 
-### 3. Vizualna Verifikacija (RViz2)
+### 4. Vizualna Verifikacija (RViz2)
 Kako biste pregledali statični model (bez Gazeba, služi za provjeru URDF-a i spajanja ruku):
 ```bash
 ros2 launch pas_dual_arm_bringup display.launch.py
 ```
 Ovdje možete pomicati klizače i promatrati kinematic-stablo robota.
 
-### 4. Pokretanje Gazebo Simulacije
+### 5. Pokretanje Gazebo Simulacije
 Za pokretanje punog okruženja (svijet + robot):
 ```bash
 ros2 launch pas_dual_arm_bringup sim.launch.py

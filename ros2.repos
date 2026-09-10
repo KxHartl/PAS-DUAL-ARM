@@ -1,0 +1,34 @@
+# Pinned source dependencies for PAS-DUAL-ARM (vcstool format).
+#
+# These five packages live under src/ as gitlinks with no .gitmodules, so a fresh
+# clone of this repository does not pull them. This manifest records the exact
+# upstream URL and commit each one was built against, so the workspace can be
+# reconstructed reproducibly:
+#
+#   vcs import src < ros2.repos
+#   ./scripts/apply_patches.sh        # reapply tracked local patches (see patches/)
+#
+# Versions are pinned to the exact commit (not a branch) so the build does not
+# drift when upstream moves. The upstream branch each commit came from is noted
+# in a comment for future deliberate updates.
+repositories:
+  aruco_ros:
+    type: git
+    url: https://github.com/pal-robotics/aruco_ros.git
+    version: 86a0bbb76c935095334ba31682f0246efb44e148   # humble-devel, 5.0.5-1-g86a0bbb
+  omni_base_simulation:
+    type: git
+    url: https://github.com/pal-robotics/omni_base_simulation.git
+    version: 77248acbc811d9f5f7adc4e88e95e1f60d7bf883   # humble-devel, 2.12.0
+  pan_tilt_ros:
+    type: git
+    url: https://github.com/I-Quotient-Robotics/pan_tilt_ros.git
+    version: b0f653428d25b968a4871ad0d9aae0e4d672affd   # humble-devel
+  realsense-ros:
+    type: git
+    url: https://github.com/realsenseai/realsense-ros.git
+    version: 6d87b071dcfef15f2a0407e1e78945256add70d0   # ros2-master, 4.57.6-42-g6d87b071
+  ros2_kortex:
+    type: git
+    url: https://github.com/Kinovarobotics/ros2_kortex.git
+    version: 116d87ae595c791ba7ae32201b88693a3ba02324   # humble, 0.2.3-29-g116d87a

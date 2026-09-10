@@ -56,6 +56,12 @@ zadano sdformat ime.
   NE smije fake-attachati kutiju izdaleka.
 
 ## Poznati problemi / gotchas
+- **colcon upozorenje `realsense2_description` override**: `colcon build` javlja da paket
+  `realsense2_description` iz `src/realsense-ros/` nadjačava istoimeni paket iz `/opt/ros/humble`.
+  Ovo je **namjerno**: cijeli `realsense-ros` je dohvaćen iz izvora (v4.57.6, noviji od apt verzije u
+  Humbleu) radi usklađenog drivera i opisa kamere, pa override mora ostati. Upozorenje je benigno i ne
+  treba ga uklanjati; ako želiš tišu konzolu, ne briši paket iz source seta (izgubila bi se verzija
+  usklađena s driverom).
 - **`gazebo_version` xacro greška** (`name 'gazebo_version' is not defined`):
   ispravljeno u `robot.urdf.xacro` — dodano svojstvo `gazebo_version=gazebo`
   jer namjerno preskačemo `omni_base_description/robots/omni_base.urdf.xacro`
