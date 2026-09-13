@@ -1,0 +1,114 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro"
+       xmlns:ignition="http://ignitionrobotics.org/schema">
+
+  <!-- frontal_reflect = front = +1 and rear = -1 -->
+  <!-- sagital_reflect = right = +1 and left = -1 -->
+  <xacro:macro name="wheel" params="side parent sagital_reflect frontal_reflect radius width torque velocity sagital_separation frontal_separation fdir1">
+
+    <link name="suspension_${side}_link">
+      <inertial>
+        <origin xyz="-0.058182 ${frontal_reflect * sagital_reflect * -0.0043908} -0.0057695" rpy="0 0 0" />
+        <mass value="1.2879" />
+        <inertia ixx="0.0015947" ixy="${frontal_reflect * sagital_reflect * -0.00013183}" ixz="1.7315E-05"
+          iyy="0.00060158" iyz="${frontal_reflect * sagital_reflect * -6.0731E-05}" izz="0.0015861" />
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <xacro:if value="${frontal_reflect == 1}">
+            <mesh filename="package://omni_base_description/meshes/wheels/suspension_front_link.stl" scale="1 1 1"/>
+          </xacro:if>
+          <xacro:unless value="${frontal_reflect == 1}">
+            <mesh filename="package://omni_base_description/meshes/wheels/suspension_rear_link.stl" scale="1 1 1"/>
+          </xacro:unless>
+        </geometry>
+        <material name="">
+          <color rgba="0.79216 0.81961 0.93333 1" />
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <xacro:if value="${frontal_reflect == 1}">
+            <mesh filename="package://omni_base_description/meshes/wheels/suspension_front_link.stl" scale="1 1 1"/>
+          </xacro:if>
+          <xacro:unless value="${frontal_reflect == 1}">
+            <mesh filename="package://omni_base_description/meshes/wheels/suspension_rear_link.stl" scale="1 1 1"/>
+          </xacro:unless>
+        </geometry>
+      </collision>
+      <kinematic>0</kinematic>
+      <gravity>1</gravity>
+    </link>
+
+    <joint name="suspension_${side}_joint" type="fixed">
+      <origin xyz="${frontal_reflect * frontal_separation / 2.0} ${sagital_reflect * -1.0 * suspension_sagital_separation / 2.0} 0" rpy="0 0 ${sagital_reflect * -90.0 * deg_to_rad}" />
+      <parent link="${parent}" />
+      <child link="suspension_${side}_link" />
+      <axis xyz="0 0 1" />
+    </joint>
+
+    <link name="wheel_${side}_link">
+      <inertial>
+        <origin xyz="${frontal_reflect * 5.4922E-09} ${frontal_reflect * sagital_reflect * 6.9775E-05} ${sagital_reflect * 0.011144}" rpy="0 0 0" />
+        <mass value="0.70767" />
+        <inertia ixx="0.00035492" ixy="${frontal_reflect * 7.5685E-13}" ixz="3.8795E-11"
+          iyy="0.00035529" iyz="${frontal_reflect * -2.0284E-07}" izz="0.00040131" />
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <xacro:if value="${sagital_reflect == 1}">
+            <mesh filename="package://omni_base_description/meshes/wheels/wheel_link.stl" scale="1 1 1"/>
+          </xacro:if>
+          <xacro:unless value="${sagital_reflect == 1}">
+            <mesh filename="package://omni_base_description/meshes/wheels/wheel_link_reverted.stl" scale="1 1 1"/>
+          </xacro:unless>
+        </geometry>
+        <material name="DarkGrey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <cylinder radius="${radius}" length="${width}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Continuous wheel joint with 100 Nm effort limit and zero damping/friction for DART velocity servo -->
+    <joint name="wheel_${side}_joint" type="continuous">
+      <origin xyz="0.050675 0 0" rpy="${-90.0 * deg_to_rad} 0 ${sagital_reflect * 90.0 * deg_to_rad}" />
+      <parent link="suspension_${side}_link" />
+      <child link="wheel_${side}_link" />
+      <axis xyz="0 0 1" />
+      <limit effort="${torque}" velocity="${velocity}"/>
+      <dynamics damping="0.0" friction="0.0"/>
+    </joint>
+
+    <!-- Anisotropic surface friction for mecanum wheel -->
+    <gazebo reference="wheel_${side}_link">
+      <collision>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.80</mu>
+              <mu2>0.20</mu2>
+              <fdir1 ignition:expressed_in="base_footprint">${fdir1}</fdir1>
+            </ode>
+          </friction>
+          <contact>
+            <ode>
+              <kp>1000000.0</kp>
+              <kd>1000.0</kd>
+              <min_depth>0.003</min_depth>
+            </ode>
+          </contact>
+        </surface>
+      </collision>
+      <material>Gazebo/Grey</material>
+    </gazebo>
+
+  </xacro:macro>
+
+</robot>

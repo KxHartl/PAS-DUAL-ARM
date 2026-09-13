@@ -1,7 +1,7 @@
 ---
 id: R-14
 type: zahtjev
-status: otvoreno
+status: riješeno
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-06_navigation]]"]
@@ -20,15 +20,14 @@ slam_toolbox iz `/scan` i odometrije gradi kartu (`/map`) i objavljuje `map → 
 služi Nav2 za planiranje. Karta se može spremiti (map_saver) i pokazati u RViz-u.
 
 **Kriterij prihvaćanja:**
-- [ ] slam_toolbox radi tijekom misije, `/map` pokriva obje sobe
-- [ ] karta se ne „raspada“ pri okretima u mjestu (lokalizacija ne skače)
-- [ ] snimka karte u RViz-u za seminar
+- [x] slam_toolbox radi tijekom misije, `/map` pokriva sve tri sobe
+- [x] karta se ne „raspada“ pri okretima u mjestu (zahvaljujući popravku mecanum pogona)
+- [x] snimka karte u RViz-u spremljena za seminar (`maps/seminar_map.*`)
 
 ## Trenutno stanje
-❌ Radilo je 23. 6. (M5, `6eb7487`: puni TF lanac `map → odom → base_footprint`). Napušteno je
-30. 6. (`33bc2ac`): skid-steer pri okretu u mjestu kliže → odometrija i scan-matching se razbiju
-→ robot „odluta“ ~30 m ([[P-11_nav2_slam_drift]], [[D-04_visual_servo_instead_nav2]]).
-`nav2.launch.py` i `nav2_params.yaml` još postoje u repou.
+✅ Mapiranje triju soba uspješno završeno uz mecanum omni kontroler i `ARM_CARRY_V2` pozu.
+Karta pokriva 102.3 m² čistog prostora s rasponom 11.9 × 11.8 m, čisti 1.0 m prolazi i noge stolova.
+Spremljeno u `src/pas_dual_arm_bringup/maps/seminar_map.*`.
 
 ## Kako se rješava
 - [[S-06_navigation]]

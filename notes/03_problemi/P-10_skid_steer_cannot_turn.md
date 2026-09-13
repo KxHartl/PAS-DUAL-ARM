@@ -21,10 +21,11 @@ mu1 = mu2 = 0 (kinematski Classic), a naš prvi override mu2 = 1.5 je klizanje b
 |---|---|---|---|---|
 | 1 | 23. 6. `6eb7487` | override trenja kotača (visok mu2) | vozi ravno, ne okreće | bočno trenje blokira skid |
 | 2 | 30. 6. `f62ebbd` | mu2 = 0 | okreće (yaw 0 → 2.36 uz ω = 0.8) | okret moguć |
-| 3 | 30. 6. `33bc2ac` | mu1 = 0.4 | čist okret u mjestu, drift ~4 mm | trenutno |
+| 3 | 30. 6. `33bc2ac` | mu1 = 0.4 | čist okret u mjestu, drift ~4 mm | okret moguć |
+| 4 | 13. 9. | mu2 = 0.2 | minimalni bočni otpor umjesto nule | sprječava rubne numeričke greške nule uz zadržan okret |
 
 ## Trenutno rješenje
-`robot.urdf.xacro:103-104` mu1 0.4, mu2 0.0. **Pravilo:** okret i vožnja nikad istovremeno (inače
+`robot.urdf.xacro:120-132` mu1 0.4, mu2 0.2. **Pravilo:** okret i vožnja nikad istovremeno (inače
 baza „krabira“).
 
 ## Nuspojave

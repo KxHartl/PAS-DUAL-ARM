@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- INCLUDES -->
+  <xacro:include filename="$(find pas_dual_arm_bringup)/urdf/base/base.urdf.xacro"/>
+  <xacro:include filename="$(find pal_urdf_utils)/urdf/interaction_sensors/imu.urdf.xacro"/>
+
+  <!-- MACRO DEFINITION -->
+  <xacro:macro name="base_sensors" params="name front_laser_model:=false rear_laser_model:=false laser_height:=0.13244">
+
+    <!-- Virtual Base Laser Link -->
+    <joint name="virtual_${name}_laser_joint" type="fixed">
+        <parent link="${name}_link"/>
+        <child link="virtual_${name}_laser_link"/>
+        <origin xyz="0 0 ${laser_height}" rpy="0 0 0" />
+    </joint>
+    <link name="virtual_${name}_laser_link"/>
+
+    <!-- IMU -->
+    <xacro:imu_sensor name="${name}_imu" parent="${name}_link" update_rate="100.0">
+      <origin xyz="-0.287 0 0.092163" rpy="0 0 ${90.0 * deg_to_rad}" />
+    </xacro:imu_sensor>
+
+    <xacro:base name="${name}"/>
+
+  </xacro:macro>
+
+</robot>

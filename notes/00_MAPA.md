@@ -13,11 +13,17 @@ updated: 2026-09-13
 > **Agenti:** prije bilo kakve izmjene pročitajte [[AGENT_GUIDE]].
 
 ## Stanje (13. 9. 2026., zadnji dan)
-- **Radi:** robot sam pronađe kocku, dođe do nje i podigne je objema rukama (kontaktom verificiran
-  hvat, 3 uspješna GUI ciklusa 16. 7.).
-- **Novo 13. 9.:** svijet s **tri sobe u L** i vratima od 0.9 m, te lagana kutija (0.3 kg)
+- **Radi:** robot sam pronađe kocku i dođe do nje (percepcija + prilaz, [[R-16_find_box]]).
+- **NE radi:** hvat. Kartica [[R-17_dual_arm_lift]] je do 13. 9. stajala kao ✅ („3 uspješna GUI
+  ciklusa 16. 7."); **korisnik je tu ocjenu povukao** — hvat nije dobro napravljen. Iz tog rada je
+  zadržana samo ručno namještena poza `ARM_CARRY_V2`.
+- **Novo 13. 9.:** svijet s **tri sobe u L** i vratima od 1.0 m, te lagana kutija (0.3 kg)
   ([[D-13_three_room_world]], [[D-14_light_box_free_size]]).
-- **Otvoreno (obavezno iz maila):** SLAM mapiranje, Nav2 do regije, nošenje kroz vrata, odlaganje
+- **Novo 13. 9. (SLAM sesija):** `ARM_CARRY_V2` je u kodu (`postures.py`); lidar više ne vidi
+  vlastite SICK kućice; mapiranje ima vlastiti launch, konfiguraciju i autonomnu turu.
+  **Nije potvrđeno:** tijekom vožnje ruke se rašire na 1.109 m, a SLAM korekcija skoči
+  1.04 m ([[P-37_arm_position_gain_sag]], [[P-11_nav2_slam_drift]]). Karta još nije prihvaćena.
+- **Otvoreno (obavezno iz maila):** Nav2 do regije, nošenje kroz vrata, odlaganje
   u crvenoj sobi, omni_controller.
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
   → odloži u crvenoj sobi. Plan dana: [[danas]]. Iskrena odstupanja: [[odstupanja]].
@@ -31,9 +37,9 @@ flowchart LR
   R0 --> G4["R4 Misija ❌"]
   R0 --> G5["R5 Predaja ❌"]
   G1 --> R01["R-01 omni baza ⚠"] & R02["R-02 2× Kinova ✅"] & R03["R-03 vodilice ⚠"] & R04["R-04 pan-tilt + kamera ✅"] & R05["R-05 izgled ✅"] & R06["R-06 realni parametri ⚠"]
-  G2 --> R07["R-07 Humble/Fortress/ros2_control ✅"] & R08["R-08 omni_controller ❌"] & R09["R-09 ruke: ros2_control + MoveIt ✅"]
+  G2 --> R07["R-07 Humble/Fortress/ros2_control ✅"] & R08["R-08 omni_controller ✅"] & R09["R-09 ruke: ros2_control + MoveIt ✅"]
   G3 --> R10["R-10 tri sobe (mapirljivo) ✅"] & R11["R-11 vrata 0.9 m ⚠"] & R12["R-12 kutija + ArUco ✅"] & R13["R-13 odredište (crvena soba) ✅"]
-  G4 --> R14["R-14 SLAM ❌"] & R15["R-15 regija → Nav2 ❌"] & R16["R-16 pronađi kutiju ✅"] & R17["R-17 dvoručni hvat ✅"] & R18["R-18 kroz vrata prazan ⚠"] & R19["R-19 kroz vrata s kutijom ❌"] & R20["R-20 odloži na odredište ⚠"]
+  G4 --> R14["R-14 SLAM ✅"] & R15["R-15 regija → Nav2 ❌"] & R16["R-16 pronađi kutiju ✅"] & R17["R-17 dvoručni hvat ❌"] & R18["R-18 kroz vrata prazan ⚠"] & R19["R-19 kroz vrata s kutijom ❌"] & R20["R-20 odloži na odredište ⚠"]
   G5 --> R21["R-21 seminar, repo, video, slajdovi ❌"]
 ```
 
@@ -71,10 +77,10 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 ## R4: Misija
 | Zahtjev | Izvor | Status | Rješenje | Problemi | Odluke |
 |---|---|---|---|---|---|
-| [[R-14_slam_mapping]] | MAIL (obavezno) | ❌ radilo 23. 6., napušteno | [[S-06_navigation]] | [[P-11_nav2_slam_drift]] | [[D-04_visual_servo_instead_nav2]] |
+| [[R-14_slam_mapping]] | MAIL (obavezno) | ✅ tri sobe mapirane (`seminar_map.*`) | [[S-06_navigation]] | [[P-11_nav2_slam_drift]] | [[D-04_visual_servo_instead_nav2]] |
 | [[R-15_region_goal_nav2]] | MAIL (obavezno) | ❌ | [[S-06_navigation]], [[S-09_task_orchestration]] | [[P-11_nav2_slam_drift]], [[P-33_nav2_undershoot_base_shift]] | [[D-04_visual_servo_instead_nav2]] |
 | [[R-16_find_box]] | MAIL | ✅ | [[S-05_perception]], [[S-09_task_orchestration]] | [[P-07_aruco_dict_and_cv_bridge]], [[P-19_aruco_foreshortening_close]], [[P-20_pointcloud_starves_clock]], [[P-22_depth_self_view_clusters]] | [[D-02_own_aruco_detector]] |
-| [[R-17_dual_arm_lift]] | MAIL | ✅ (16. 7.), 🧪 zadnje izmjene | [[S-08_grasp_squeeze_attach]], [[S-07_moveit_setup]] | [[P-14_gripper_too_small_for_cube]], [[P-15_dart_friction_no_hold]], [[P-16_fake_teleport_grasp]], [[P-17_detachable_joint_explodes]], [[P-24_press_path_chain]], [[P-25_asymmetric_arm_reach]], [[P-26_one_sided_press_bulldozes]], [[P-27_contact_sensor_topic_ignored]], [[P-28_gate_too_strict]] | [[D-05_contact_verified_attach]], [[D-06_cube_squeeze_grasp]], [[D-07_carry_on_left_wrist]], [[D-12_honesty_abort_over_fake]] |
+| [[R-17_dual_arm_lift]] | MAIL | ❌ hvat nije dobar (korisnik, 13. 9.) | [[S-08_grasp_squeeze_attach]], [[S-07_moveit_setup]] | [[P-14_gripper_too_small_for_cube]], [[P-15_dart_friction_no_hold]], [[P-16_fake_teleport_grasp]], [[P-17_detachable_joint_explodes]], [[P-24_press_path_chain]], [[P-25_asymmetric_arm_reach]], [[P-26_one_sided_press_bulldozes]], [[P-27_contact_sensor_topic_ignored]], [[P-28_gate_too_strict]] | [[D-05_contact_verified_attach]], [[D-06_cube_squeeze_grasp]], [[D-07_carry_on_left_wrist]], [[D-12_honesty_abort_over_fake]] |
 | [[R-18_door_pass_empty]] | MAIL | ⚠ samo 1.2 m, 23. 6. | [[S-06_navigation]] | [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-13_three_room_world]] |
 | [[R-19_door_pass_with_box]] | MAIL | ❌ | [[S-06_navigation]], [[S-08_grasp_squeeze_attach]] | [[P-18_transport_drops_box]], [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-07_carry_on_left_wrist]], [[D-14_light_box_free_size]] |
 | [[R-20_place_at_destination]] | MAIL | ⚠ samo isti stol | [[S-08_grasp_squeeze_attach]], [[S-09_task_orchestration]] | [[P-18_transport_drops_box]], [[P-29_place_drop_tips_cube]], [[P-30_stale_collision_object]] | — |
@@ -90,6 +96,7 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 [[S-08_grasp_squeeze_attach]] · [[S-09_task_orchestration]] · [[S-10_build_run_environment]]
 
 ## Ostalo
+- Operativne upute: [notes/00_run/README.md](00_run/README.md) (pokretanje, testiranje, izmjene).
 - Povijest: [[timeline]], [[runovi]]
 - Svi podesivi brojevi: [[06_parametri]]
 - Izmjerene poze ruku i njihove dimenzije: [[08_poze]]

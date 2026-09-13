@@ -2,8 +2,11 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable, TimerAction
+from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
+                            SetEnvironmentVariable, TimerAction)
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
@@ -16,15 +19,26 @@ def generate_launch_description():
     rmw_env = SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')
     zenoh_env = SetEnvironmentVariable('ZENOH_CONFIG_OVERRIDE', '')
 
-    # SLAM (slam_toolbox): builds the map on the fly and provides map->odom.
-    slam_launch = IncludeLaunchDescription(
+    mode = LaunchConfiguration('mode')
+    map_file = LaunchConfiguration('map')
+    mode_arg = DeclareLaunchArgument('mode', default_value='mapping',
+                                     description='localization (saved map) or mapping (live SLAM)')
+    map_arg = DeclareLaunchArgument(
+        'map', default_value=os.path.join(pkg_bringup, 'maps', 'seminar_map.yaml'),
+        description='Saved occupancy map for AMCL localization')
+    mapping = Node(
+        package='slam_toolbox', executable='async_slam_toolbox_node',
+        name='slam_toolbox', output='screen',
+        parameters=[os.path.join(pkg_bringup, 'config', 'slam_params.yaml'),
+                    {'use_sim_time': True}],
+        condition=IfCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
+    )
+    localization = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(nav2_bringup_dir, 'launch', 'slam_launch.py')
-        ),
-        launch_arguments={
-            'use_sim_time': 'true',
-            'params_file': params_file,
-        }.items(),
+            os.path.join(nav2_bringup_dir, 'launch', 'localization_launch.py')),
+        launch_arguments={'use_sim_time': 'true', 'map': map_file,
+                          'params_file': params_file}.items(),
+        condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
     )
 
     # Nav2 stack (planner, controller, behaviors, bt_navigator...).
@@ -38,24 +52,87 @@ def generate_launch_description():
         }.items(),
     )
 
-    # Nav2 publishes /cmd_vel, the base controller listens on its own topic
-    # inside the gz controller_manager - the relay bridges the two.
-    cmd_vel_relay = Node(
-        package='pas_dual_arm_scripts',
-        executable='cmd_vel_relay',
+    # Nav2 publishes /cmd_vel and the base controller listens on its own topic
+    # inside the gz controller_manager, so a relay has to bridge the two - but
+    # sim.launch.py already starts it. Starting a second one here put two nodes
+    # of the same name on the same topic, so this launch relies on the one from
+    # sim.launch.py.
+
+    # Costmap keepout filter servers (active during localization mode)
+    mask_yaml_file = os.path.join(pkg_bringup, 'maps', 'keepout_mask.yaml')
+    filter_mask_server = Node(
+        package='nav2_map_server',
+        executable='map_server',
+        name='filter_mask_server',
         output='screen',
-        parameters=[{'use_sim_time': True}],
+        parameters=[{
+            'use_sim_time': True,
+            'yaml_filename': mask_yaml_file,
+            'topic_name': 'keepout_filter_mask',
+            'frame_id': 'map',
+        }],
+        condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
+    )
+    costmap_filter_info_server = Node(
+        package='nav2_map_server',
+        executable='costmap_filter_info_server',
+        name='costmap_filter_info_server',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
+            'type': 0,
+            'filter_info_topic': '/costmap_filter_info',
+            'mask_topic': '/keepout_filter_mask',
+            'base': 0.0,
+            'multiplier': 1.0,
+        }],
+        condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
+    )
+    lifecycle_manager_costmap_filters = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_costmap_filters',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
+            'autostart': True,
+            'node_names': ['filter_mask_server', 'costmap_filter_info_server'],
+        }],
+        condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
     )
 
-    # Delay the Nav2 stack so slam_toolbox has time to publish map->odom first.
+    # Delay the Nav2 stack so the localizer has time to publish map->odom first.
     # Otherwise local_costmap activates while the TF tree is still split
     # (odom and base_link in unconnected trees) and logs a startup-race error.
     delayed_nav2 = TimerAction(period=5.0, actions=[nav2_launch])
+    features = Node(
+        package='pas_dual_arm_scripts', executable='feature_registry',
+        output='screen', parameters=[{'use_sim_time': True}],
+    )
+
+    rviz = LaunchConfiguration('rviz')
+    rviz_arg = DeclareLaunchArgument('rviz', default_value='true',
+                                     description='Open RViz with Nav2 default view')
+    rviz_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(nav2_bringup_dir, 'launch', 'rviz_launch.py')),
+        launch_arguments={'use_sim_time': 'true'}.items(),
+        condition=IfCondition(rviz),
+    )
 
     return LaunchDescription([
         rmw_env,
         zenoh_env,
-        slam_launch,
-        cmd_vel_relay,
+        mode_arg,
+        map_arg,
+        rviz_arg,
+        mapping,
+        localization,
+        filter_mask_server,
+        costmap_filter_info_server,
+        lifecycle_manager_costmap_filters,
+        features,
         delayed_nav2,
+        rviz_cmd,
     ])
+

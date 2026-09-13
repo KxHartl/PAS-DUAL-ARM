@@ -33,6 +33,10 @@ def generate_launch_description():
     auto_start_arg = DeclareLaunchArgument(
         'auto_start', default_value='true',
         description='Run the main_task orchestration node automatically.')
+    navigate_region = LaunchConfiguration('navigate_region')
+    region_x = LaunchConfiguration('region_x')
+    region_y = LaunchConfiguration('region_y')
+    region_yaw = LaunchConfiguration('region_yaw')
 
     moveit_dir = get_package_share_directory('pas_dual_arm_moveit_config')
     move_group = IncludeLaunchDescription(
@@ -48,7 +52,11 @@ def generate_launch_description():
         package='pas_dual_arm_scripts',
         executable='main_task',
         output='screen',
-        parameters=[{'use_sim_time': True}],
+        parameters=[{'use_sim_time': True,
+                     'navigate_region': navigate_region,
+                     'region_x': region_x,
+                     'region_y': region_y,
+                     'region_yaw': region_yaw}],
         condition=IfCondition(auto_start),
     )
     # Give move_group + aruco ~12 s to advertise before orchestrating.
@@ -58,6 +66,10 @@ def generate_launch_description():
         rmw_env,
         zenoh_env,
         auto_start_arg,
+        DeclareLaunchArgument('navigate_region', default_value='false'),
+        DeclareLaunchArgument('region_x', default_value='0.0'),
+        DeclareLaunchArgument('region_y', default_value='-4.5'),
+        DeclareLaunchArgument('region_yaw', default_value='-1.57079632679'),
         move_group,
         aruco,
         delayed_task,

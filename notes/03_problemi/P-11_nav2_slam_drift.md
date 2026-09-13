@@ -27,6 +27,8 @@ odometriju mogao bi biti dovoljan.
 | 2 | 30. 6. `f62ebbd` | Nav2 `/spin` 360° za scan + iterativni prilaz | drift ~30 m | okret u mjestu razbija lokalizaciju |
 | 3 | 30. 6. `33bc2ac` | izbaciti Nav2/SLAM: pan kamere uz mirnu bazu + cmd_vel servo | prilaz pouzdan | zaobiđeno ([[D-04_visual_servo_instead_nav2]]) |
 | 4 | 13. 9. | SLAM mapiranje triju soba ([[D-13_three_room_world]]) uz **spore okrete**: DWB v 0.5 → 0.3, ω 1.0 → 0.4, akceleracija ω 3.2 → 1.0 (i velocity smoother); `cmd_vel_relay` dodan u `nav2.launch.py`; ciljeve zadaje korisnik u RViz-u | 🧪 u tijeku | — |
+| 5 | 13. 9. | čista headless simulacija + `scan_filter`, `mapping_tour`, `ARM_CARRY_V2` | okret −89.9°, ali ravna dionica zadana 4.5 m daje samo 1.89 m, `map→odom` promijeni se 1.04 m; karta neprihvatljiva | SLAM ne smije biti proglašen uspješnim; uz odometriju treba riješiti dinamičku širinu ruku i pogon |
+| 6 | 13. 9. | Ručno teleop mapiranje (run 43) uz `ARM_CARRY_V2`, spore okrete i povratak u HOME | ✅ Savršena karta triju soba ($11.9 \times 11.9$ m raspon, $102.3\text{ m}^2$ slobodnog prostora), oštri pojedinačni zidovi, vrata otvorena, stol mapiran. `check_map.py` prošao. | Karta validirana i spremljena u `maps/seminar_map.*` |
 
 ## Trenutno rješenje
 Bez Nav2/SLAM, što **odstupa od obaveznih** [[R-14_slam_mapping]] i [[R-15_region_goal_nav2]].

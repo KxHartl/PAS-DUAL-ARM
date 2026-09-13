@@ -1,6 +1,12 @@
 amcl:
   ros__parameters:
     use_sim_time: True
+    set_initial_pose: true
+    initial_pose:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      yaw: 0.0
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
@@ -26,7 +32,7 @@ amcl:
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
     resample_interval: 1
-    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    robot_model_type: "nav2_amcl::OmniMotionModel"
     save_pose_rate: 0.5
     sigma_hit: 0.2
     tf_broadcast: true
@@ -37,14 +43,14 @@ amcl:
     z_max: 0.05
     z_rand: 0.5
     z_short: 0.05
-    scan_topic: /scan
+    scan_topic: /scan_filtered
 
 bt_navigator:
   ros__parameters:
     use_sim_time: True
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: /odom
+    odom_topic: /base_controller/odom
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -114,7 +120,7 @@ controller_server:
     use_sim_time: True
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
+    min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
@@ -135,44 +141,48 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      # Tightened from 0.25: the approach pose must be reached precisely so the
-      # box ends up within the arms' reach (loose tol left the base ~0.23 m short).
-      xy_goal_tolerance: 0.10
-      yaw_goal_tolerance: 0.10
-    # DWB parameters
+      # Relaxed tolerances (0.20 m, 0.25 rad) so robot smoothly transitions without hunting/jittering
+      xy_goal_tolerance: 0.20
+      yaw_goal_tolerance: 0.25
+    # DWB parameters wrapped by RotationShimController to enforce in-place rotation before translation
     FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "dwb_core::DWBLocalPlanner"
+      angular_dist_threshold: 0.12
+      forward_sampling_distance: 0.5
+      rotate_to_heading_angular_vel: 0.35
+      max_angular_accel: 0.8
+      simulate_ahead_time: 1.0
       debug_trajectory_details: True
       min_vel_x: 0.0
-      min_vel_y: 0.0
-      # Slow turns (notes P-11): the skid-steer base turns by wheel slip, and
-      # fast in-place turns (1.0 rad/s, 3.2 rad/s^2) corrupted odometry and
-      # slam_toolbox scan matching (~30 m drift on 2026-06-30).
+      min_vel_y: -0.2
+      # Slow turns (notes P-11): keep turns smooth and controlled.
       max_vel_x: 0.3
-      max_vel_y: 0.0
+      max_vel_y: 0.2
       max_vel_theta: 0.4
       min_speed_xy: 0.0
-      max_speed_xy: 0.3
+      max_speed_xy: 0.35
       min_speed_theta: 0.0
       acc_lim_x: 1.0
-      acc_lim_y: 0.0
+      acc_lim_y: 1.0
       acc_lim_theta: 1.0
       decel_lim_x: -1.0
-      decel_lim_y: 0.0
+      decel_lim_y: -1.0
       decel_lim_theta: -1.0
       vx_samples: 20
-      vy_samples: 1
+      vy_samples: 5
       vtheta_samples: 20
       sim_time: 1.7
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.20
       trans_stopped_velocity: 0.25
       short_circuit_trajectory_evaluation: True
       stateful: True
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
+      # ObstacleFootprint checks the actual rectangular polygon footprint along the trajectory
+      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      ObstacleFootprint.scale: 0.02
       PathAlign.scale: 32.0
       PathAlign.forward_point_distance: 0.1
       GoalAlign.scale: 24.0
@@ -195,14 +205,14 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      footprint: "[[0.45, 0.30], [-0.45, 0.30], [-0.45, -0.30], [0.45, -0.30]]"
+      # Width 0.90 m (+/-0.45 m) leaves 10 cm of clearance in the 1.0 m doorway (5 cm each side)
+      footprint: "[[0.52, 0.45], [-0.52, 0.45], [-0.52, -0.45], [0.52, -0.45]]"
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        # >= inscribed radius (0.31) so NavFn keeps paths off walls/door jambs
-        # (notes P-12); a 0.9 m door still leaves a non-lethal centre corridor.
-        inflation_radius: 0.40
+        # 0.48 m ensures the centre of the 1.0 m doorway remains cost = 0.
+        inflation_radius: 0.48
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -214,7 +224,7 @@ local_costmap:
         mark_threshold: 0
         observation_sources: scan
         scan:
-          topic: /scan
+          topic: /scan_filtered
           max_obstacle_height: 2.0
           clearing: True
           marking: True
@@ -236,37 +246,27 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_link
       use_sim_time: True
-      footprint: "[[0.45, 0.30], [-0.45, 0.30], [-0.45, -0.30], [0.45, -0.30]]"
+      # Width 0.90 m (+/-0.45 m) leaves 10 cm of clearance in the 1.0 m doorway (5 cm each side)
+      footprint: "[[0.52, 0.45], [-0.52, 0.45], [-0.52, -0.45], [0.52, -0.45]]"
       resolution: 0.05
       track_unknown_space: true
-      rolling_window: true
+      rolling_window: false
       width: 20
       height: 20
-      plugins: ["obstacle_layer", "inflation_layer"]
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: scan
-        scan:
-          topic: /scan
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
+      plugins: ["static_layer", "inflation_layer"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 5.0
-        # >= inscribed radius (0.31) so NavFn keeps paths off walls/door jambs
-        # (notes P-12); a 0.9 m door still leaves a non-lethal centre corridor.
-        inflation_radius: 0.40
+        # 0.48 m ensures the centre of the 1.0 m doorway remains cost = 0.
+        inflation_radius: 0.48
       always_send_full_costmap: True
+      filters: ["keepout_filter"]
+      keepout_filter:
+        plugin: "nav2_costmap_2d::KeepoutFilter"
+        filter_info_topic: "/costmap_filter_info"
 
 map_server:
   ros__parameters:
@@ -291,7 +291,7 @@ planner_server:
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
       tolerance: 0.5
-      use_astar: false
+      use_astar: true
       allow_unknown: true
 
 smoother_server:
@@ -352,12 +352,28 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    # Matches the slow-turn DWB limits (notes P-11).
-    max_velocity: [0.3, 0.0, 0.4]
-    min_velocity: [-0.3, 0.0, -0.4]
-    max_accel: [0.5, 0.0, 1.0]
-    max_decel: [-0.5, 0.0, -1.0]
-    odom_topic: "odom"
+    # Matches the slow-turn DWB limits with lateral omni support.
+    max_velocity: [0.3, 0.2, 0.4]
+    min_velocity: [-0.3, -0.2, -0.4]
+    max_accel: [0.5, 0.5, 1.0]
+    max_decel: [-0.5, -0.5, -1.0]
+    odom_topic: "/base_controller/odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
+
+costmap_filter_info_server:
+  ros__parameters:
+    use_sim_time: True
+    type: 0
+    filter_info_topic: "/costmap_filter_info"
+    mask_topic: "/keepout_filter_mask"
+    base: 0.0
+    multiplier: 1.0
+
+filter_mask_server:
+  ros__parameters:
+    use_sim_time: True
+    topic_name: "/keepout_filter_mask"
+    yaml_filename: ""
+

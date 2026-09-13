@@ -1,9 +1,12 @@
-<?xml version="1.0"?>
-<robot xmlns:xacro="http://ros.org/wiki/xacro" name="dual_arm_robot">
+<robot xmlns:xacro="http://ros.org/wiki/xacro"
+       xmlns:ignition="http://ignitionrobotics.org/schema"
+       xmlns:gz="http://gazebosim.org/schema"
+       name="dual_arm_robot">
 
   <!-- Arguments -->
   <xacro:arg name="use_sim_time" default="true"/>
   <xacro:arg name="sim_ignition" default="true"/>
+  <xacro:arg name="carry_arms" default="false"/>
   
   <!-- 1. OMNI BASE -->
   <!-- We include ONLY the structural part of the omni_base (base_link, base_footprint,
@@ -19,8 +22,15 @@
   <xacro:property name="gazebo_version" value="gazebo"/>
   <xacro:include filename="$(find pal_urdf_utils)/urdf/materials.urdf.xacro"/>
   <xacro:include filename="$(find pal_urdf_utils)/urdf/deg_to_rad.urdf.xacro"/>
-  <xacro:include filename="$(find omni_base_description)/urdf/base/base_sensors.urdf.xacro"/>
-  <xacro:base_sensors name="base" front_laser_model="sick-571" rear_laser_model="sick-571"/>
+  <xacro:include filename="$(find pas_dual_arm_bringup)/urdf/base/base_sensors.urdf.xacro"/>
+  <!-- Both PAL SICK lasers are disabled on purpose. They are Gazebo-Classic gpu_ray
+       sensors, so they publish nothing under Fortress (see section 6), yet their meshes
+       sit at (+-0.27512, -+0.18297, 0.13244) - exactly in the scan plane of the 360 deg
+       gpu_lidar we mount on virtual_base_laser_link. They showed up as two 7-ray blobs at
+       ~0.31 m in every scan, which would smear into the SLAM map as obstacles that travel
+       with the robot. Disabling them keeps virtual_base_laser_link, which the macro
+       creates unconditionally. -->
+  <xacro:base_sensors name="base" front_laser_model="false" rear_laser_model="false"/>
 
   <!-- 2. DUAL ARM TORSO -->
   <!-- We include our custom torso and attach it to the base_link -->
@@ -33,6 +43,15 @@
 
   <!-- 3. KINOVA GEN3 ARMS -->
   <xacro:include filename="$(find kortex_description)/robots/kortex_robot.xacro"/>
+  <!-- Mapping starts in the existing measured carry posture. This avoids a
+       large arm sweep that destabilizes the Fortress/DART simulation. The
+       standard task spawn remains unchanged unless explicitly requested. -->
+  <xacro:property name="initial_left_arm" value="${dict(joint_1=0.0,joint_2=0.0,joint_3=0.0,joint_4=0.0,joint_5=0.0,joint_6=0.0,joint_7=0.0)}"/>
+  <xacro:property name="initial_right_arm" value="${dict(joint_1=0.0,joint_2=0.0,joint_3=0.0,joint_4=0.0,joint_5=0.0,joint_6=0.0,joint_7=0.0)}"/>
+  <xacro:if value="$(arg carry_arms)">
+    <xacro:property name="initial_left_arm" value="${dict(joint_1=0.0,joint_2=1.571,joint_3=2.356,joint_4=-1.571,joint_5=-0.785,joint_6=1.571,joint_7=1.571)}"/>
+    <xacro:property name="initial_right_arm" value="${dict(joint_1=0.0,joint_2=1.571,joint_3=0.785,joint_4=1.571,joint_5=0.785,joint_6=-1.571,joint_7=-1.571)}"/>
+  </xacro:if>
   
   <!-- Left Arm -->
   <xacro:load_robot 
@@ -50,7 +69,8 @@
     port_realtime="10001" 
     session_inactivity_timeout_ms="60000" 
     connection_inactivity_timeout_ms="2000" 
-    sim_ignition="$(arg sim_ignition)">
+    sim_ignition="$(arg sim_ignition)"
+    initial_positions="${initial_left_arm}">
     <origin xyz="0 0.060 0" rpy="-0.785398 0 0"/>
   </xacro:load_robot>
 
@@ -70,7 +90,8 @@
     port_realtime="10001" 
     session_inactivity_timeout_ms="60000" 
     connection_inactivity_timeout_ms="2000" 
-    sim_ignition="$(arg sim_ignition)">
+    sim_ignition="$(arg sim_ignition)"
+    initial_positions="${initial_right_arm}">
     <origin xyz="0 0.060 0" rpy="0.785398 0 3.14159"/>
   </xacro:load_robot>
 
@@ -90,27 +111,6 @@
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </xacro:sensor_d435>
 
-  <!-- 4.4 WHEEL FRICTION OVERRIDE -->
-  <!-- PAL's wheel.gazebo.xacro sets mu1=mu2=0.0 on every wheel (their Classic sim
-       drives the base kinematically with planar_move, so wheels are decorative).
-       Our diff_drive base actually rolls on the wheels, so give them rolling
-       traction (mu1) but LOW lateral friction (mu2): this is a rigid 4-wheel
-       skid-steer, so turning in place needs the wheels to slide sideways. With
-       high mu2 the base could only drive straight and would not rotate at all
-       (the 360 scan and all turns were impossible). -->
-  <xacro:macro name="wheel_friction" params="side">
-    <gazebo reference="wheel_${side}_link">
-      <mu1>0.4</mu1>
-      <mu2>0.0</mu2>
-      <kp>1000000.0</kp>
-      <kd>1000.0</kd>
-      <minDepth>0.003</minDepth>
-    </gazebo>
-  </xacro:macro>
-  <xacro:wheel_friction side="front_left"/>
-  <xacro:wheel_friction side="front_right"/>
-  <xacro:wheel_friction side="rear_left"/>
-  <xacro:wheel_friction side="rear_right"/>
 
   <!-- 4.5 GRIPPER FINGER-TIP FRICTION -->
   <!-- The 85 mm Robotiq grippers cannot enclose the 300 mm box, so it is held
@@ -179,6 +179,7 @@
       <child_link>box_link</child_link>
       <attach_topic>/aruco_box/attach</attach_topic>
       <detach_topic>/aruco_box/detach</detach_topic>
+      <output_topic>/aruco_box/state</output_topic>
     </plugin>
   </gazebo>
 
@@ -332,7 +333,7 @@
     <joint name="pan_tilt_pitch_joint">
       <command_interface name="position"/>
       <state_interface name="position">
-        <param name="initial_value">0.0</param>
+        <param name="initial_value">0.45</param>
       </state_interface>
       <state_interface name="velocity"/>
     </joint>

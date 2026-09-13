@@ -1,0 +1,2 @@
+Saved SLAM maps land here (scripts/save_map.sh). Kept in git so map_server has a
+directory to resolve against even before the first map is recorded.

@@ -1,7 +1,7 @@
 ---
 id: P-09
 type: problem
-status: otvoreno
+status: riješeno
 requirements: ["[[R-08_omni_controller]]", "[[R-01_omni_base]]"]
 solutions: ["[[S-04_base_drive]]", "[[S-03_ros2_control_setup]]"]
 decisions: ["[[D-03_diff_drive_base_temporary]]"]
@@ -10,7 +10,7 @@ updated: 2026-09-13
 # P-09: Omnidirekcijski pogon baze na Fortressu (obavezni omni_controller)
 
 ## Simptom
-Nijedan omni pogon nije proradio. Baza trenutno vozi samo x + yaw kao skid-steer.
+Riješeno 13. 9. Baza ima puni omnidirekcijski pogon (vx, vy, wz) preko `mecanum_drive_controller` uz `mu2 = 0.20`.
 
 ## Uzrok
 **Potvrđeno:**
@@ -34,25 +34,13 @@ ispravno zapovijedati brzine kotača, ali bočno gibanje fizički neće nastati 
 | 3 | 23. 6. `6eb7487` | Ignition `VelocityControl` / PAL `planar_move` | ne instancira se / Classic-only | slijepa ulica |
 | 4 | 23. 6. `6eb7487` | `diff_drive_controller` na 4 kotača (skid-steer) | radi: x + yaw, odom, TF | privremeno ([[D-03_diff_drive_base_temporary]]) |
 | 5 | 13. 9. (provjera) | traženje omni kontrolera: `apt-cache`, ament index | PAL omni ❌, **`mecanum_drive_controller` ✅** | novi kandidat |
+| 6 | 13. 9. | `mecanum_drive_controller` + URDF base prilagodba (effort 100 Nm, damping/friction 0, `fdir1` u `base_footprint`, mu2 0.20) + `cmd_vel_relay` | **PUNI USPJEH** ✅: vx, vy (0.33 m), wz (okret u mjestu), dijagonala rade | Omnidirekcijski pogon potpuno operativan |
 
-## Trenutno rješenje
-`diff_drive_controller` ([[S-04_base_drive]]).
-
-## Sljedeći korak (time-box ~60 min, vidi [[danas]])
-1. `ros2 param describe` / izvor ros2_controllers 2.53.3: potrebni parametri `mecanum_drive_controller`
-   (imena kotača, `kinematics.wheels_radius`, `kinematics.sum_of_robot_center_projection_on_X_Y_axis`,
-   frameovi) i format reference (TwistStamped/unstamped, topic `~/reference`).
-2. U `controllers.yaml` zamijeniti `base_controller` (r = 0.0762, razmak kotača 0.44715, osni
-   razmak 0.488 iz PAL `mobile_base_controller.yaml`). Prilagoditi `cmd_vel` izdavače
-   (`main_task._send_vel`, `cmd_vel_relay`).
-3. Test u GUI-ju: `linear.y = 0.1` → gibanje bočno? Ako **ne** (cilindri), probati anizotropno
-   trenje po kotaču (`fdir1`, mu2 0). Ako i to ne uspije, koristiti mecanum kontroler samo za
-   x + yaw (formalno ispunjava „omni_controller“, fizički ograničeno), što ide u [[odstupanja]].
-4. Regresija: okret u mjestu, dovoz, centriranje. Parametar `mu1/mu2` mijenjati samo uz
-   [[06_parametri]].
-
-**Kriterij uspjeha:** `ros2 control list_controllers` pokazuje mecanum kontroler aktivan, baza
-radi okret i vožnju naprijed kao prije, a (idealno) i bočni pomak.
+## Konačno rješenje
+- Kontroler: `mecanum_drive_controller/MecanumDriveController` u `src/pas_dual_arm_bringup/config/controllers.yaml`.
+- Poveznica: `cmd_vel_relay.py` preusmjerava `/cmd_vel` i `/base_controller/cmd_vel_unstamped` na `/base_controller/reference_unstamped`, te `/base_controller/odometry` na `/base_controller/odom` i `~/tf_odometry` na `/tf`.
+- URDF: `src/pas_dual_arm_bringup/urdf/base/` definira `wheel.urdf.xacro` s effort limitom 100 Nm (DART SERVO motor constraint), bez pasivnog prigušenja i s anizotropnim trenjem `mu=0.80`, `mu2=0.20`, `fdir1 ignition:expressed_in="base_footprint"`.
+- Nav2: ažurirani `nav2_params.yaml` (DWB `max_vel_y: 0.2`, `acc_lim_y: 1.0`, AMCL `OmniMotionModel`).
 
 ## Ne ponavljati
 - Ignition `MecanumDrive` / `VelocityControl` sistem pluginovi (ne instanciraju se).

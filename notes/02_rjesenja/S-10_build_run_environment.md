@@ -17,6 +17,8 @@ Reproducibilan build i izoliran ROS okoliš, bez ovisnosti o globalnom `~/.bashr
 - **`scripts/run_native.sh`**: učitava samo `/opt/ros/humble` + lokalni overlay; Fast DDS, ROS
   domena **5**, localhost discovery; čisti naslijeđene putanje ([[D-11_project_scoped_ros_env]]).
   `./scripts/run_native.sh` otvara shell, a `./scripts/run_native.sh <cmd>` pokreće naredbu.
+- **`scripts/verify_environment.sh`**: BATRACS-style read-only preflight; provjerava ROS,
+  overlay, alate i pakete; `--live` provjerava topice već pokrenute simulacije.
 - **`ros2.repos`**: 5 upstream paketa (`aruco_ros`, `omni_base_simulation`, `pan_tilt_ros`,
   `realsense-ros`, `ros2_kortex`) pinanih na točan commit ([[P-34_source_provenance]]).
 - **`patches/` + `apply_patches.sh`**: jedna zakrpa (Isaac-Sim argumenti iz Robotiq xacroa),

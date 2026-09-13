@@ -21,23 +21,24 @@ updated: 2026-09-13
 | širina vrata | **1.0 m** (zid y = -3: x ∈ ±0.5; zid x = 3: y ∈ ±0.5) | `WORLD` linkovi `door_*` | robot je 0.85 m → 7.3 cm po strani; prije 0.9 m pa 2.0 m ([[P-35_arm_span_too_wide_for_door]]) |
 | zidovi | 0.1 m debljine × **3.0 m visine** (13. 9.; bilo 1.2 m) | `WORLD` model `rooms` | kamera je na 1.39 m i gledala je preko zidova → [[P-36_walls_lower_than_camera]] |
 | visina robota | **1.45 m** (kamera 1.39 m + rub) | izmjereno `scripts/measure_robot.py` | [[08_poze]] |
-| kutija poza | (0, **-6.38**, 0.25), yaw -π/2 (marker gleda +y, prema vratima) | `WORLD` model `aruco_box` | [[D-13_three_room_world]] |
+| kutija poza | (0, **-6.35**, 0.90), yaw -π/2 (marker gleda +y, prema vratima) | `WORLD` model `aruco_box` | dno na stolu z=0.75, težište z=0.90 |
 | kutija masa / veličina | **0.3 kg** / 0.30 m (I = 0.0045) | `WORLD` model `aruco_box` | [[D-14_light_box_free_size]] (prije 1.0 kg) |
 | kutija μ | 5.0 | `WORLD` model `aruco_box` | [[P-15_dart_friction_no_hold]] |
 | ploča markera | 0.22 m (-X ploha, x = -0.1505) | `WORLD` model `aruco_box` | [[P-08_marker_not_detected_texture]] |
-| `pick_table` | (0, **-6.5**), yaw -π/2, ploča 0.4 × 0.5 na z = 0.10 | `WORLD` | plava soba |
-| `place_table` | (**6.5**, 0), ploča 0.6 × 0.6 na z = 0.10 | `WORLD` | crvena soba, odredište ([[R-13_destination_place]]) |
+| `pick_table` | (0, **-6.5**), 4 noge, ploča 0.8 × 0.8 na **z = 0.75 m** | `WORLD` | plava soba; 4 noge na z=0..0.71 |
+| `place_table` | (**6.5**, 0), 4 noge, ploča 0.8 × 0.8 na **z = 0.75 m** | `WORLD` | crvena soba, odredište ([[R-13_destination_place]]) |
 
 ## Robot
-| Parametar | Vrijednost | Gdje | Zašto / veza |
-|---|---|---|---|
-| trenje kotača mu1 / mu2 | 0.4 / 0.0 (kp 1e6) | `URDF` l. 103–105 | [[P-10_skid_steer_cannot_turn]] |
+| trenje kotača mu1 / mu2 | **0.80 / 0.20** (anizotropno, fdir1 ±45° u `base_footprint`) | `src/pas_dual_arm_bringup/urdf/base/wheel.urdf.xacro` | [[P-09_omni_drive_on_fortress]], [[R-08_omni_controller]] |
+| effort limit kotača / prigušenje | **100.0 Nm** / damping 0.0, friction 0.0 | `src/pas_dual_arm_bringup/urdf/base/wheel.urdf.xacro` | DART SERVO constraint za omni pogon ([[P-09_omni_drive_on_fortress]]) |
+| base controller | `mecanum_drive_controller/MecanumDriveController` | `CTRL` l. 28, 41–64 | [[R-08_omni_controller]], zamijenio diff_drive_controller |
 | trenje jastučića prstiju | mu1 = mu2 = 5.0 | `URDF` l. 122–123 | squeeze |
 | masa vodilice / klizača | 12 kg / 2 kg | `dual_arm_torso.urdf.xacro` l. 24, 55, 92 | procjena ([[R-06_realistic_parameters]]) |
 | klizač limit | **0.05–0.65 m** (13. 9.; bilo 0.05–0.8), 1000 N, 0.5 m/s | `dual_arm_torso.urdf.xacro` l. 71, 105 | hod stvarne vodilice (odluka korisnika); [[P-13_torso_prismatic_no_lift]] |
 | torzo `position_proportional_gain` | 20.0 | `URDF` l. 301, 312 | [[P-13_torso_prismatic_no_lift]] |
 | lidar | 360 zraka, 10 Hz | `URDF` l. 192–201 | [[P-06_classic_only_sensors]] |
 | RGBD kamera | 640×480, 15 Hz, HFOV 1.211 | `URDF` l. 226–236 | [[S-05_perception]] |
+| pan-tilt početni pitch | **0.45 rad** (~25.8° dolje prema stolu) | `URDF` l. 355 | usmjerenje prema stolu 75 cm |
 | contact senzori | 50 Hz | `URDF` l. 149 | [[P-27_contact_sensor_topic_ignored]] |
 | DetachableJoint | `left_bracelet_link` ↔ `aruco_box` | `URDF` l. 175–181 | [[D-05_contact_verified_attach]] |
 
@@ -55,13 +56,13 @@ updated: 2026-09-13
 ## Navigacija (Nav2; trenutno se ne koristi)
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|
-| footprint | ±0.45 × ±0.30 m | `NAV` l. 197, 236 | — |
-| `inflation_radius` | **0.40** (13. 9.; bilo 0.35 → 0.15 → 0.05), `cost_scaling_factor` 5.0 | `NAV` `local_costmap`, `global_costmap` | [[P-12_door_too_narrow]]: mora biti ≥ upisanog radijusa 0.31 |
-| `xy_goal_tolerance` | 0.10 / 0.25 | `NAV` l. 140, 169 | [[P-33_nav2_undershoot_base_shift]] |
+| footprint | ±0.52 × ±0.45 m (širina 90 cm, ostavlja 10 cm lufta u vratima 1.0 m) | `NAV` local/global costmap | [[P-35_arm_span_too_wide_for_door]], veći prostor za grešku |
+| `inflation_radius` | **0.48**, `cost_scaling_factor` **5.0** | `NAV` `local_costmap`, `global_costmap` | ostavlja čisti centralni prolaz troška 0 u vratima 1.0 m |
+| `xy_goal_tolerance` / `yaw_goal_tolerance` | **0.20 m / 0.25 rad** (bilo 0.10 / 0.10) | `NAV` l. 146–147 | opuštena tolerancija da robot ne traži mikronsko poravnanje |
 | DWB `max_vel_x` / `max_vel_theta` | **0.3 / 0.4** (bilo 0.5 / 1.0, 13. 9.) | `NAV` `controller_server.FollowPath` | [[P-11_nav2_slam_drift]]: spori okreti |
 | DWB `acc_lim_x` / `acc_lim_theta` | **1.0 / 1.0** (bilo 2.5 / 3.2, 13. 9.) | `NAV` `controller_server.FollowPath` | [[P-11_nav2_slam_drift]] |
 | velocity smoother max v / ω / akc. | **0.3 / 0.4 / (0.5, 1.0)** (bilo 0.5 / 1.0 / (2.5, 3.2), 13. 9.) | `NAV` `velocity_smoother` | [[P-11_nav2_slam_drift]] |
-| slam_toolbox | default `mapper_params_online_sync` (pomak 0.5 m / 0.5 rad, `base_footprint`, `/scan`) | `nav2_params.yaml` nema sekciju | [[R-14_slam_mapping]] |
+| slam_toolbox | async, pomak 0.2 m / 0.2 rad, `base_footprint`, `/scan_filtered`, rezolucija 0.05 m | `config/slam_params.yaml`, `mapping.launch.py` | [[R-14_slam_mapping]], [[P-11_nav2_slam_drift]]; karta još nije prihvaćena |
 
 ## Percepcija
 | Parametar | Vrijednost | Gdje | Zašto / veza |

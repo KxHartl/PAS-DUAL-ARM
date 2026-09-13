@@ -1,7 +1,7 @@
 ---
 id: R-08
 type: zahtjev
-status: otvoreno
+status: riješeno
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-04_base_drive]]"]
@@ -24,13 +24,12 @@ Baza se upravlja ros2_control kontrolerom za **omnidirekcijski** pogon: prima `c
   registriran), provjereno 13. 9.
 
 **Kriterij prihvaćanja:**
-- [ ] `ros2 control list_controllers` pokazuje omni/mecanum kontroler aktivan za 4 kotača
-- [ ] `cmd_vel` s `linear.y ≠ 0` pomiče bazu bočno u Gazebu (GUI potvrda)
-- [ ] odometrija + `odom → base_footprint` TF objavljeni
+- [x] `ros2 control list_controllers` pokazuje omni/mecanum kontroler aktivan za 4 kotača
+- [x] `cmd_vel` s `linear.y ≠ 0` pomiče bazu bočno u Gazebu (potvrđeno uživo: vy=0.2 m/s -> dy=0.33 m)
+- [x] odometrija + `odom → base_footprint` TF objavljeni
 
 ## Trenutno stanje
-❌ Baza je `diff_drive_controller/DiffDriveController` (4-kotačni skid-steer, samo x + yaw), vidi
-[[D-03_diff_drive_base_temporary]]. **Ovo je najjasnije odstupanje od obaveznog zahtjeva.**
+✅ Baza koristi `mecanum_drive_controller/MecanumDriveController` (puni omni pogon: vx, vy, wz i dijagonale). Zahtjev R-08 je u potpunosti ispunjen.
 
 ## Kako se rješava
 - [[S-04_base_drive]]: trenutni pogon i plan prelaska

@@ -32,8 +32,9 @@ import numpy as np
 import rclpy
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory, GripperCommand
-from geometry_msgs.msg import Pose, Point, Quaternion, Twist
+from geometry_msgs.msg import Pose, Point, Quaternion
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup
+from nav2_msgs.action import NavigateToPose
 from moveit_msgs.srv import GetCartesianPath, GetPositionIK
 from moveit_msgs.msg import (
     CollisionObject,
@@ -46,11 +47,14 @@ from moveit_msgs.msg import (
 )
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState, PointCloud2
 from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+from pas_dual_arm_scripts.base_drive import BaseDriver
+from pas_dual_arm_scripts.postures import (ARM_DRIVE, POSTURES, joint_constraints,
+                                           move_to_posture, switch_arm_hold)
 
 # Optional Ignition contact-sensor feedback. Bridged via ros_gz_interfaces; if the
 # package or the sensor is missing, the grasp verification falls back to depth +
@@ -120,15 +124,10 @@ def quat_mul(a, b):
         w=a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z)
 
 
-# Reachable 'ready' posture (SRDF Home state) used as a known-good joint-space
-# target so the MoveIt2 execution path is exercised even when a Cartesian grasp
-# pose is out of the arms' workspace.
-ARM_HOME = {1: 0.0, 2: 0.26, 3: 3.14, 4: -2.27, 5: 0.0, 6: 0.96, 7: 1.57}
-
-# Compact carry posture: shoulders raised and elbows folded in so both arms are
-# tucked close to the body (narrow Y span) while driving the box through the
-# doorway, instead of leaving the elbows bowed out from the grasp solution.
-ARM_CARRY = {1: 0.0, 2: 0.7, 3: 3.14, 4: -2.5, 5: 0.0, 6: 1.2, 7: 1.57}
+# Named postures live in postures.py, which mirrors the measured registry in
+# notes/08_poze.md. The old local ARM_CARRY was removed: nothing used it, and it
+# was measured at 1.29 m wide, so it never was the "tucked" posture its comment
+# claimed. ARM_CARRY_V2 is the narrow one (85.4 cm).
 
 # Top-down grasp orientation for the end_effector_link. The Kinova/Robotiq tool
 # frame has its approach axis along local +Z (palm -> fingertips) and the finger
@@ -138,7 +137,7 @@ ARM_CARRY = {1: 0.0, 2: 0.7, 3: 3.14, 4: -2.5, 5: 0.0, 6: 1.2, 7: 1.57}
 GRASP_DOWN = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
 
-class MainTask(Node):
+class MainTask(BaseDriver, Node):
     def __init__(self):
         super().__init__('main_task_node')
 
@@ -171,6 +170,10 @@ class MainTask(Node):
         # Calibration gate: stop after the pick+lift to verify the friction grasp
         # in isolation before re-enabling transport/place.
         self.declare_parameter('pick_only', True)
+        self.declare_parameter('navigate_region', False)
+        self.declare_parameter('region_x', 0.0)
+        self.declare_parameter('region_y', -4.5)
+        self.declare_parameter('region_yaw', -1.57079632679)
 
         self.pregrasp_xy = self.get_parameter('pregrasp_xy').value
         self.pregrasp_yaw = self.get_parameter('pregrasp_yaw').value
@@ -184,6 +187,7 @@ class MainTask(Node):
 
         # --- action clients --------------------------------------------------
         self.move = ActionClient(self, MoveGroup, '/move_action')
+        self.navigate = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         # Straight-line Cartesian moves (press/lift): a 10 cm press must be a
         # 10 cm motion - RRTConnect happily returns metre-long detours that
         # sweep the unmodelled box mid-path.
@@ -220,9 +224,11 @@ class MainTask(Node):
         # Drive the base directly (no Nav2): the skid-steer base rotates by wheel
         # slip, which breaks wheel odometry and SLAM during an in-place turn, so
         # Nav2/SLAM navigation is unreliable. Instead we visual-servo to the
-        # marker with direct cmd_vel (no relay is running without Nav2).
-        self.cmd_vel = self.create_publisher(
-            Twist, '/base_controller/cmd_vel_unstamped', 10)
+        # marker with direct cmd_vel. BaseDriver also subscribes to the wheel
+        # odometry used to measure the ACTUAL close-in drive distance (the
+        # open-loop profile has cm-level error, enough for the grippers to close
+        # beside the box).
+        self.init_base_drive()
 
         # --- perception ------------------------------------------------------
         self.tf_buffer = Buffer()
@@ -246,12 +252,6 @@ class MainTask(Node):
         self._joint = {}            # name -> (position, effort)
         self.create_subscription(JointState, '/joint_states',
                                  self._joint_cb, 10)
-        # Wheel odometry: used to measure the ACTUAL close-in drive distance
-        # (the trapezoidal open-loop drive has cm-level error, enough for the
-        # grippers to close beside the bar).
-        self._last_odom = None
-        self.create_subscription(Odometry, '/base_controller/odom',
-                                 self._odom_cb, 10)
         # Optional Ignition fingertip contact sensors (bridged Contacts msgs). Each
         # entry holds the wall-clock time a non-empty contact was last seen;
         # _tip_box_contact_t only counts contacts whose other collider is the box.
@@ -298,32 +298,6 @@ class MainTask(Node):
                     self._tip_box_contact_t[key] = time.monotonic()
                     break
 
-    def _odom_cb(self, msg):
-        self._last_odom = msg
-
-    def _odom_xy(self, timeout=2.0):
-        """A FRESH wheel-odometry XY sample (odom frame), or None."""
-        self._last_odom = None
-        deadline = time.monotonic() + timeout
-        while self._last_odom is None and time.monotonic() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.05)
-        if self._last_odom is None:
-            return None
-        p = self._last_odom.pose.pose.position
-        return (p.x, p.y)
-
-    def _odom_yaw(self, timeout=2.0):
-        """A FRESH wheel-odometry yaw sample (odom frame), or None."""
-        self._last_odom = None
-        deadline = time.monotonic() + timeout
-        while self._last_odom is None and time.monotonic() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.05)
-        if self._last_odom is None:
-            return None
-        q = self._last_odom.pose.pose.orientation
-        return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
-                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
-
     def _tip_in_contact(self, key, max_age=0.4, box_only=False):
         """True if the named fingertip contact sensor fired within max_age s.
         With box_only=True only contacts AGAINST THE BOX count (a pad brushing
@@ -356,44 +330,6 @@ class MainTask(Node):
         ok = result is not None and result.status == GoalStatus.STATUS_SUCCEEDED
         self.get_logger().info(f'{name}: {"OK" if ok else "FAILED"}')
         return ok
-
-    # ------------------------------------------------------------ base (cmd_vel)
-    def _send_vel(self, lin, ang):
-        tw = Twist()
-        tw.linear.x = float(lin)
-        tw.angular.z = float(ang)
-        self.cmd_vel.publish(tw)
-
-    def drive(self, lin, ang, secs, rate=20.0):
-        """Drive the base for a duration with a trapezoidal velocity profile
-        (ramp up, cruise, ramp down). A constant-velocity step jerks the base and,
-        when the box is rigidly attached to the arm, that impulse makes the attach
-        joint's constraint solver explode and flings the box; smooth ramps avoid
-        it (the way Nav2's smoothed velocities did when carry worked before)."""
-        n = max(1, int(secs * rate))
-        ramp = max(1, int(0.8 * rate))   # ~0.8 s ease in / ease out
-        period = 1.0 / rate
-        # Pace the ticks by SIM time, not wall time: `secs` of commanded motion
-        # only integrates `secs` of sim time worth of distance, and the GUI sim
-        # runs below real-time (measured RTF ~0.5: commanded 0.48 m, driven
-        # 0.24 m with wall pacing). spin_once() alone is no pacing at all - it
-        # returns per serviced callback and /clock runs at ~1 kHz. The wall
-        # deadline is a safety net so a paused sim cannot hang us forever.
-        t0_ns = self.get_clock().now().nanoseconds
-        wall_deadline = time.monotonic() + 4.0 * secs + 5.0
-        for i in range(n):
-            if i < ramp:
-                s = (i + 1) / ramp
-            elif i >= n - ramp:
-                s = max(0.0, (n - i) / ramp)
-            else:
-                s = 1.0
-            self._send_vel(lin * s, ang * s)
-            target_ns = t0_ns + int((i + 1) * period * 1e9)
-            while (self.get_clock().now().nanoseconds < target_ns
-                   and time.monotonic() < wall_deadline):
-                rclpy.spin_once(self, timeout_sec=0.02)
-        self._send_vel(0.0, 0.0)
 
     def _attach_box(self, attach):
         """Rigidly attach / detach the box to the left wrist via the
@@ -896,7 +832,7 @@ class MainTask(Node):
         return self._send_and_wait(self.move, goal, label)
 
     def move_arms_joint(self, posture, label):
-        """Joint-space plan of both arms to a symmetric posture (dict joint#->val).
+        """Joint-space plan of both arms to a named posture (see postures.py).
         Joint goals are always IK-solvable, so this reliably exercises MoveIt2
         planning + trajectory execution on the real controllers."""
         if not self._wait_server(self.move, 'move_action'):
@@ -908,17 +844,7 @@ class MainTask(Node):
         req.allowed_planning_time = 5.0
         req.max_velocity_scaling_factor = 0.2
         req.max_acceleration_scaling_factor = 0.2
-        c = Constraints(name=label)
-        for side in ('left', 'right'):
-            for j, val in posture.items():
-                jc = JointConstraint()
-                jc.joint_name = f'{side}_joint_{j}'
-                jc.position = float(val)
-                jc.tolerance_above = 0.02
-                jc.tolerance_below = 0.02
-                jc.weight = 1.0
-                c.joint_constraints.append(jc)
-        req.goal_constraints.append(c)
+        req.goal_constraints.append(joint_constraints(posture, label))
         goal.planning_options.plan_only = False
         self.get_logger().info(f'{label}: planning both_arms (joint-space)')
         return self._send_and_wait(self.move, goal, label)
@@ -1418,11 +1344,72 @@ class MainTask(Node):
             f'wrist|effort|={wrist_eff:.2f}.')
         return {'contact': contact, 'stalled': bool(stalled)}
 
+    def _navigate_to_region(self):
+        """Reach the operator's approximate map-frame region before scanning."""
+        xy = (self.get_parameter('region_x').value,
+              self.get_parameter('region_y').value)
+        yaw = float(self.get_parameter('region_yaw').value)
+        if not all(math.isfinite(float(v)) for v in (*xy, yaw)):
+            self.get_logger().error('region coordinates must be finite')
+            return False
+        if not self.navigate.wait_for_server(timeout_sec=30.0):
+            self.get_logger().error('/navigate_to_pose is unavailable')
+            return False
+        goal = NavigateToPose.Goal()
+        goal.pose.header.frame_id = 'map'
+        goal.pose.header.stamp = self.get_clock().now().to_msg()
+        goal.pose.pose.position.x = float(xy[0])
+        goal.pose.pose.position.y = float(xy[1])
+        goal.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        goal.pose.pose.orientation.w = math.cos(yaw / 2.0)
+        self.get_logger().info(f'Nav2 region goal: ({xy[0]:.2f}, {xy[1]:.2f}), yaw={yaw:.2f}')
+        send = self.navigate.send_goal_async(goal)
+        rclpy.spin_until_future_complete(self, send)
+        handle = send.result()
+        if handle is None or not handle.accepted:
+            return False
+        result_future = handle.get_result_async()
+        deadline = time.monotonic() + 600.0
+        while not result_future.done() and time.monotonic() < deadline:
+            rclpy.spin_once(self, timeout_sec=0.1)
+            for side, joints in POSTURES[ARM_DRIVE].items():
+                for index, target in joints.items():
+                    joint = f'{side}_joint_{index}'
+                    actual = self._joint.get(joint)
+                    if actual is None:
+                        continue
+                    error = math.atan2(math.sin(actual[0] - target),
+                                       math.cos(actual[0] - target))
+                    if abs(error) > 0.15:
+                        self.get_logger().error(
+                            f'{joint} deviated {error:.3f} rad while navigating; '
+                            'canceling before the doorway')
+                        handle.cancel_goal_async()
+                        self._send_vel(0.0, 0.0)
+                        return False
+        if not result_future.done():
+            handle.cancel_goal_async()
+            self._send_vel(0.0, 0.0)
+            self.get_logger().error('Nav2 region goal timed out')
+            return False
+        result = result_future.result()
+        return result is not None and result.status == GoalStatus.STATUS_SUCCEEDED
+
     # --------------------------------------------------------------------- run
     def run(self):
         # The DetachableJoint starts attached; release it so the box sits free on
         # the table until we deliberately grasp it.
         self._attach_box(False)
+
+        if self.get_parameter('navigate_region').value:
+            if not move_to_posture(self, ARM_DRIVE, label='travel to region', freeze=True):
+                return self._fail('could not reach narrow travel posture')
+            try:
+                arrived = self._navigate_to_region()
+            finally:
+                switch_arm_hold(self, False)
+            if not arrived:
+                return self._fail('Nav2 did not reach the requested region')
 
         # 1. SCAN: pan the camera (base still) until the marker is found.
         found = self.scan_for_marker()
@@ -1557,7 +1544,7 @@ class MainTask(Node):
         # 5. SQUEEZE: ready posture, CLOSE both grippers so the fingertips act
         #    as pressing pads (contact sensors stay live on the tips), pre-pose
         #    beside each face, then press horizontally with 5 mm interference.
-        self.move_arms_joint(ARM_HOME, 'STEP5 ready posture')
+        self.move_arms_joint('ARM_HOME', 'STEP5 ready posture')
         self.set_gripper(self.left_grip, 0.7, 'STEP5 close left pad')
         self.set_gripper(self.right_grip, 0.7, 'STEP5 close right pad')
         # Pre-squeeze goes through IK EXPLICITLY: solve IK for the PRESS pose

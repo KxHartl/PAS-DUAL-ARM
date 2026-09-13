@@ -27,6 +27,12 @@ setup(
             'aruco_detector = pas_dual_arm_scripts.aruco_detector:main',
             'cmd_vel_relay = pas_dual_arm_scripts.cmd_vel_relay:main',
             'main_task = pas_dual_arm_scripts.main_task:main',
+            'mapping_tour = pas_dual_arm_scripts.mapping_tour:main',
+            'set_posture = pas_dual_arm_scripts.set_posture:main',
+            'scan_filter = pas_dual_arm_scripts.scan_filter:main',
+            'feature_registry = pas_dual_arm_scripts.feature_registry:main',
+            'set_camera = pas_dual_arm_scripts.set_camera:main',
+            'go_to_room = pas_dual_arm_scripts.go_to_room:main',
         ],
     },
 )

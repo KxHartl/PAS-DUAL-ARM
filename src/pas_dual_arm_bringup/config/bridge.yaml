@@ -70,3 +70,23 @@
   ros_type_name: "ros_gz_interfaces/msg/Contacts"
   gz_type_name: "ignition.msgs.Contacts"
   direction: GZ_TO_ROS
+
+# --- DetachableJoint commands and state (Method 2) ---
+- ros_topic_name: "/aruco_box/attach"
+  gz_topic_name: "/aruco_box/attach"
+  ros_type_name: "std_msgs/msg/Empty"
+  gz_type_name: "ignition.msgs.Empty"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/aruco_box/detach"
+  gz_topic_name: "/aruco_box/detach"
+  ros_type_name: "std_msgs/msg/Empty"
+  gz_type_name: "ignition.msgs.Empty"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/aruco_box/state"
+  gz_topic_name: "/aruco_box/state"
+  ros_type_name: "std_msgs/msg/String"
+  gz_type_name: "ignition.msgs.StringMsg"
+  direction: GZ_TO_ROS
+

@@ -199,41 +199,71 @@
     <!-- Pick table (BLUE room): low table, top at Z=0.10, rotated so its 0.4 m
          depth runs along -Y (away from the door). Same design and box overhang
          as the previously verified setup, so the grasp geometry is unchanged. -->
+    <!-- Pick table (BLUE room): 4-legged table with top at z = 0.75 m (75 cm)
+         Dimensions: top slab 0.8 x 0.8 x 0.04 m, 4 legs 0.05 x 0.05 x 0.71 m. -->
     <model name="pick_table">
       <static>true</static>
-      <pose>0 -6.5 0 0 0 -1.5708</pose>
+      <pose>0 -6.5 0 0 0 0</pose>
       <link name="table">
-        <collision name="slab_c">
-          <pose>0 0 0.08 0 0 0</pose>
-          <geometry><box><size>0.4 0.5 0.04</size></box></geometry>
+        <!-- Table top slab: z = 0.73, thickness = 0.04 -> top surface at z = 0.75 m -->
+        <collision name="top_c">
+          <pose>0 0 0.73 0 0 0</pose>
+          <geometry><box><size>0.8 0.8 0.04</size></box></geometry>
         </collision>
-        <visual name="slab_v">
-          <pose>0 0 0.08 0 0 0</pose>
-          <geometry><box><size>0.4 0.5 0.04</size></box></geometry>
+        <visual name="top_v">
+          <pose>0 0 0.73 0 0 0</pose>
+          <geometry><box><size>0.8 0.8 0.04</size></box></geometry>
           <material><ambient>0.5 0.35 0.2 1</ambient><diffuse>0.5 0.35 0.2 1</diffuse></material>
         </visual>
-        <collision name="pillar_c">
-          <pose>0 0 0.04 0 0 0</pose>
-          <geometry><box><size>0.12 0.12 0.08</size></box></geometry>
+
+        <!-- 4 Legs: height 0.71 m, center z = 0.355 m, cross-section 0.05 x 0.05 m -->
+        <collision name="leg1_c">
+          <pose>0.35 0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
         </collision>
-        <visual name="pillar_v">
-          <pose>0 0 0.04 0 0 0</pose>
-          <geometry><box><size>0.12 0.12 0.08</size></box></geometry>
-          <material><ambient>0.4 0.28 0.16 1</ambient><diffuse>0.4 0.28 0.16 1</diffuse></material>
+        <visual name="leg1_v">
+          <pose>0.35 0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.3 0.2 0.1 1</diffuse></material>
+        </visual>
+
+        <collision name="leg2_c">
+          <pose>0.35 -0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+        </collision>
+        <visual name="leg2_v">
+          <pose>0.35 -0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.3 0.2 0.1 1</diffuse></material>
+        </visual>
+
+        <collision name="leg3_c">
+          <pose>-0.35 0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+        </collision>
+        <visual name="leg3_v">
+          <pose>-0.35 0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.3 0.2 0.1 1</diffuse></material>
+        </visual>
+
+        <collision name="leg4_c">
+          <pose>-0.35 -0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+        </collision>
+        <visual name="leg4_v">
+          <pose>-0.35 -0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.3 0.2 0.1 1</diffuse></material>
         </visual>
       </link>
     </model>
 
-    <!-- The box (decision D-14): size is free per the assignment, so it keeps
-         the 0.30 m cube the dual-arm squeeze grasp is tuned and verified for,
-         but is a light plastic box (0.3 kg). On the pick table's near edge,
-         yawed so the marked -X face points +Y, i.e. straight at the BLUE door:
-         the robot entering the room sees the marker head-on. The 85 mm gripper
-         cannot enclose a 0.3 m face, so both closed grippers press opposite
-         side faces (contact-verified) and the attach joint carries it.
-         Centre Z = table top 0.10 + 0.15. -->
+    <!-- The box (decision D-14): 0.30 m cube, 0.3 kg, resting on 0.75 m table top.
+         Centre Z = 0.75 + 0.15 = 0.90 m.
+         Yaw -1.5708 so the ArUco marker (-X face) points towards the door (+Y). -->
     <model name="aruco_box">
-      <pose>0 -6.38 0.25 0 0 -1.5708</pose>
+      <pose>0 -6.35 0.90 0 0 -1.5708</pose>
       <link name="box_link">
         <inertial>
           <mass>0.3</mass>
@@ -301,31 +331,62 @@
       </link>
     </model>
 
-    <!-- Place table (RED room, destination): same low height as the pick table
-         (top 0.10), so the place step lowers the box to the pick height (the
-         existing STEP8 logic) and the table stops it. Generous 0.6 x 0.6 top
-         to absorb navigation spread. -->
+    <!-- Place table (RED room, destination): 4-legged table with top at z = 0.75 m (75 cm)
+         Dimensions: top slab 0.8 x 0.8 x 0.04 m, 4 legs 0.05 x 0.05 x 0.71 m. -->
     <model name="place_table">
       <static>true</static>
       <pose>6.5 0 0 0 0 0</pose>
       <link name="table">
-        <collision name="slab_c">
-          <pose>0 0 0.08 0 0 0</pose>
-          <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
+        <!-- Table top slab: z = 0.73, thickness = 0.04 -> top surface at z = 0.75 m -->
+        <collision name="top_c">
+          <pose>0 0 0.73 0 0 0</pose>
+          <geometry><box><size>0.8 0.8 0.04</size></box></geometry>
         </collision>
-        <visual name="slab_v">
-          <pose>0 0 0.08 0 0 0</pose>
-          <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
+        <visual name="top_v">
+          <pose>0 0 0.73 0 0 0</pose>
+          <geometry><box><size>0.8 0.8 0.04</size></box></geometry>
           <material><ambient>0.5 0.35 0.2 1</ambient><diffuse>0.5 0.35 0.2 1</diffuse></material>
         </visual>
-        <collision name="pillar_c">
-          <pose>0 0 0.04 0 0 0</pose>
-          <geometry><box><size>0.12 0.12 0.08</size></box></geometry>
+
+        <!-- 4 Legs: height 0.71 m, center z = 0.355 m, cross-section 0.05 x 0.05 m -->
+        <collision name="leg1_c">
+          <pose>0.35 0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
         </collision>
-        <visual name="pillar_v">
-          <pose>0 0 0.04 0 0 0</pose>
-          <geometry><box><size>0.12 0.12 0.08</size></box></geometry>
-          <material><ambient>0.4 0.28 0.16 1</ambient><diffuse>0.4 0.28 0.16 1</diffuse></material>
+        <visual name="leg1_v">
+          <pose>0.35 0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.3 0.2 0.1 1</diffuse></material>
+        </visual>
+
+        <collision name="leg2_c">
+          <pose>0.35 -0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+        </collision>
+        <visual name="leg2_v">
+          <pose>0.35 -0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.3 0.2 0.1 1</diffuse></material>
+        </visual>
+
+        <collision name="leg3_c">
+          <pose>-0.35 0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+        </collision>
+        <visual name="leg3_v">
+          <pose>-0.35 0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.3 0.2 0.1 1</diffuse></material>
+        </visual>
+
+        <collision name="leg4_c">
+          <pose>-0.35 -0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+        </collision>
+        <visual name="leg4_v">
+          <pose>-0.35 -0.35 0.355 0 0 0</pose>
+          <geometry><box><size>0.05 0.05 0.71</size></box></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.3 0.2 0.1 1</diffuse></material>
         </visual>
       </link>
     </model>

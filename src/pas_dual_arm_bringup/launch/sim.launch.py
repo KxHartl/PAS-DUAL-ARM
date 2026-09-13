@@ -1,10 +1,15 @@
 import os
 import re
 import subprocess
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import (
+    DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription,
+    RegisterEventHandler, SetEnvironmentVariable, TimerAction
+)
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
@@ -40,6 +45,9 @@ def generate_launch_description():
     # automated runs.
     headless = LaunchConfiguration('headless', default='false')
     headless_arg = DeclareLaunchArgument('headless', default_value='false')
+    carry_arms_arg = DeclareLaunchArgument(
+        'carry_arms', default_value='false',
+        description='Spawn robot with arms folded in carry posture.')
 
     world_file = os.path.join(pkg_bringup, 'worlds', 'seminar_world.sdf')
     urdf_file = os.path.join(pkg_bringup, 'urdf', 'robot.urdf.xacro')
@@ -61,9 +69,21 @@ def generate_launch_description():
     # scales (e.g. scale="1 -1 1"); DART asserts (scale > 0) on collision meshes and
     # aborts the whole Gazebo server. Strip the minus signs from every scale attribute
     # (visually negligible) so physics can build the collision shapes.
+    carry_arms = os.environ.get('PAS_SIM_CARRY_ARMS', '').strip().lower()
+    for arg in sys.argv:
+        if arg.startswith('carry_arms:='):
+            carry_arms = arg.split(':=', 1)[1].strip().lower()
+    if not carry_arms:
+        carry_arms = 'false'
+    if carry_arms not in ('true', 'false'):
+        raise ValueError('carry_arms must be true or false')
     robot_xml = subprocess.check_output(
-        ['xacro', urdf_file, 'sim_ignition:=true']).decode('utf-8')
+        ['xacro', urdf_file, 'sim_ignition:=true',
+         f'carry_arms:={carry_arms}']).decode('utf-8')
     robot_xml = re.sub(r'(scale="[0-9. ]*)-([0-9])', r'\1\2', robot_xml)
+
+    # Do not inject position_proportional_gain into joint interfaces here:
+    # the installed Humble plugin ignores that tag and retains its 0.1 default.
     robot_description = {'robot_description': robot_xml}
     node_robot_state_publisher = Node(
         package='robot_state_publisher',
@@ -127,9 +147,60 @@ def generate_launch_description():
         executable='cmd_vel_relay',
         output='screen',
     )
+    scan_filter = Node(
+        package='pas_dual_arm_scripts',
+        executable='scan_filter',
+        output='screen',
+        parameters=[{'use_sim_time': True}],
+    )
+
+    # 6. DetachableJoint initial release ("Normally Open" enforcement).
+    # Fortress's DetachableJoint hardcodes attachRequested=true at startup,
+    # so we explicitly detach on spawn exit and via a delayed fallback.
+    detach_box_on_spawn = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=node_spawn_entity,
+            on_exit=[
+                ExecuteProcess(
+                    cmd=['ign', 'topic', '-t', '/aruco_box/detach',
+                         '-m', 'ignition.msgs.Empty', '-p', 'unused: true'],
+                    output='screen',
+                )
+            ]
+        )
+    )
+    delayed_detach = TimerAction(
+        period=4.0,
+        actions=[
+            ExecuteProcess(
+                cmd=['ign', 'topic', '-t', '/aruco_box/detach',
+                     '-m', 'ignition.msgs.Empty', '-p', 'unused: true'],
+                output='screen',
+            )
+        ]
+    )
+
+    # 7. Auto-fold arms into carry posture if carry_arms is true.
+    extra_actions = []
+    if carry_arms == 'true':
+        auto_carry = Node(
+            package='pas_dual_arm_scripts',
+            executable='set_posture',
+            arguments=['ARM_CARRY_V2'],
+            output='screen',
+            parameters=[{'use_sim_time': True}],
+        )
+        carry_handler = RegisterEventHandler(
+            event_handler=OnProcessExit(
+                target_action=controller_spawners[-1],
+                on_exit=[auto_carry]
+            )
+        )
+        extra_actions.append(carry_handler)
 
     return LaunchDescription([
         headless_arg,
+        carry_arms_arg,
         rmw_env,
         zenoh_env,
         ign_resource_env,
@@ -137,6 +208,10 @@ def generate_launch_description():
         node_robot_state_publisher,
         node_spawn_entity,
         node_ros_gz_bridge,
+        detach_box_on_spawn,
+        delayed_detach,
         cmd_vel_relay,
+        scan_filter,
         *controller_spawners,
+        *extra_actions,
     ])

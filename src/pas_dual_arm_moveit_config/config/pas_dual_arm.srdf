@@ -310,8 +310,8 @@
     <disable_collisions link1="base_link" link2="base_antenna_left_link" reason="Adjacent"/>
     <disable_collisions link1="base_link" link2="base_antenna_right_link" reason="Adjacent"/>
     <disable_collisions link1="base_link" link2="base_dock_link" reason="Adjacent"/>
-    <disable_collisions link1="base_link" link2="base_front_laser_link" reason="Adjacent"/>
-    <disable_collisions link1="base_link" link2="base_rear_laser_link" reason="Adjacent"/>
+<!-- base_front_laser_link / base_rear_laser_link were dropped from the URDF: their meshes
+     sat in the scan plane of the 360 deg lidar. See robot.urdf.xacro section 1. -->
     <disable_collisions link1="base_link" link2="torso_base_link" reason="Adjacent"/>
     <disable_collisions link1="suspension_front_left_link" link2="wheel_front_left_link" reason="Adjacent"/>
     <disable_collisions link1="suspension_front_right_link" link2="wheel_front_right_link" reason="Adjacent"/>

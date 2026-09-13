@@ -1,5 +1,18 @@
 # Stanje Projekta (State)
 
+> **Operativne upute, 13. 9. 2026.:** `notes/00_run/README.md` vodi na
+> aktualno pokretanje, testiranje i izmjene. Omnidirekcijski pogon (`mecanum_drive_controller`)
+> i SLAM mapiranje triju soba su **uspješno riješeni**. Validna karta je spremljena
+> u `maps/seminar_map.*` (102.3 m² slobodnog prostora, raspon 11.9 × 11.8 m, vrata 1.0 m čista).
+> BATRACS-ov obrazac projektnog okoliša prisutan je kroz `scripts/run_native.sh`;
+> `scripts/verify_environment.sh` prolazi 17/17.
+
+> **Status SLAM mapiranja (13. 9. 2026.):** Uspješno završeno ručno teleop mapiranje (run 43)
+> uz `ARM_CARRY_V2`, omnidirekcijski pogon (mecanum, `mu1=0.80`, `mu2=0.20`, 100 Nm) i
+> `scan_filter`. Karta je provjerena pomoću `scripts/check_map.py` i vizualnim pregledom.
+> Vrata i noge stolova su jasno razlučeni. Sljedeći korak: testiranje Nav2 lokalizacije (AMCL)
+> i navigacije do regije u plavoj sobi prema planu `notes/07_predaja/danas.md`.
+
 > **13. 9. 2026.:** zahtjevi, problemi (s tablicama pokušaja), odluke i parametri sada žive u
 > Obsidian bilješkama → **`notes/00_MAPA.md`** (ulaz) i `notes/AGENT_GUIDE.md` (pravila). Plan
 > zadnjeg dana: `notes/07_predaja/danas.md`. Sadržaj ispod je povijesni zapis sesija; kod
@@ -24,14 +37,18 @@ radilo (16. 7.), ali sada u **novom svijetu s tri sobe**, pa ga treba ponovno po
   `capture_posture.py`, `measure_robot.py`, `fit_test.py`, `mesh_extent.py`,
   `door_gauge.py`. Popravljen `display.launch.py` (bio neupotrebljiv od 12. 6.).
 - Klizači torza: gornji limit 0.8 → **0.65 m**.
+- **Omnidirekcijski pogon baze (R-08, P-09) RIJEŠEN**: `mecanum_drive_controller` uspješno
+  integriran u `ros2_control` i DART fiziku. Prilagođen URDF baze (`wheel.urdf.xacro`, `base.urdf.xacro`)
+  s effort limitom 100 Nm, 0 prigušenjem/trenjem i anizotropnim trenjem (`mu1=0.80`, `mu2=0.20`,
+  `fdir1 ignition:expressed_in="base_footprint"`). Uživo potvrđeno gibanje: vx, vy (dy = 0.33 m),
+  wz i dijagonale; odometrija i TF stabilni. Odstupanja #1 i #7 precrtana.
 
 **Otvoreno (redom po prioritetu):** vidi `notes/07_predaja/danas.md`.
-1. SLAM mapiranje triju soba, pa Nav2 do plave sobe (`P-11`).
-2. Ponoviti hvat u novom svijetu (`P-28`, runovi 31+).
-3. Poza za prolaz kroz vrata i determinističko provlačenje (`P-35`, `D-15`).
-4. Transport s kutijom i odlaganje u crvenoj sobi (`P-18`).
-5. omni_controller preko `mecanum_drive_controller` (`P-09`).
-6. Seminar, video, prezentacija (`R-21`).
+1. Nav2 lokalizacija (AMCL s novom kartom `seminar_map`) i vožnja do regije u plavoj sobi (`R-15`, `P-11`).
+2. Ponoviti dvoručni hvat na 0.75 m stolu u novom svijetu (`P-28`, `R-17`).
+3. Poza za prolaz kroz vrata i transport kocke (`P-18`, `P-35`, `D-15`).
+4. Odlaganje kocke na odredišni stol u crvenoj sobi (`R-20`).
+5. Seminar, video, prezentacija (`R-21`).
 
 **Slijepe ulice iz ove sesije:** prilagodba Gazebo `<gui>` sekcije (FOV, ViewAngle plugin)
 — pogoršala je stvari, vraćeno na zadano; vidi `notes/02_rjesenja/S-02_world_and_sim_launch.md`.

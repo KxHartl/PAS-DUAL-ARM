@@ -10,3 +10,13 @@ __pycache__/
 .obsidian/workspace*.json
 # Assistant's email contains personal data - quoted in notes/01_zahtjevi/izvori.md instead
 data/raw/zadatak/email_*
+# SLAM maps: the .yaml/.pgm pair is what map_server and the keepout filter need and
+# is tracked. The serialised pose graph is only needed to CONTINUE mapping, and the
+# two files together are ~16 MB per map, so they stay local.
+src/pas_dual_arm_bringup/maps/*.posegraph
+src/pas_dual_arm_bringup/maps/*.data
+# Timestamped map archives written by save_map.sh; only seminar_map.* is the active one.
+src/pas_dual_arm_bringup/maps/map_2*
+# Raw assistant session transcripts dumped at the repo root
+/*-local-command-caveat*.txt
+/codex-session-*.md
