@@ -41,21 +41,25 @@ updated: 2026-09-13
 
 Ime svijeta mora ostati `seminar_world`, jer ga sadrže bridge topici kontaktnih senzora.
 
-## GUI kamera (`<gui>` u svijetu)
-Svijet nosi vlastitu `<gui>` sekciju s **cijelim standardnim setom Fortress plugina** (18 komada,
-prepisani iz `/usr/share/ignition/ignition-gazebo6/gui/gui.config`), uz izmjene:
-- `MinimalScene.horizontal_fov` **1.05 rad (60°)** — normalni objektiv. Zadanih 90° daje „riblje
-  oko“; ispod ~50° slika postaje plosnata i neprirodna (probano 46°, korisnik odbio).
-- `MinimalScene.camera_pose` `-6 -6 7 0 0.55 0.55` — pogled na sve tri sobe.
-- dodan plugin **`ViewAngle`** („Pogled“): gumbi za gotove poglede (odozgo, sprijeda, sa strane) i
-  `Home` koji vraća na gornju pozu. Time korisnik mijenja pogled sam, bez diranja SDF-a.
+## GUI kamera: NE dirati (`<gui>` uklonjen)
+Svijet **nema** vlastitu `<gui>` sekciju — koristi se zadana Fortress konfiguracija. Pokušaj
+prilagodbe 13. 9. je propao i **ne treba ga ponavljati**:
 
-Ako se `<gui>` doda, gubi se zadana konfiguracija, pa popis plugina mora biti potpun (inače nestanu
-alatne trake, Component Inspector, Entity Tree…).
+| # | Što je probano | Ishod |
+|---|---|---|
+| 1 | `horizontal_fov` 0.80 rad (46°) radi manje „ribljeg oka“ | slika plosnata i neprirodna |
+| 2 | 1.05 rad (60°) + vlastita `camera_pose` | i dalje čudno |
+| 3 | dodan plugin `ViewAngle` | panel se doda **odsječen** (ne može se skrolati), nema kontrole za FOV, a njegov „View Control Reference Visual“ crta **golemu žutu kuglu** preko scene |
 
-**Upravljanje pogledom mišem u Gazebu:** lijevi gumb + pomak = rotacija oko scene; srednji gumb ili
-`Shift` + lijevi = pomak (pan); kotačić ili desni gumb + pomak = zumiranje; dvoklik na objekt =
-centriraj na njega.
+Uz to je kamera odlutala na x ≈ 310 m, pa je orbitiranje postalo preosjetljivo: u Gazebu brzina
+pomicanja pogleda raste s udaljenošću do točke oko koje se rotira.
+
+**Zaključak:** zadani Gazebo GUI je potpun i predvidljiv; 90° FOV je sitna estetska cijena.
+Ako netko opet poželi mijenjati pogled, to se radi **u samom GUI-ju** (izbornik ⋮ → *View angle*),
+ne u SDF-u.
+
+**Ako se kamera izgubi:** izbornik ⋮ → *View angle* → gumb kuće, ili dvoklik na robota da se
+centrira. Miš: lijevi gumb = rotacija, srednji ili `Shift`+lijevi = pomak, kotačić = zum.
 
 ## Launch
 - `IGN_GAZEBO_RESOURCE_PATH` iz svih `AMENT_PREFIX_PATH/share` ([[P-04_mesh_uri_not_found]]).
