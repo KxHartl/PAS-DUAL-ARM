@@ -39,6 +39,13 @@ i drift. Nezavisno od toga, SLAM i Nav2 mogu voziti **dugačke ravne dionice** (
 odredište), a visual servo ostaje samo za finalni prilaz kutiji. Tako se okreti u mjestu ne rade
 dok SLAM gradi kartu. Detalji su u [[P-11_nav2_slam_drift]] → „Sljedeći korak“.
 
+## Stanje 13. 9. (podignuto, ali NIJE provjereno vožnjom)
+- `nav2.launch.py` sada sam pokreće i `cmd_vel_relay` (prije se morao pokretati ručno).
+- DWB i velocity smoother usporeni radi [[P-11_nav2_slam_drift]] (v 0.3, ω 0.4).
+- `inflation_radius` 0.05 → 0.40 ([[P-12_door_too_narrow]]).
+- Provjereno samo da se stack digne i da `/map` postoji. **Nijedan Nav2 cilj nije vožen**, jer
+  robot u carry pozi ne stane kroz vrata ([[P-35_arm_span_too_wide_for_door]]).
+
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|

@@ -22,4 +22,7 @@ updated: 2026-09-13
 | # | datum | commit | način | cilj runa | ishod | stao na | zaključak / kartica |
 |---|---|---|---|---|---|---|---|
 | 31 | 16. 7. | `73617e8` | GUI | provjera popuštenog gatea | prekinut krajem sesije | — | [[P-28_gate_too_strict]] |
-| 32 | | | | | | | |
+| 32 | 13. 9. | `2bda09e` | GUI | podizanje novog svijeta (tri sobe) | ✅ svijet valjan (`ign sdf -k`), 8/8 kontrolera aktivno, korisnik potvrdio raspored | — | [[D-13_three_room_world]] |
+| 33 | 13. 9. | (necommitano) | GUI | SLAM + Nav2 + `cmd_vel_relay` podignuti | ✅ stack se digao, `/map` objavljen (158×158, 0.05 m/px); Nav2 javio da je `inflation_radius` (0.05) manji od upisanog radijusa (0.31) | nije vožen nijedan cilj | [[P-12_door_too_narrow]] |
+| 34 | 13. 9. | (necommitano) | GUI | `ARM_CARRY` preko MoveIt-a + TF mjerenje širine | ⚠ MoveIt OK, ali **širina 1.26 m** (laktovi y = ±0.58) | prolaz kroz 0.9 m nije ni pokušan | **[[P-35_arm_span_too_wide_for_door]]** (novo) |
+| 35 | | | | | | | |

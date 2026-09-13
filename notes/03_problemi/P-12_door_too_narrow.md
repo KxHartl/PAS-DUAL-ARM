@@ -23,6 +23,8 @@ zatvara otvor. Ispružene ruke su šire od baze.
 | 2 | 29. 6. `e9157e1` | vrata 2.0 m (usput, razlog nije zapisan) | — | 🔁 udaljilo od zahtjeva ([[D-08_door_widened]]) |
 | 3 | kasnije | `inflation_radius` 0.05 (lokalni i globalni costmap) | nije testirano kroz vrata | kandidat |
 | 4 | 13. 9. | novi svijet: dvoja vrata **0.9 m** ([[D-13_three_room_world]]) | 🧪 prolaz nije testiran | — |
+| 6 | 13. 9. | nakon spawna su **svi zglobovi ruku na 0** (ispružena Kinova), pa ruke s bočnih klizača strše u stranu (robot > 2 m širok). Obje ruke u `ARM_CARRY` preko MoveIt-a (`both_arms`, pomoćna skripta kao `main_task.move_arms_joint`) | MoveIt OK, ali TF mjerenje: laktovi (`forearm_link`) na **y = ±0.58**, pa je robot širok ~1.2–1.3 m | **`ARM_CARRY` nije uska poza**; bilješka iz lipnja („~0.6 m“) je netočna → treba posebna poza za vrata (|y| < 0.40), tražena preko `/compute_fk` + `/check_state_validity` |
+| 5 | 13. 9. | Nav2 pri pokretanju javlja `[ERROR] inflation radius (0.050) is smaller than the computed inscribed radius (0.310)`: NavFn planira za točku i treba inflaciju ≥ upisanog radijusa, inače put ljubi zidove i dovratke → `inflation_radius` 0.05 → **0.40** (oba costmapa) | 🧪 | koridor u vratima 0.9 m: centar je 0.45 m od dovratka > 0.31 (nije smrtonosno) |
 
 ## Trenutno rješenje
 Vrata 0.9 m u svijetu. Prolaz tek treba provjeriti.
@@ -36,6 +38,10 @@ Vrata 0.9 m u svijetu. Prolaz tek treba provjeriti.
 
 **Kriterij uspjeha:** GUI prolaz HOME → PLAVA i HOME → CRVENA bez kontakta, zatim isto s kutijom
 ([[R-19_door_pass_with_box]]).
+
+## Povezano
+Prije ovoga treba riješiti **širinu ruku**: [[P-35_arm_span_too_wide_for_door]] (robot je u carry
+pozi ~1.26 m širok, vrata su 0.9 m). Dok to stoji, Nav2 test prolaza nema smisla.
 
 ## Ne ponavljati
 - Širiti vrata radi Nav2: pravi popravak je costmap/footprint + poravnanje.

@@ -5,7 +5,7 @@ status: otvoreno
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-06_navigation]]", "[[S-08_grasp_squeeze_attach]]"]
-problems: ["[[P-18_transport_drops_box]]", "[[P-12_door_too_narrow]]"]
+problems: ["[[P-18_transport_drops_box]]", "[[P-12_door_too_narrow]]", "[[P-35_arm_span_too_wide_for_door]]"]
 decisions: ["[[D-07_carry_on_left_wrist]]"]
 updated: 2026-09-13
 ---

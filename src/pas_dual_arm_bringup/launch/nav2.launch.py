@@ -4,6 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
@@ -37,6 +38,15 @@ def generate_launch_description():
         }.items(),
     )
 
+    # Nav2 publishes /cmd_vel, the base controller listens on its own topic
+    # inside the gz controller_manager - the relay bridges the two.
+    cmd_vel_relay = Node(
+        package='pas_dual_arm_scripts',
+        executable='cmd_vel_relay',
+        output='screen',
+        parameters=[{'use_sim_time': True}],
+    )
+
     # Delay the Nav2 stack so slam_toolbox has time to publish map->odom first.
     # Otherwise local_costmap activates while the TF tree is still split
     # (odom and base_link in unconnected trees) and logs a startup-race error.
@@ -46,5 +56,6 @@ def generate_launch_description():
         rmw_env,
         zenoh_env,
         slam_launch,
+        cmd_vel_relay,
         delayed_nav2,
     ])

@@ -5,7 +5,7 @@ status: djelomicno
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-06_navigation]]", "[[S-09_task_orchestration]]"]
-problems: ["[[P-12_door_too_narrow]]"]
+problems: ["[[P-12_door_too_narrow]]", "[[P-35_arm_span_too_wide_for_door]]"]
 decisions: ["[[D-08_door_widened]]"]
 updated: 2026-09-13
 ---

@@ -26,6 +26,7 @@ odometriju mogao bi biti dovoljan.
 | 1 | 23. 6. `6eb7487` `45c32f1` | SLAM + Nav2, pretežno ravne vožnje (M5/M6) | radi, kroz 1.2 m vrata | ravne dionice su OK |
 | 2 | 30. 6. `f62ebbd` | Nav2 `/spin` 360° za scan + iterativni prilaz | drift ~30 m | okret u mjestu razbija lokalizaciju |
 | 3 | 30. 6. `33bc2ac` | izbaciti Nav2/SLAM: pan kamere uz mirnu bazu + cmd_vel servo | prilaz pouzdan | zaobiđeno ([[D-04_visual_servo_instead_nav2]]) |
+| 4 | 13. 9. | SLAM mapiranje triju soba ([[D-13_three_room_world]]) uz **spore okrete**: DWB v 0.5 → 0.3, ω 1.0 → 0.4, akceleracija ω 3.2 → 1.0 (i velocity smoother); `cmd_vel_relay` dodan u `nav2.launch.py`; ciljeve zadaje korisnik u RViz-u | 🧪 u tijeku | — |
 
 ## Trenutno rješenje
 Bez Nav2/SLAM, što **odstupa od obaveznih** [[R-14_slam_mapping]] i [[R-15_region_goal_nav2]].

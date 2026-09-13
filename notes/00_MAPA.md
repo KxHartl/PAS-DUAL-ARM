@@ -64,7 +64,7 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 | Zahtjev | Izvor | Status | Rješenje | Problemi | Odluke |
 |---|---|---|---|---|---|
 | [[R-10_mappable_world]] | MAIL | ✅ tri sobe (GUI potvrđeno 13. 9.) | [[S-02_world_and_sim_launch]] | — | [[D-13_three_room_world]] |
-| [[R-11_door_80cm]] | MAIL + korisnik (0.9 m) | ⚠ vrata postoje, prolaz netestiran | [[S-02_world_and_sim_launch]], [[S-06_navigation]] | [[P-12_door_too_narrow]] | [[D-13_three_room_world]] (zamjenjuje [[D-08_door_widened]]) |
+| [[R-11_door_80cm]] | MAIL + korisnik (0.9 m) | ⚠ vrata postoje, prolaz netestiran | [[S-02_world_and_sim_launch]], [[S-06_navigation]] | [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-13_three_room_world]] (zamjenjuje [[D-08_door_widened]]) |
 | [[R-12_box_with_aruco]] | MAIL (dimenzije slobodne) | ✅ 0.30 m, 0.3 kg | [[S-02_world_and_sim_launch]], [[S-05_perception]] | [[P-08_marker_not_detected_texture]], [[P-14_gripper_too_small_for_cube]] | [[D-01_aruco_dict_4x4_50]], [[D-06_cube_squeeze_grasp]], [[D-14_light_box_free_size]] |
 | [[R-13_destination_place]] | MAIL | ✅ `place_table` u crvenoj sobi | [[S-02_world_and_sim_launch]] | — | [[D-13_three_room_world]] |
 
@@ -75,8 +75,8 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 | [[R-15_region_goal_nav2]] | MAIL (obavezno) | ❌ | [[S-06_navigation]], [[S-09_task_orchestration]] | [[P-11_nav2_slam_drift]], [[P-33_nav2_undershoot_base_shift]] | [[D-04_visual_servo_instead_nav2]] |
 | [[R-16_find_box]] | MAIL | ✅ | [[S-05_perception]], [[S-09_task_orchestration]] | [[P-07_aruco_dict_and_cv_bridge]], [[P-19_aruco_foreshortening_close]], [[P-20_pointcloud_starves_clock]], [[P-22_depth_self_view_clusters]] | [[D-02_own_aruco_detector]] |
 | [[R-17_dual_arm_lift]] | MAIL | ✅ (16. 7.), 🧪 zadnje izmjene | [[S-08_grasp_squeeze_attach]], [[S-07_moveit_setup]] | [[P-14_gripper_too_small_for_cube]], [[P-15_dart_friction_no_hold]], [[P-16_fake_teleport_grasp]], [[P-17_detachable_joint_explodes]], [[P-24_press_path_chain]], [[P-25_asymmetric_arm_reach]], [[P-26_one_sided_press_bulldozes]], [[P-27_contact_sensor_topic_ignored]], [[P-28_gate_too_strict]] | [[D-05_contact_verified_attach]], [[D-06_cube_squeeze_grasp]], [[D-07_carry_on_left_wrist]], [[D-12_honesty_abort_over_fake]] |
-| [[R-18_door_pass_empty]] | MAIL | ⚠ samo 1.2 m, 23. 6. | [[S-06_navigation]] | [[P-12_door_too_narrow]] | [[D-13_three_room_world]] |
-| [[R-19_door_pass_with_box]] | MAIL | ❌ | [[S-06_navigation]], [[S-08_grasp_squeeze_attach]] | [[P-18_transport_drops_box]], [[P-12_door_too_narrow]] | [[D-07_carry_on_left_wrist]], [[D-14_light_box_free_size]] |
+| [[R-18_door_pass_empty]] | MAIL | ⚠ samo 1.2 m, 23. 6. | [[S-06_navigation]] | [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-13_three_room_world]] |
+| [[R-19_door_pass_with_box]] | MAIL | ❌ | [[S-06_navigation]], [[S-08_grasp_squeeze_attach]] | [[P-18_transport_drops_box]], [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-07_carry_on_left_wrist]], [[D-14_light_box_free_size]] |
 | [[R-20_place_at_destination]] | MAIL | ⚠ samo isti stol | [[S-08_grasp_squeeze_attach]], [[S-09_task_orchestration]] | [[P-18_transport_drops_box]], [[P-29_place_drop_tips_cube]], [[P-30_stale_collision_object]] | — |
 
 ## R5: Predaja (danas)

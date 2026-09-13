@@ -55,9 +55,12 @@ updated: 2026-09-13
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|
 | footprint | ±0.45 × ±0.30 m | `NAV` l. 197, 236 | — |
-| `inflation_radius` | 0.05 (bilo 0.35 → 0.15) | `NAV` l. 202, 263 | [[P-12_door_too_narrow]] |
+| `inflation_radius` | **0.40** (13. 9.; bilo 0.35 → 0.15 → 0.05), `cost_scaling_factor` 5.0 | `NAV` `local_costmap`, `global_costmap` | [[P-12_door_too_narrow]]: mora biti ≥ upisanog radijusa 0.31 |
 | `xy_goal_tolerance` | 0.10 / 0.25 | `NAV` l. 140, 169 | [[P-33_nav2_undershoot_base_shift]] |
-| `max_vel_x` / `max_vel_theta` | 0.5 / 1.0 | `NAV` l. 148, 150 | [[P-11_nav2_slam_drift]] (spustiti θ) |
+| DWB `max_vel_x` / `max_vel_theta` | **0.3 / 0.4** (bilo 0.5 / 1.0, 13. 9.) | `NAV` `controller_server.FollowPath` | [[P-11_nav2_slam_drift]]: spori okreti |
+| DWB `acc_lim_x` / `acc_lim_theta` | **1.0 / 1.0** (bilo 2.5 / 3.2, 13. 9.) | `NAV` `controller_server.FollowPath` | [[P-11_nav2_slam_drift]] |
+| velocity smoother max v / ω / akc. | **0.3 / 0.4 / (0.5, 1.0)** (bilo 0.5 / 1.0 / (2.5, 3.2), 13. 9.) | `NAV` `velocity_smoother` | [[P-11_nav2_slam_drift]] |
+| slam_toolbox | default `mapper_params_online_sync` (pomak 0.5 m / 0.5 rad, `base_footprint`, `/scan`) | `nav2_params.yaml` nema sekciju | [[R-14_slam_mapping]] |
 
 ## Percepcija
 | Parametar | Vrijednost | Gdje | Zašto / veza |
@@ -85,7 +88,7 @@ updated: 2026-09-13
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|
 | `ARM_HOME` | {0, 0.26, 3.14, -2.27, 0, 0.96, 1.57} | `MT` l. 126 | ready poza |
-| `ARM_CARRY` | {0, 0.7, 3.14, -2.5, 0, 1.2, 1.57} | `MT` l. 131 | laktovi uvučeni (~0.6 m) za vrata |
+| `ARM_CARRY` | {0, 0.7, 3.14, -2.5, 0, 1.2, 1.57} | `MT` l. 131 | ⚠ izmjereno 13. 9.: laktovi na y = ±0.58, pa je robot ~1.2 m širok i **ne prolazi vrata od 0.9 m** ([[P-12_door_too_narrow]]) |
 | `tip_standoff` | 0.145 m (mjeri se iz TF-a) | `MT` l. 238 | zapešće → vrh |
 | hvataljka kao jastučić | 0.7 (zatvoreno) | `MT` l. 1561–1562 | [[D-06_cube_squeeze_grasp]] |
 | pre-squeeze / press | +0.10 m / **-0.030 m** (3 cm u kocki) | `MT` l. 1569–1570 | [[P-24_press_path_chain]] |
