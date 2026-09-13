@@ -52,17 +52,26 @@ U sljedećem, čistom startu simulacije, bez istodobnog SLAM čvora:
 ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup task.launch.py navigate_region:=true region_x:=0.0 region_y:=-4.5 region_yaw:=-1.57079632679
 ```
 
-## Stanje mjerenja 13. 9. 2026.
+## Stanje mjerenja 14. 9. 2026.
 
-Kod i launch datoteke se grade. Sirovi `/scan` i `/scan_filtered` objavljuju, a
-registar značajki radi na sintetičkoj karti s vratima od 1.0 m. **Nema prihvaćene
-karte ni potvrđene navigacije.** Pokus s čistom simulacijom postigao je odometrijski
-okret −89.9°, ali ravna dionica zadana kao 4.5 m ostvarila je samo 1.89 m, uz
-promjenu `map→odom` 1.04 m. Izmjerena stvarna širina ruku nakon gibanja bila je
-**1.109 m**, dakle robot fizički ne može proći kroz vrata od 1.0 m u sadašnjem
-stanju. Tura je zato zaustavljena, a nepotpuna karta spremljena samo kao
-dijagnostička kopija u `/tmp/pas-map-diagnostic/`.
+**Karta je prihvaćena.** Run 44 (teleop, popravljeni `mecanum_drive_controller`, 100 Nm,
+`mu1=0.80`, `mu2=0.20`, `ARM_CARRY_V2`) dao je kartu 11.9 × 11.8 m, 102.3 m² slobodno, oba
+prolaza od 1.0 m čista, sve četiri noge po stolu razlučene; `check_map.py` prošao. Spremljena
+je u `src/pas_dual_arm_bringup/maps/seminar_map.*`.
 
-Sljedeći tehnički preduvjet je dinamički stabilna putna poza ili fizički ispravan
-upravljani model ruku, pa zatim provjera stvarnog pogona ravno naprijed. Ne
-podizati stolove samo radi lidara: to mijenja visinu kutije i neprovjereni hvat.
+**Registar značajki je provjeren na toj karti, ne na sintetičkoj.** Karta ima točno devet
+povezanih komponenti: osam nogu stola i zidove — bez šuma. Detekcija nalazi oboja vrata s
+promašajem centra 1.5 cm, a širinu očitava kao **0.95 m** (stvarnih 1.0 m; SLAM zadeblja zid
+~2.5 cm po strani). Zone se zato grade na izmjerenih 0.95 m.
+
+**Navigacija je prebačena na zone iz detektiranih značajki**
+([[D-16_zones_from_detected_features]], razlog [[P-39_nav2_enters_doorway_at_an_angle]]).
+Headless je provjereno: 8/8 kontrolera, AMCL lokaliziran, `KeepoutFilter` aktivan na globalnom
+**i** lokalnom costmapu, 14/14 sondi costmapa točno, a planirane putanje sijeku prag vrata pod
+0.00–1.07° i 2.5 cm od osi.
+
+**Nijedan metar još nije odvožen.** Sljedeće je GUI vožnja praznog robota u `ARM_CARRY_V2`:
+ručni cilj iz RViz-a, pa tipke u `scripts/nav_gui.py`. Otvoreno ostaje
+[[P-37_arm_position_gain_sag]] — ruke su nakon gibanja bile izmjerene na 1.109 m, šire od
+otvora, pa `room_navigator` prije svakog prolaza provjerava pozu i odbija voziti ako ne drži.
+Ne podizati stolove samo radi lidara: to mijenja visinu kutije i neprovjereni hvat.

@@ -1,14 +1,20 @@
 ---
 id: D-15
 type: odluka
-status: predlozena
+status: zamijenjena
 deviation: false
 requirements: ["[[R-11_door_80cm]]", "[[R-14_slam_mapping]]", "[[R-15_region_goal_nav2]]", "[[R-18_door_pass_empty]]", "[[R-19_door_pass_with_box]]"]
 problems: ["[[P-12_door_too_narrow]]", "[[P-35_arm_span_too_wide_for_door]]", "[[P-11_nav2_slam_drift]]"]
-superseded_by: ""
-updated: 2026-09-13
+superseded_by: "[[D-16_zones_from_detected_features]]"
+updated: 2026-09-14
 ---
-# D-15: Prolaz kao značajka + determinističko provlačenje (PRIJEDLOG, nije implementirano)
+# D-15: Prolaz kao značajka + determinističko provlačenje (ZAMIJENJENA)
+
+> [!warning] Zamijenjena s [[D-16_zones_from_detected_features]] (14. 9. 2026.)
+> Ideja „prolaz je značajka" je preuzeta i implementirana, ali bez izlaska iz Nav2:
+> vrata se detektiraju iz karte, a determinizam dolazi iz **zona** u costmapu umjesto iz
+> vlastitog provlačenja. Determinističko poravnanje opisano ovdje ostaje plan B ako se
+> uživo pokaže da 4.8 cm po strani nije dovoljno za DWB.
 
 ## Kontekst
 Prolaz je uzak (0.9–0.95 m) u odnosu na robota (0.85 m s najužom pozom ruku,

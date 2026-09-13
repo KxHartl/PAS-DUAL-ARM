@@ -119,18 +119,48 @@ Nakon što je `seminar_map.yaml` spremljena i instalirana, navigacija se pokreć
    ```bash
    ./scripts/run_native.sh ros2 run pas_dual_arm_scripts set_posture ARM_CARRY_V2
    ```
-4. **Terminal 4** (Nav2 stog u načinu lokalizacije + RViz):
+4. **Terminal 4** (Nav2 stog + zone + RViz; `mode:=localization` je sada zadano):
    ```bash
-   ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py mode:=localization
+   ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py
+   ```
+5. **Terminal 5** (tipke za vožnju po sobama):
+   ```bash
+   ./scripts/run_native.sh python3 scripts/nav_gui.py
    ```
 
 AMCL automatski inicijalizira početnu pozu na `(0, 0, yaw=0)` (gdje se robot spawna u HOME sobi).
-U RViz-u se prikazuje karta, costmap i čestice lokalizacije. Za slanje navigacijskog cilja:
-- **Preko RViz-a**: Klikni alat **"2D Goal Pose"** i postavi cilj u plavoj sobi ispred stola (npr. oko `x=0.0, y=-5.0`, usmjeren prema `-Y`).
-- **Ili preko CLI-ja**:
+
+### Što provjeriti u RViz-u prije vožnje
+Dodaj `MarkerArray` na **`/nav_zones_markers`**. Mora se vidjeti:
+- **zelena traka** točno kroz oba prolaza, duga 1.2 m sa svake strane;
+- **crveni lijevci** lijevo i desno od svake trake;
+- **narančasti halo** oko oba stola, **otvoren prema vratima sobe** (U-oblik);
+- **plave strelice** = portalne poze (1.95 m ispred i iza svakih vrata), sve okomite na zid;
+- **žuta strelica** = prilazna poza ispred stola.
+
+Ako se to ne vidi, `nav_zones` nije našao vrata — ne voziti. Provjeri offline:
+```bash
+./scripts/run_native.sh python3 scripts/check_zones.py
+```
+
+### Dva načina slanja robota
+- **Ručno (Nav2 izravno)**: alat **„2D Goal Pose"** u RViz-u. Zone vrijede i tu — putanja
+  ulazi u prolaz okomito čak i kad je cilj u drugoj sobi.
+- **Tipkom (`nav_gui.py`)**: **PLAVA soba** / **CRVENA soba** vode robota pred stol te sobe,
+  **HOME** u sredinu polazne sobe, **STOP** prekida. Isto bez GUI-ja:
   ```bash
-  ./scripts/run_native.sh ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{pose: {header: {frame_id: 'map'}, pose: {position: {x: 0.0, y: -5.0, z: 0.0}, orientation: {z: -0.7071, w: 0.7071}}}}"
+  ./scripts/run_native.sh ros2 topic pub --once /room_navigator/goto std_msgs/String "{data: blue}"
   ```
+  Ruta je uvijek: portal ispred vrata → **ravno kroz vrata** → (kut, ako treba) → pred stol.
+
+### Kad odbije voziti
+`room_navigator` prije svakog prolaza provjerava ruke i poravnatost i **pošteno stane**
+([[D-12_honesty_abort_over_fake]]). Poruke koje se mogu vidjeti:
+- `arms: left_joint_6 is … off ARM_CARRY_V2` → ruke su se raširile ([[P-37_arm_position_gain_sag]]);
+  ponoviti `set_posture ARM_CARRY_V2`. Robot širi od ~0.92 m ne stane kroz 0.95 m otvora.
+- `alignment: … off the lane centreline` → AMCL nije dovoljno točan ili je prethodna dionica
+  podbacila; poslati robota malo unazad i ponoviti.
+- `only X cm beside the robot` → prekid usred prolaza, razmak pao ispod 3 cm.
 
 
 ## 6. Zadatak — eksperimentalno

@@ -21,3 +21,12 @@ uzrok i izmjerenu stvarnu geometriju prvo zabilježi u [[P-37_arm_position_gain_
 Promjena kontrolerskog parametra ide i u [[06_parametri]]; svaki pokušaj u
 P-tablicu i [[runovi]]. Kod se builda, ali uspjeh se potvrđuje zasebnim
 simulacijskim runom. Postojeće necommitane izmjene u radnom stablu ne brisati.
+
+## Navigacijske zone (od 14. 9.)
+| Što mijenjaš | Gdje | Nakon izmjene |
+|---|---|---|
+| geometrija zona (duljina lijevka, halo stola, portali) | `nav_zones.py` `default_params` | `python3 scripts/check_zones.py` — mora proći **prije** pokretanja simulacije |
+| detekcija vrata / stolova | `feature_registry.py` (`door_candidates`, `table_candidates`) | `python3 scripts/check_doors.py` pa `check_zones.py` |
+| ime sobe (`home`/`blue`/`red`) | `room_labels` parametar čvora `nav_zones` | jedini ručni podatak; geometrija se ne dira |
+| pragovi gatea prije vrata | `room_navigator.py` parametri | novi run; zabilježiti u [[runovi]] |
+| tolerancije, footprint, kritičari | `config/nav2_params.yaml` | rebuild bringupa, nova sesija; upisati u [[06_parametri]] |

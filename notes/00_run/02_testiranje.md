@@ -52,3 +52,19 @@ Svaki pokušaj i neuspjeh upisati u [[runovi]] i pripadnu P-karticu; ne prepisiv
 stari red. Glavni otvoreni problemi: [[P-37_arm_position_gain_sag]] i
 [[P-11_nav2_slam_drift]]. Ako se kutija sama pomakne prije kontakta, prekini
 mapiranje i slijedi izolacijski test u [[P-38_spontaneous_box_motion]].
+
+## Navigacija sa zonama (od 14. 9., [[P-39_nav2_enters_doorway_at_an_angle]])
+Redom, i ne preskakati — prva dva koraka ne trebaju simulator:
+
+| # | Provjera | Prolazi ako |
+|---|---|---|
+| 1 | `python3 scripts/check_doors.py` | oboja vrata nađena, promašaj centra < 10 cm, širina 0.85–1.05 m |
+| 2 | `python3 scripts/check_zones.py` | 3 sobe, 2 vrata, 2 stola; sve portalne poze izvan zona i robot se u njima smije okrenuti u mjestu |
+| 3 | RViz `/nav_zones_markers` | zelena traka u oba otvora, halo stolova otvoren prema vratima |
+| 4 | **ručni** „2D Goal Pose" unutar polazne sobe | stigao, |Δyaw| < 0.05 rad, bez dodira zida |
+| 5 | **ručni** „2D Goal Pose" u drugoj sobi | putanja ulazi u otvor **okomito**, prolaz bez dodira |
+| 6 | **tipka** PLAVA, pa CRVENA, pa HOME | stane pred stol; log javi bočni razmak > 3 cm i |Δyaw| na pragu < 0.05 rad |
+| 7 | ponovljivost | 3 uzastopna prolaza po smjeru bez dodira; skok `map→odom` < 0.2 m |
+| 8 | **negativni test** | ruke izvan `ARM_CARRY_V2` → abort **prije** zone vrata, ne pokušaj prolaza |
+
+`NavigateToPose` koji javi uspjeh nije dokaz: mjeri se izmjerena poza po dionici, kut na pragu vrata i najmanji bočni razmak iz `/scan_filtered` (oba ispisuje `room_navigator`).

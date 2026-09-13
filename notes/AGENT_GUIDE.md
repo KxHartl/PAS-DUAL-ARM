@@ -1,7 +1,7 @@
 ---
 id: AGENT_GUIDE
 type: pravila
-updated: 2026-09-13
+updated: 2026-09-14
 ---
 # Vodič za agente (i ljude koji preuzimaju posao)
 
@@ -54,6 +54,9 @@ su zastarjeli). Kad nađeš kontradikciju, **ne biraj tiho**: zapiši je u karti
 | `cv_bridge` u Python čvorovima | segfault s numpy 2 | [[P-07_aruco_dict_and_cv_bridge]] |
 | kompat-symlink za ABI, `~/ws_moveit2` | slomilo okoliš | [[P-31_apt_upgrade_breakage]] |
 | širenje vrata radi Nav2 | krši zahtjev od 80 cm | [[P-12_door_too_narrow]] |
+| popuštanje `yaw_goal_tolerance` da cilj „prođe" | 0.25 rad traži 1.085 m otvora | [[P-39_nav2_enters_doorway_at_an_angle]] |
+| spuštanje `ObstacleFootprint.scale` da DWB nađe put | skriva da je footprint kriv | [[P-39_nav2_enters_doorway_at_an_angle]] |
+| keepout zone samo na globalnom costmapu | upravljač ih ne vidi | [[P-39_nav2_enters_doorway_at_an_angle]] |
 
 ## 6. Rad s korisnikom
 - Komunikacija na **hrvatskom**, a kod i commitovi na engleskom (Conventional Commits).
@@ -75,4 +78,5 @@ Detalji: `RUNNING.md`, [[S-10_build_run_environment]].
 [[D-04_visual_servo_instead_nav2]] · [[D-05_contact_verified_attach]] · [[D-06_cube_squeeze_grasp]] ·
 [[D-07_carry_on_left_wrist]] · [[D-08_door_widened]] · [[D-09_lift_with_arms_not_torso]] ·
 [[D-10_headless_vs_gui]] · [[D-11_project_scoped_ros_env]] · [[D-12_honesty_abort_over_fake]] ·
-[[D-13_three_room_world]] · [[D-14_light_box_free_size]]
+[[D-13_three_room_world]] · [[D-14_light_box_free_size]] ·
+[[D-15_door_transit_behaviour]] (zamijenjena) · [[D-16_zones_from_detected_features]]

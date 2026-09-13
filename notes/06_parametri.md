@@ -53,16 +53,27 @@ updated: 2026-09-13
 | hvataljke | `allow_stalling: true` | `CTRL` l. 111, 116 | — |
 | CM timeout spawnera | 120 s | `sim.launch.py` l. 107 | [[P-32_gui_starves_controllers]] |
 
-## Navigacija (Nav2; trenutno se ne koristi)
+## Navigacija (Nav2 + zone iz detektiranih značajki)
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|
-| footprint | ±0.52 × ±0.45 m (širina 90 cm, ostavlja 10 cm lufta u vratima 1.0 m) | `NAV` local/global costmap | [[P-35_arm_span_too_wide_for_door]], veći prostor za grešku |
-| `inflation_radius` | **0.48**, `cost_scaling_factor` **5.0** | `NAV` `local_costmap`, `global_costmap` | ostavlja čisti centralni prolaz troška 0 u vratima 1.0 m |
-| `xy_goal_tolerance` / `yaw_goal_tolerance` | **0.20 m / 0.25 rad** (bilo 0.10 / 0.10) | `NAV` l. 146–147 | opuštena tolerancija da robot ne traži mikronsko poravnanje |
-| DWB `max_vel_x` / `max_vel_theta` | **0.3 / 0.4** (bilo 0.5 / 1.0, 13. 9.) | `NAV` `controller_server.FollowPath` | [[P-11_nav2_slam_drift]]: spori okreti |
-| DWB `acc_lim_x` / `acc_lim_theta` | **1.0 / 1.0** (bilo 2.5 / 3.2, 13. 9.) | `NAV` `controller_server.FollowPath` | [[P-11_nav2_slam_drift]] |
-| velocity smoother max v / ω / akc. | **0.3 / 0.4 / (0.5, 1.0)** (bilo 0.5 / 1.0 / (2.5, 3.2), 13. 9.) | `NAV` `velocity_smoother` | [[P-11_nav2_slam_drift]] |
-| slam_toolbox | async, pomak 0.2 m / 0.2 rad, `base_footprint`, `/scan_filtered`, rezolucija 0.05 m | `config/slam_params.yaml`, `mapping.launch.py` | [[R-14_slam_mapping]], [[P-11_nav2_slam_drift]]; karta još nije prihvaćena |
+| footprint | **±0.52 × ±0.427 m** (1.04 × 0.854 m; bilo ±0.45) | `NAV` local/global costmap | izmjerena širina u `ARM_CARRY_V2` ([[P-35_arm_span_too_wide_for_door]]); 0.90 m je bila procjena zbog koje je `ObstacleFootprint` odbacivao sve trajektorije ([[P-39_nav2_enters_doorway_at_an_angle]]) |
+| `inflation_radius` | **0.45** (bilo 0.48), `cost_scaling_factor` 5.0 | `NAV` `local_costmap`, `global_costmap` | mora biti ≥ upisanog radijusa 0.427; veće samo zatvara traku |
+| `xy_goal_tolerance` / `yaw_goal_tolerance` | **0.10 m / 0.05 rad** (bilo 0.20 / 0.25) | `NAV` `general_goal_checker` | 0.25 rad traži 1.085 m otvora, a ima ga 0.95 m ([[P-39_nav2_enters_doorway_at_an_angle]]) |
+| `RotationShimController.angular_dist_threshold` | **0.06 rad** (bilo 0.12) | `NAV` `FollowPath` | ovo, a ne tolerancija cilja, odlučuje kako robot ulazi u vrata: 0.12 rad = 0.972 m |
+| `ObstacleFootprint.scale` | **1.0** (bilo 0.02) | `NAV` `FollowPath` | jedini kritičar koji gleda pravi pravokutnik |
+| `PathDist.scale` / `PathAlign.scale` | **64 / 48** (bilo 32 / 32) | `NAV` `FollowPath` | drži robota na osi lijevka = pravocrtnost |
+| `local_costmap.filters` | **`["keepout_filter"]`** (prije ga nije bilo) | `NAV` `local_costmap` | bez toga DWB ne vidi zone i siječe kut ([[P-39_nav2_enters_doorway_at_an_angle]]) |
+| DWB `max_vel_x` / `max_vel_y` / `max_vel_theta` | **0.3 / 0.15 / 0.4** | `NAV` `FollowPath` | `vy` je bočna korekcija mecanum baze, ne krabiranje; [[P-11_nav2_slam_drift]] |
+| DWB `acc_lim_x` / `acc_lim_theta` | 1.0 / 1.0 | `NAV` `FollowPath` | [[P-11_nav2_slam_drift]] |
+| velocity smoother max v / vy / ω | **0.3 / 0.15 / 0.4** | `NAV` `velocity_smoother` | usklađeno s DWB |
+| zone: `chute_length` / `chute_thickness` | 1.20 m / 0.65 m | `nav_zones.py` `default_params` | lijevak uz svaka vrata, 1.2 m u svaku sobu |
+| zone: `lane_margin` | **−0.05 m** (negativno = šire) | `nav_zones.py` | lijevak ne smije biti uži od stvarnih vrata; inače on, a ne prolaz, mjeri stane li robot |
+| zone: `portal_standoff` | 0.75 m (portal je 1.95 m od vrata) | `nav_zones.py` | > opisanog radijusa 0.673 m, da se robot tu smije okrenuti u mjestu |
+| zone: `table_clearance` / `table_standoff` / `table_gate_margin` | 0.55 / 0.60 / 0.20 m | `nav_zones.py` | halo oko stola, otvoren na licu prilaza; prilazna poza 1.50 m od centra stola |
+| navigator: `centreline_tolerance` / `heading_tolerance` | 0.08 m / 0.07 rad | `room_navigator.py` | gate prije prolaza; 0.07 rad traži 0.926 m |
+| navigator: `min_side_clearance` / `arm_tolerance` | 0.03 m / 0.15 rad | `room_navigator.py` | prekid vožnje ako razmak padne; ruke moraju držati `ARM_CARRY_V2` ([[P-37_arm_position_gain_sag]]) |
+| **izmjereno** (detekcija iz `maps/seminar_map`) | vrata (0.00, −3.00) i (3.00, −0.01), širina **0.95 m** (stvarna 1.0 m); stolovi (−0.04, −6.53) i (6.54, −0.01) | `scripts/check_doors.py`, `scripts/check_zones.py` | SLAM zadeblja zid ~2.5 cm po strani; zone se grade na izmjerenom, ne na nazivnom |
+| slam_toolbox | async, pomak 0.2 m / 0.2 rad, `base_footprint`, `/scan_filtered`, rezolucija 0.05 m | `config/slam_params.yaml`, `mapping.launch.py` | [[R-14_slam_mapping]]; karta prihvaćena u runu 44 |
 
 ## Percepcija
 | Parametar | Vrijednost | Gdje | Zašto / veza |
