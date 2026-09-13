@@ -66,11 +66,12 @@ updated: 2026-09-13
 | DWB `max_vel_x` / `max_vel_y` / `max_vel_theta` | **0.3 / 0.15 / 0.4** | `NAV` `FollowPath` | `vy` je bočna korekcija mecanum baze, ne krabiranje; [[P-11_nav2_slam_drift]] |
 | DWB `acc_lim_x` / `acc_lim_theta` | 1.0 / 1.0 | `NAV` `FollowPath` | [[P-11_nav2_slam_drift]] |
 | velocity smoother max v / vy / ω | **0.3 / 0.15 / 0.4** | `NAV` `velocity_smoother` | usklađeno s DWB |
-| zone: `chute_length` / `chute_thickness` | 1.20 m / 0.65 m | `nav_zones.py` `default_params` | lijevak uz svaka vrata, 1.2 m u svaku sobu |
+| zone: `chute_length` / `chute_thickness` | **0.85 m** (bilo 1.20) / 0.65 m | `nav_zones.py` `default_params` | lijevak samo mora obvezati robota na traku prije nego mu prednji kraj dođe do otvora; 0.85 m je 1.6× poluduljine (0.52). Duži nije sigurniji — na 1.20 m je bio 5 cm od opisane kružnice pri okretu ispred stola |
 | zone: `lane_margin` | **−0.05 m** (negativno = šire) | `nav_zones.py` | lijevak ne smije biti uži od stvarnih vrata; inače on, a ne prolaz, mjeri stane li robot |
-| zone: `portal_standoff` | 0.75 m (portal je 1.95 m od vrata) | `nav_zones.py` | > opisanog radijusa 0.673 m, da se robot tu smije okrenuti u mjestu |
-| zone: `table_clearance` / `table_standoff` / `table_gate_margin` | 0.55 / 0.60 / 0.20 m | `nav_zones.py` | halo oko stola, otvoren na licu prilaza; prilazna poza 1.50 m od centra stola |
+| zone: `portal_standoff` | **0.95 m** (bilo 0.75; portal je 1.80 m od vrata) | `nav_zones.py` | opisani radijus 0.673 + tolerancija cilja 0.10 + 0.15 za pomak pri okretu = 0.923 |
+| zone: `table_clearance` / `table_standoff` / `table_gate_margin` | 0.55 / 0.60 / **0.55 m** (gate bio 0.20) | `nav_zones.py` | prolaz kroz halo ide **punom širinom** halo-a: na 0.20 m robot je mogao doći pred stol, ali se nije mogao okrenuti natrag ([[P-39_nav2_enters_doorway_at_an_angle]], pokušaj 7) |
 | navigator: `centreline_tolerance` / `heading_tolerance` | 0.08 m / 0.07 rad | `room_navigator.py` | gate prije prolaza; 0.07 rad traži 0.926 m |
+| provjera zona: `TURN_MARGIN` | 0.15 m povrh opisanog radijusa, uz pomak od 0.10 m | `scripts/check_zones.py` | DWB pri „okretu u mjestu" i translatira; golo nepreklapanje nije kriterij |
 | navigator: `min_side_clearance` / `arm_tolerance` | 0.03 m / 0.15 rad | `room_navigator.py` | prekid vožnje ako razmak padne; ruke moraju držati `ARM_CARRY_V2` ([[P-37_arm_position_gain_sag]]) |
 | **izmjereno** (detekcija iz `maps/seminar_map`) | vrata (0.00, −3.00) i (3.00, −0.01), širina **0.95 m** (stvarna 1.0 m); stolovi (−0.04, −6.53) i (6.54, −0.01) | `scripts/check_doors.py`, `scripts/check_zones.py` | SLAM zadeblja zid ~2.5 cm po strani; zone se grade na izmjerenom, ne na nazivnom |
 | slam_toolbox | async, pomak 0.2 m / 0.2 rad, `base_footprint`, `/scan_filtered`, rezolucija 0.05 m | `config/slam_params.yaml`, `mapping.launch.py` | [[R-14_slam_mapping]]; karta prihvaćena u runu 44 |

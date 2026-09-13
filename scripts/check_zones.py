@@ -30,6 +30,14 @@ from pas_dual_arm_scripts.nav_zones import Zones, default_params  # noqa: E402
 # what the robot sweeps when it turns on the spot.
 HALF_LENGTH, HALF_WIDTH = 0.52, 0.427
 CIRCUMSCRIBED = math.hypot(HALF_LENGTH, HALF_WIDTH)
+# nav2_params.yaml general_goal_checker.xy_goal_tolerance: the robot can be this
+# far from where it was sent, so the turn has to fit from there too.
+XY_TOLERANCE = 0.10
+# Room demanded beyond the swept circle. Not padding for its own sake: DWB scores
+# trajectories that rotate and translate together, so a "turn on the spot" drifts.
+# A run with 5 cm of bare clearance left at the table snagged the guide wall, so
+# bare non-overlap is not the test - this margin is.
+TURN_MARGIN = 0.15
 
 
 def check(zones):
@@ -45,6 +53,43 @@ def check(zones):
             return True
         return mask[row, col] != 0
 
+    def can_turn(x, y):
+        """Room to turn on the spot, allowing for stopping a tolerance off.
+
+        The robot does not pivot cleanly - DWB scores trajectories that rotate
+        and translate at once - so the swept circle is checked from the worst
+        arrival position, not just from the pose that was commanded.
+        """
+        reach = CIRCUMSCRIBED + TURN_MARGIN
+        for offset in np.linspace(0, 2 * math.pi, 8, endpoint=False):
+            ox = x + XY_TOLERANCE * math.cos(offset)
+            oy = y + XY_TOLERANCE * math.sin(offset)
+            for angle in np.linspace(0, 2 * math.pi, 36, endpoint=False):
+                if keepout_at(ox + reach * math.cos(angle),
+                              oy + reach * math.sin(angle)):
+                    return (ox, oy)
+        return None
+
+    # Every pose the navigator stops at, doorway portals and table approaches
+    # alike. Missing the table approach here is what let a too-long guide wall
+    # through: the robot reached the table fine and then jammed turning round.
+    stops = [(f'door {i} {room} {role}', portal[role][0], portal[role][1])
+             for i, door in enumerate(zones.doors)
+             for room, portal in (door.get('portals') or {}).items()
+             for role in ('approach', 'exit')]
+    stops += [(f'table {i} ({t["room"]}) approach', t['approach'][0], t['approach'][1])
+              for i, t in enumerate(zones.tables)]
+    for label, x, y in stops:
+        if keepout_at(x, y):
+            failures.append(f'{label}: pose is inside a keepout zone')
+            continue
+        jam = can_turn(x, y)
+        if jam:
+            failures.append(
+                f'{label}: cannot turn on the spot - the {CIRCUMSCRIBED:.3f} m swept '
+                f'circle reaches a keepout zone from ({jam[0]:+.2f}, {jam[1]:+.2f}), '
+                f'{XY_TOLERANCE:.2f} m off the commanded pose')
+
     for index, door in enumerate(zones.doors):
         nx, ny = door['normal']
         # The lane itself must stay open along the whole guide-wall run.
@@ -56,16 +101,6 @@ def check(zones):
         for room_name, portal in door.get('portals', {}).items():
             for role in ('approach', 'exit'):
                 x, y, yaw = portal[role]
-                if keepout_at(x, y):
-                    failures.append(f'door {index} {room_name} {role}: pose is inside a keepout zone')
-                # A portal pose is where the robot turns to the door heading.
-                for angle in np.linspace(0, 2 * math.pi, 24, endpoint=False):
-                    if keepout_at(x + CIRCUMSCRIBED * math.cos(angle),
-                                  y + CIRCUMSCRIBED * math.sin(angle)):
-                        failures.append(
-                            f'door {index} {room_name} {role}: cannot turn in place, '
-                            f'the {CIRCUMSCRIBED:.3f} m swept circle enters a keepout zone')
-                        break
                 # Heading must be along the door normal, not merely near it.
                 if min(abs(_wrap(yaw - math.atan2(ny, nx))),
                        abs(_wrap(yaw - math.atan2(-ny, -nx)))) > 1e-6:

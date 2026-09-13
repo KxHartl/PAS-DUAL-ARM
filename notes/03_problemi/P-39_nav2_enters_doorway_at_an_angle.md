@@ -51,6 +51,9 @@ Uz to su zone i waypointi bili magični brojevi na dva mjesta (`generate_keepout
 | 5 | 14. 9. `497a69a` | izmjeren kut kojim **planirana putanja** siječe prag vrata, 5 slučajeva preko `/compute_path_to_pose` | 0.00–1.07° od okomice, 2.5 cm od osi; traži 0.854–0.873 m | i jedan jedini cilj kroz cijelu sobu sad prolazi okomito |
 | 6 | 14. 9. | isto, ali s praznom keepout maskom (A/B, zone isključene) | najgori prolaz 2.92° i 5.6 cm od osi (vs 0.34° i 2.5 cm sa zonama) | **globalnu putanju uglavnom ispravlja već ispravljen footprint**; zone popravljaju najgori slučaj i daju graf i poze. Glavni uzrok kvara bile su tolerancije i nevidljivost zona lokalnom upravljaču |
 
+| 7 | 14. 9. (GUI, korisnik) | prva vožnja sa zonama | ❌ **robot se ne može okrenuti u mjestu kad stoji ispred stola — zapne za zonu.** Izmjereno: prolaz kroz halo stola bio je širok samo stol + 0.20 m, pa je pri okretu kut robota ulazio u halo pokraj prolaza. Usput otkriveno da je i `portal_standoff` 0.75 < potrebnih 0.923 m. | prolaz kroz halo → **puna širina halo-a**; `portal_standoff` 0.75 → 0.95; `chute_length` 1.20 → 0.85. `check_zones.py` sada provjerava okret u mjestu na **svakoj** pozi gdje navigator stane (i portali i prilaz stolu), iz poze pomaknute za toleranciju cilja i uz rezervu 0.15 m |
+| 8 | 14. 9. | zaostali `velocity_smoother` iz ranijeg headless testa | ❌ novi `lifecycle_manager` ga našao u stanju `active` → `No transition matching 1 found` → **prekinut cijeli bringup**, karta se ne učita | uvijek provjeriti zaostale čvorove prije starta; upisano u [[01_pokretanje]] |
+
 ## Trenutno rješenje
 [[D-16_zones_from_detected_features]]. Zone se generiraju iz karte
 (`nav_zones.py`), Nav2 i dalje vozi, a `room_navigator.py` vodi po grafu soba s poštenim

@@ -11,7 +11,7 @@ planner near the features where orientation matters, by reshaping the space it
 plans in.
 
 Around every detected doorway this publishes two "guide walls" that leave a
-lane exactly as wide as the measured opening and 1.2 m long on each side.  A
+lane exactly as wide as the measured opening, a short way into each room.  A
 path can then only enter along the door normal, and the controller can only
 track it square.  Around every detected table it publishes a halo, so routes
 keep their distance instead of grazing a corner.  Straight legs and square
@@ -326,8 +326,15 @@ def _cell_box(info, x0, x1, y0, y1):
 def default_params(node=None):
     """Zone geometry. Defaults are derived, not guessed - see the comments."""
     spec = {
-        # Guide walls run 1.2 m into each room from the wall plane.
-        'chute_length': 1.20,
+        # Guide walls run this far into each room from the wall plane. They only
+        # have to commit the robot to the lane before its front reaches the
+        # opening, so 0.85 m is comfortably more than its 0.52 m half length.
+        # Longer is not safer: at 1.20 m the guide wall came within 5 cm of the
+        # robot's swept circle when it turned on the spot in front of the table
+        # (0.673 m circumscribed radius, plus 0.10 m of goal tolerance), and it
+        # snagged. Anything that changes this must re-run scripts/check_zones.py,
+        # which checks the turn clearance at every pose the navigator stops at.
+        'chute_length': 0.85,
         # Thick enough that the planner cannot squeeze a path around the
         # outside of a guide wall at map resolution.
         'chute_thickness': 0.65,
@@ -340,12 +347,17 @@ def default_params(node=None):
         'lane_margin': -0.05,
         # Portal poses must clear the guide walls by more than the robot's
         # circumscribed radius (hypot(0.52, 0.427) = 0.673 m) so the robot can
-        # turn to the door heading without a corner entering the lane.
-        'portal_standoff': 0.75,
+        # turn to the door heading without a corner entering the lane - plus the
+        # 0.10 m it may stop short by and room for the drift of a DWB turn, which
+        # rotates and translates at once. 0.673 + 0.10 + 0.15 = 0.923.
+        'portal_standoff': 0.95,
         'table_clearance': 0.55,
         'table_standoff': 0.60,
-        # How much wider than the table the head-on gate through its halo is.
-        'table_gate_margin': 0.20,
+        # The head-on gate spans the full width of the halo, not just the table:
+        # at 0.20 m the robot could drive in but not turn round again without a
+        # corner sweeping into the halo beside the gate. The three other sides
+        # still close the halo, so no route through the room can graze the table.
+        'table_gate_margin': 0.55,
         # Sealing depth when splitting free space into rooms: more than the
         # 0.10 m wall thickness, less than a room.
         'seal_depth': 0.30,
