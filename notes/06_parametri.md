@@ -84,6 +84,9 @@ updated: 2026-09-13
 | centriranje kocke | y ≈ **-0.075**, ω = 0.3, prag 0.05 rad | `MT` l. 1525–1529 | [[P-25_asymmetric_arm_reach]] |
 | transport-proba | 0.10 m/s × 4 s; ω 0.3 × 3.5 s | `MT` l. 1771, 1777 | [[P-18_transport_drops_box]] |
 
+## Poze ruku
+Izmjerene dimenzije svake poze su u [[08_poze]] (snima ih `scripts/capture_posture.py` iz RViz-a).
+
 ## Hvat
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|

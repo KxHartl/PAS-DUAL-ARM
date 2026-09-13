@@ -4,6 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     pkg_share = get_package_share_directory('pas_dual_arm_bringup')
@@ -17,7 +18,11 @@ def generate_launch_description():
     model_arg = DeclareLaunchArgument(name='model', default_value=default_model_path,
                                       description='Absolute path to robot urdf file')
     
-    robot_description = {'robot_description': Command(['xacro ', LaunchConfiguration('model')])}
+    # Wrap in ParameterValue(value_type=str): without it launch parses the
+    # expanded URDF as YAML and aborts (the same bug fixed in sim.launch.py in
+    # M0 - see notes/03_problemi/P-02_robot_description_yaml_parse.md).
+    robot_description = {'robot_description': ParameterValue(
+        Command(['xacro ', LaunchConfiguration('model')]), value_type=str)}
 
     joint_state_publisher_node = Node(
         package='joint_state_publisher_gui',

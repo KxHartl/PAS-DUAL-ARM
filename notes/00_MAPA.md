@@ -92,5 +92,6 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 ## Ostalo
 - Povijest: [[timeline]], [[runovi]]
 - Svi podesivi brojevi: [[06_parametri]]
+- Izmjerene poze ruku i njihove dimenzije: [[08_poze]]
 - Odluke (ADR): [[D-01_aruco_dict_4x4_50]] … [[D-14_light_box_free_size]]. Popis je u [[AGENT_GUIDE]].
 - Vizualno stablo: `00_mapa.canvas`
