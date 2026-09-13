@@ -21,7 +21,6 @@ from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
-from visualization_msgs.msg import Marker, MarkerArray
 
 
 def rotation_matrix(q):
@@ -70,6 +69,9 @@ def door_candidates(msg):
                 y = info.origin.position.y + (iy + 0.5) * resolution
                 found.append({'x': x, 'y': y, 'width': gap * resolution,
                               'wall_axis': 'x' if axis == 0 else 'y'})
+    # `wall_axis` is the axis the WALL runs along, so the direction a robot has
+    # to travel to get through is the other one. Carrying it as an explicit
+    # vector keeps every consumer from re-deriving (and mis-deriving) it.
     # Wall thickness yields several adjacent candidates. Merge within 0.25 m.
     merged = []
     for candidate in sorted(found, key=lambda d: (d['wall_axis'], d['x'], d['y'])):
@@ -83,7 +85,60 @@ def door_candidates(msg):
             for key in ('x', 'y', 'width'):
                 match[key] = (match[key] * n + candidate[key]) / (n + 1)
             match['observations'] += 1
-    return [d for d in merged if d['observations'] >= 2]
+    doors = [d for d in merged if d['observations'] >= 2]
+    for door in doors:
+        door['normal'] = [0.0, 1.0] if door['wall_axis'] == 'x' else [1.0, 0.0]
+    return doors
+
+
+def table_candidates(msg, max_post=0.25, max_span=1.6, min_posts=3):
+    """Find tables in the map as clusters of free-standing posts (the legs).
+
+    The 0.21 m scan plane cuts the legs, not the 0.75 m top, so a table appears
+    as three or four small blobs that touch nothing. That is a far more
+    dependable signal than the RGB-D top: it is in the map from the moment the
+    room is mapped, needs no camera pointing and no robot pose near the table.
+    Walls are excluded by size - they are one huge connected component.
+    """
+    info = msg.info
+    grid = np.asarray(msg.data, dtype=np.int16).reshape(info.height, info.width)
+    resolution = info.resolution
+    labels, count = ndimage.label(grid >= 65, structure=np.ones((3, 3)))
+    posts = []
+    for label in range(1, count + 1):
+        cells = np.argwhere(labels == label)
+        extent = (cells.max(axis=0) - cells.min(axis=0) + 1) * resolution
+        if max(extent) > max_post:
+            continue          # a wall, or anything else too big to be a leg
+        iy, ix = cells.mean(axis=0)
+        posts.append((info.origin.position.x + (ix + 0.5) * resolution,
+                      info.origin.position.y + (iy + 0.5) * resolution))
+
+    # Single-link clustering: legs of one table are within a table diagonal of
+    # each other, and tables are metres apart.
+    unassigned = list(posts)
+    tables = []
+    while unassigned:
+        group = [unassigned.pop()]
+        grew = True
+        while grew:
+            grew = False
+            for post in list(unassigned):
+                if any(math.hypot(post[0] - g[0], post[1] - g[1]) <= max_span
+                       for g in group):
+                    group.append(post)
+                    unassigned.remove(post)
+                    grew = True
+        if len(group) < min_posts:
+            continue
+        xs = [p[0] for p in group]
+        ys = [p[1] for p in group]
+        tables.append({
+            'x': (min(xs) + max(xs)) / 2.0, 'y': (min(ys) + max(ys)) / 2.0,
+            'size_x': max(xs) - min(xs), 'size_y': max(ys) - min(ys),
+            'posts': len(group), 'source': 'occupancy_grid_legs',
+        })
+    return tables
 
 
 class FeatureRegistry(Node):
@@ -91,13 +146,16 @@ class FeatureRegistry(Node):
         super().__init__('feature_registry')
         self._tf = Buffer()
         self._listener = TransformListener(self._tf, self)
-        self._features = {'doors': [], 'tables': [], 'box_marker': None}
+        # `tables` are the map-derived leg clusters used to build navigation
+        # zones; `table_tops` are RGB-D sightings of the 0.75 m surface, kept
+        # separate so a camera glimpse can never move a planning zone.
+        self._features = {'doors': [], 'tables': [], 'table_tops': [],
+                          'box_marker': None}
         self._last_cloud = 0.0
         self._last_map = 0.0
         qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self._pub = self.create_publisher(String, '/semantic_features', qos)
-        self._marker_pub = self.create_publisher(MarkerArray, '/door_markers', qos)
         self.create_subscription(OccupancyGrid, '/map', self._on_map, qos)
         self.create_subscription(PointCloud2, '/camera/points', self._on_cloud,
                                  qos_profile_sensor_data)
@@ -107,71 +165,6 @@ class FeatureRegistry(Node):
         msg = String()
         msg.data = json.dumps({'frame_id': 'map', **self._features}, allow_nan=False)
         self._pub.publish(msg)
-
-    def _publish_door_markers(self, doors):
-        array = MarkerArray()
-        now = self.get_clock().now().to_msg()
-        mid = 0
-        for d in doors:
-            x, y, w, axis = d['x'], d['y'], d['width'], d['wall_axis']
-            # Door threshold line
-            m_thresh = Marker()
-            m_thresh.header.frame_id = 'map'
-            m_thresh.header.stamp = now
-            m_thresh.ns = 'doors'
-            m_thresh.id = mid; mid += 1
-            m_thresh.type = Marker.CUBE
-            m_thresh.action = Marker.ADD
-            m_thresh.pose.position.x = float(x)
-            m_thresh.pose.position.y = float(y)
-            m_thresh.pose.position.z = 0.05
-            m_thresh.scale.x = float(w) if axis == 'x' else 0.15
-            m_thresh.scale.y = 0.15 if axis == 'x' else float(w)
-            m_thresh.scale.z = 0.10
-            m_thresh.color.r = 0.1; m_thresh.color.g = 0.9; m_thresh.color.b = 0.2; m_thresh.color.a = 0.8
-            array.markers.append(m_thresh)
-
-            # Staging pose in HOME and Transit pose in ROOM (1.20 m from threshold)
-            if axis == 'x': # wall along X (e.g. BLUE door at y = -3.0)
-                stage = (float(x), float(y + 1.2), -math.pi / 2, 'Staging (HOME)')
-                transit = (float(x), float(y - 1.2), -math.pi / 2, 'Transit (ROOM)')
-            else: # wall along Y (e.g. RED door at x = 3.0)
-                stage = (float(x - 1.2), float(y), 0.0, 'Staging (HOME)')
-                transit = (float(x + 1.2), float(y), 0.0, 'Transit (ROOM)')
-
-            for px, py, pyaw, label in (stage, transit):
-                m_pt = Marker()
-                m_pt.header.frame_id = 'map'
-                m_pt.header.stamp = now
-                m_pt.ns = 'doors'
-                m_pt.id = mid; mid += 1
-                m_pt.type = Marker.ARROW
-                m_pt.action = Marker.ADD
-                m_pt.pose.position.x = px
-                m_pt.pose.position.y = py
-                m_pt.pose.position.z = 0.1
-                m_pt.pose.orientation.z = math.sin(pyaw * 0.5)
-                m_pt.pose.orientation.w = math.cos(pyaw * 0.5)
-                m_pt.scale.x = 0.6; m_pt.scale.y = 0.12; m_pt.scale.z = 0.12
-                m_pt.color.r = 0.2; m_pt.color.g = 0.8; m_pt.color.b = 1.0; m_pt.color.a = 0.9
-                array.markers.append(m_pt)
-
-                m_txt = Marker()
-                m_txt.header.frame_id = 'map'
-                m_txt.header.stamp = now
-                m_txt.ns = 'doors'
-                m_txt.id = mid; mid += 1
-                m_txt.type = Marker.TEXT_VIEW_FACING
-                m_txt.action = Marker.ADD
-                m_txt.pose.position.x = px
-                m_txt.pose.position.y = py
-                m_txt.pose.position.z = 0.4
-                m_txt.scale.z = 0.25
-                m_txt.color.r = 1.0; m_txt.color.g = 1.0; m_txt.color.b = 1.0; m_txt.color.a = 1.0
-                m_txt.text = f"{label} ({px:.1f}, {py:.1f})"
-                array.markers.append(m_txt)
-
-        self._marker_pub.publish(array)
 
     def _transform(self, frame):
         try:
@@ -186,9 +179,9 @@ class FeatureRegistry(Node):
             return
         self._last_map = time.monotonic()
         self._features['doors'] = [dict(d, source='occupancy_grid')
-                                    for d in door_candidates(msg)]
+                                   for d in door_candidates(msg)]
+        self._features['tables'] = table_candidates(msg)
         self._publish()
-        self._publish_door_markers(self._features['doors'])
 
     def _on_marker(self, msg):
         transform = self._transform(msg.header.frame_id)
@@ -222,9 +215,11 @@ class FeatureRegistry(Node):
         if len(points) == 0:
             return
         world = points @ rot.T + origin
-        # Table tops are at 0.10 m; the floor is near zero.  This is an
-        # observation band, not a claim that every cluster is a table.
-        world = world[(world[:, 2] > 0.075) & (world[:, 2] < 0.125)]
+        # Both tables in the world have their top surface at 0.75 m (the 0.10 m
+        # band this used to carry belonged to the old low slab and matched
+        # nothing).  This is an observation band, not a claim that every
+        # cluster is a table.
+        world = world[(world[:, 2] > 0.70) & (world[:, 2] < 0.80)]
         if len(world) < 50:
             return
         cell = 0.05
@@ -236,20 +231,20 @@ class FeatureRegistry(Node):
         image = np.zeros(tuple(shape), dtype=np.int16)
         np.add.at(image, (ij[:, 0], ij[:, 1]), 1)
         labels, count = ndimage.label(image > 0)
-        tables = []
+        tops = []
         for label in range(1, count + 1):
             cells = np.argwhere(labels == label)
             if len(cells) < 20:
                 continue
             extent = (cells.max(axis=0) - cells.min(axis=0) + 1) * cell
-            if not (0.25 <= extent[0] <= 0.9 and 0.25 <= extent[1] <= 0.9):
+            if not (0.25 <= extent[0] <= 1.2 and 0.25 <= extent[1] <= 1.2):
                 continue
             xy = minimum + cells.mean(axis=0) * cell
-            tables.append({'x': float(xy[0]), 'y': float(xy[1]),
-                           'size_x': float(extent[0]), 'size_y': float(extent[1]),
-                           'top_z': 0.10, 'source': 'rgbd_horizontal_cluster'})
-        if tables:
-            self._features['tables'] = tables
+            tops.append({'x': float(xy[0]), 'y': float(xy[1]),
+                         'size_x': float(extent[0]), 'size_y': float(extent[1]),
+                         'top_z': 0.75, 'source': 'rgbd_horizontal_cluster'})
+        if tops:
+            self._features['table_tops'] = tops
             self._publish()
 
 

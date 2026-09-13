@@ -21,7 +21,11 @@ def generate_launch_description():
 
     mode = LaunchConfiguration('mode')
     map_file = LaunchConfiguration('map')
-    mode_arg = DeclareLaunchArgument('mode', default_value='mapping',
+    # Mapping has its own launch (mapping.launch.py, which deliberately leaves
+    # Nav2 out - P-32), so reaching for this one means navigating on the saved
+    # map. The old 'mapping' default started a second slam_toolbox against a
+    # map file that may not exist.
+    mode_arg = DeclareLaunchArgument('mode', default_value='localization',
                                      description='localization (saved map) or mapping (live SLAM)')
     map_arg = DeclareLaunchArgument(
         'map', default_value=os.path.join(pkg_bringup, 'maps', 'seminar_map.yaml'),
@@ -58,20 +62,19 @@ def generate_launch_description():
     # of the same name on the same topic, so this launch relies on the one from
     # sim.launch.py.
 
-    # Costmap keepout filter servers (active during localization mode)
-    mask_yaml_file = os.path.join(pkg_bringup, 'maps', 'keepout_mask.yaml')
-    filter_mask_server = Node(
-        package='nav2_map_server',
-        executable='map_server',
-        name='filter_mask_server',
-        output='screen',
-        parameters=[{
-            'use_sim_time': True,
-            'yaml_filename': mask_yaml_file,
-            'topic_name': 'keepout_filter_mask',
-            'frame_id': 'map',
-        }],
-        condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
+    # The keepout mask is generated from the doorways and tables detected in the
+    # map, rather than loaded from a hand-drawn PGM, so it follows the world.
+    # nav_zones is a plain node, so it is not in the lifecycle manager below.
+    zones = LaunchConfiguration('zones')
+    zones_arg = DeclareLaunchArgument(
+        'zones', default_value='true',
+        description='Publish doorway/table keepout zones derived from the map. '
+                    'Set false to compare against plain Nav2.')
+    nav_zones = Node(
+        package='pas_dual_arm_scripts', executable='nav_zones',
+        name='nav_zones', output='screen',
+        parameters=[{'use_sim_time': True}],
+        condition=IfCondition(zones),
     )
     costmap_filter_info_server = Node(
         package='nav2_map_server',
@@ -86,7 +89,6 @@ def generate_launch_description():
             'base': 0.0,
             'multiplier': 1.0,
         }],
-        condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
     )
     lifecycle_manager_costmap_filters = Node(
         package='nav2_lifecycle_manager',
@@ -96,9 +98,8 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': True,
             'autostart': True,
-            'node_names': ['filter_mask_server', 'costmap_filter_info_server'],
+            'node_names': ['costmap_filter_info_server'],
         }],
-        condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
     )
 
     # Delay the Nav2 stack so the localizer has time to publish map->odom first.
@@ -108,6 +109,14 @@ def generate_launch_description():
     features = Node(
         package='pas_dual_arm_scripts', executable='feature_registry',
         output='screen', parameters=[{'use_sim_time': True}],
+    )
+    # Drives room-to-room legs off the zone graph. Started with Nav2 so the
+    # GUI has something to talk to; it does nothing until asked.
+    room_navigator = Node(
+        package='pas_dual_arm_scripts', executable='room_navigator',
+        name='room_navigator', output='screen',
+        parameters=[{'use_sim_time': True}],
+        condition=IfCondition(zones),
     )
 
     rviz = LaunchConfiguration('rviz')
@@ -126,12 +135,14 @@ def generate_launch_description():
         mode_arg,
         map_arg,
         rviz_arg,
+        zones_arg,
         mapping,
         localization,
-        filter_mask_server,
+        nav_zones,
         costmap_filter_info_server,
         lifecycle_manager_costmap_filters,
         features,
+        room_navigator,
         delayed_nav2,
         rviz_cmd,
     ])

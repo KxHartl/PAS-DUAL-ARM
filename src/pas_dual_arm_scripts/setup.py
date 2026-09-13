@@ -32,7 +32,8 @@ setup(
             'scan_filter = pas_dual_arm_scripts.scan_filter:main',
             'feature_registry = pas_dual_arm_scripts.feature_registry:main',
             'set_camera = pas_dual_arm_scripts.set_camera:main',
-            'go_to_room = pas_dual_arm_scripts.go_to_room:main',
+            'nav_zones = pas_dual_arm_scripts.nav_zones:main',
+            'room_navigator = pas_dual_arm_scripts.room_navigator:main',
         ],
     },
 )
