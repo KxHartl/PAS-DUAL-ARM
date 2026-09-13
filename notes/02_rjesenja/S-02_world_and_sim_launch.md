@@ -41,6 +41,17 @@ updated: 2026-09-13
 
 Ime svijeta mora ostati `seminar_world`, jer ga sadrže bridge topici kontaktnih senzora.
 
+## GUI kamera (`<gui>` u svijetu)
+Svijet nosi vlastitu `<gui>` sekciju s **cijelim standardnim setom Fortress plugina** (18 komada,
+prepisani iz `/usr/share/ignition/ignition-gazebo6/gui/gui.config`), uz dvije izmjene na
+`MinimalScene`:
+- `horizontal_fov` **0.80 rad (46°)** umjesto zadanih 90° — zadani široki kut je davao izražen
+  „riblje oko“ efekt;
+- `camera_pose` `-8 -16 12 0 0.61 0.87` — pregled sve tri sobe odozgo i sa strane.
+
+Ako se `<gui>` doda, gubi se zadana konfiguracija, pa popis plugina mora biti potpun (inače nestanu
+alatne trake, Component Inspector, Entity Tree…).
+
 ## Launch
 - `IGN_GAZEBO_RESOURCE_PATH` iz svih `AMENT_PREFIX_PATH/share` ([[P-04_mesh_uri_not_found]]).
 - `robot_description` omotan u `ParameterValue` ([[P-02_robot_description_yaml_parse]]), a
