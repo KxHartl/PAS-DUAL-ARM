@@ -24,13 +24,17 @@ updated: 2026-09-13
 ./scripts/run_native.sh python3 scripts/measure_robot.py
 # 5) STVARNA sirina: najuzi prorez kroz koji robot prolazi (treba move_group)
 ./scripts/run_native.sh python3 scripts/fit_test.py --poza ARM_CARRY_V2
-# 6) prikaz otvora u RViz-u (marker, pomice se s robotom)
+# 6) neovisna provjera: iz vrhova meshova, vizualni vs kolizijski
+./scripts/run_native.sh python3 scripts/mesh_extent.py
+# 7) prikaz otvora u RViz-u (marker, pomice se s robotom)
 ./scripts/run_native.sh python3 scripts/door_gauge.py --sirina 1.00
 ```
 
-> [!warning] Dvije brojke
-> Tablica niže nosi **procjenu** (ishodišta linkova + 6 cm). Za odluke koristi `fit_test.py`, koji
-> mjeri **stvarnom kolizijskom geometrijom**. Za `ARM_CARRY_V2`: procjena 87 cm, stvarno **83.4 cm**.
+> [!warning] Tablica niže nosi PROCJENU
+> Stupac „Širina“ dolazi iz ishodišta linkova + pretpostavljenih 6 cm. Za odluke koristi
+> `fit_test.py` ili `mesh_extent.py`. Za `ARM_CARRY_V2`: procjena 87 cm, **stvarno 85.4 cm**.
+> U RViz-u za istinite omjere koristi pogled **TopDownOrtho** (perspektiva širi ruke, jer su
+> bliže kameri od dna zidova).
 
 | Poza | Širina | Vrata | Naprijed | Visina | Najširi link | Simetrična | Svrha | Snimljeno |
 |---|---|---|---|---|---|---|---|---|
@@ -64,11 +68,13 @@ klizači na donjem limitu 0.05 m):
 | **UKUPNO** | **1.04 m** | **0.85 m** | **1.45 m** |
 
 - Najdalje naprijed: prsti desne hvataljke (+0.64 m).
-- **Stvarni minimalni otvor: 83.4 cm** (mjereno `scripts/fit_test.py` pravim kolizijskim
-  meshovima). Prvi dodiruje **`right_half_arm_1_link`** (nadlaktica uz rame), ne zapešće.
-  Uz pravilo „+10 cm“ → **vrata 93.4 cm**; kroz sadašnjih 90 cm robot prolazi s 3.3 cm po strani.
-  Brojka 0.85 m u tablici gore je gruba procjena (ishodišta + 6 cm) →
-  [[P-35_arm_span_too_wide_for_door]].
+- **Stvarna širina: 85.4 cm.** Potvrđeno dvjema neovisnim metodama: `fit_test.py` (hodnik s
+  prorezom u MoveIt sceni) daje 85.6 cm, a `mesh_extent.py` (vrhovi meshova kroz TF) 85.4 cm.
+  Vizualna i kolizijska geometrija ruku su **identične**.
+- Najširi je `right_spherical_wrist_2` (85.4), pa `forearm` (85.0), `half_arm_1` (83.4),
+  `shoulder` (82.5) — cijela je ruka blizu granice.
+- Uz pravilo „+10 cm“ → **vrata 95.4 cm**. Kroz 90 cm prolazi s 2.3 cm po strani; kroz **100 cm**
+  ima 7.3 cm po strani (korisnik prihvatio 13. 9.). Vidi [[P-35_arm_span_too_wide_for_door]].
 - Ruke su **nesimetrične** (desna je zrcaljena, ne kopirana), najniža točka 0.26 m.
 - Kamera je na 1.45 m; zato su zidovi podignuti na 3.0 m ([[P-36_walls_lower_than_camera]]).
 

@@ -31,11 +31,10 @@ s kutijom prolazi **dvoja** vrata. To je stroži test od traženog, a ne odstupa
 1.2 m (`45c32f1`, 23. 6.) → 2.0 m (`e9157e1`, 29. 6.) → **0.9 m** (13. 9.). Vidi
 [[P-12_door_too_narrow]], [[D-08_door_widened]] (zamijenjena) i [[D-13_three_room_world]].
 
-Baza je široka ~0.6 m (footprint ±0.30 m). **Ruke su šire:** u pozi `ARM_CARRY_V2` robot prolazi
-kroz **83.4 cm** (mjereno stvarnom kolizijskom geometrijom, `scripts/fit_test.py`), pri čemu prvi
-dodiruje nadlakticu uz rame. Kroz sadašnjih 90 cm dakle **prolazi**, ali s 3.3 cm po strani;
-pravilo korisnika „+10 cm“ traži 93.4 cm. Stara `ARM_CARRY` iz koda je puno šira. Vidi
-[[P-35_arm_span_too_wide_for_door]] i [[08_poze]].
+Baza je široka ~0.6 m (footprint ±0.30 m). **Ruke su šire:** u pozi `ARM_CARRY_V2` robot je
+**85.4 cm** širok (potvrđeno dvjema neovisnim metodama, [[P-35_arm_span_too_wide_for_door]]).
+Kroz 90 cm prolazi s 2.3 cm po strani; pravilo „+10 cm“ traži 95.4 cm. Stara `ARM_CARRY` iz koda je
+puno šira. Vidi [[08_poze]].
 
 ## Kako se rješava
 - [[S-02_world_and_sim_launch]]: geometrija zidova

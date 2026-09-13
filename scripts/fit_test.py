@@ -27,7 +27,10 @@ from shape_msgs.msg import SolidPrimitive
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRY = os.path.join(ROOT, 'notes', '08_poze.md')
-WALL_T, WALL_W, WALL_H = 0.10, 1.50, 2.10
+# The gauge must be a CORRIDOR, not a thin slab: a 0.1 m thick wall at x=0 only
+# samples the cross-section there, and arms reaching to x=+0.7 simply pass
+# beside it. CORRIDOR_L spans the whole robot length so the widest point counts.
+CORRIDOR_L, WALL_W, WALL_H = 3.00, 1.50, 2.10
 
 
 def load_posture(name):
@@ -98,7 +101,7 @@ def main():
             co.operation = CollisionObject.ADD
             box = SolidPrimitive()
             box.type = SolidPrimitive.BOX
-            box.dimensions = [WALL_T, WALL_W, WALL_H]
+            box.dimensions = [CORRIDOR_L, WALL_W, WALL_H]
             p = Pose()
             p.position.x = 0.0
             p.position.y = sign * (gap / 2.0 + WALL_W / 2.0)
