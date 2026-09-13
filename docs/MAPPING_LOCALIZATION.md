@@ -4,8 +4,8 @@
 
 1. **Mehanika prije SLAM-a.** Pokrenuti simulaciju, složiti ruke u `ARM_CARRY_V2`, pa iz
    `/joint_states` i stvarnih kolizijskih meshova potvrditi da je širina tijekom vožnje
-   manja od otvora 1.0 m. MoveIt-ov `SUCCEEDED` sam po sebi nije dokaz. Držati
-   kutiju i stolove na postojećoj visini 0.10 m dok se doseg hvata ne izmjeri.
+   manja od otvora 1.0 m. MoveIt-ov `SUCCEEDED` sam po sebi nije dokaz. Stolovi su
+   na 0.75 m i tu ostaju dok se doseg hvata ne izmjeri.
 2. **Čist 2D sken.** `/scan` je sirovi Gazebo lidar. `scan_filter` izbacuje povrate
    unutar ovojnice robota i objavljuje `/scan_filtered`; taj topic koriste
    slam_toolbox, Nav2 i sigurnosna provjera ture. Usporediti skenove u RViz-u
@@ -18,8 +18,9 @@
    karte sve tri sobe spremiti `.yaml/.pgm` i `.posegraph`. `save_map.sh` provjerava
    slobodnu površinu i raspon karte te odbija očito nepotpune snimke.
 4. **Registracija.** `feature_registry` iz `/map` traži praznine između kolinearnih
-   zidova širine 0.7–1.3 m; niski stolovi dolaze iz RGB-D horizontalnih klastera
-   na z≈0.10 m; kutija je opaženi ArUco ID 0 na prednjoj plohi. JSON topic
+   zidova širine 0.7–1.3 m i uz njih normalu zida; stolovi dolaze iz karte, kao
+   klasteri slobodnostojećih nogu (ravnina skena na 0.209 m siječe noge), a RGB-D
+   ploha na 0.75 m je zasebna potvrda; kutija je opaženi ArUco ID 0 na prednjoj plohi. JSON topic
    `/semantic_features` daje koordinate u `map` i izvor svakog mjerenja.
    Opažanje treba potvrditi iz više pogleda prije uporabe kao navigacijski cilj.
 5. **Lokalizacija i navigacija.** Nakon spremanja karte koristiti AMCL preko
@@ -71,7 +72,7 @@ Headless je provjereno: 8/8 kontrolera, AMCL lokaliziran, `KeepoutFilter` aktiva
 0.00–1.07° i 2.5 cm od osi.
 
 **Nijedan metar još nije odvožen.** Sljedeće je GUI vožnja praznog robota u `ARM_CARRY_V2`:
-ručni cilj iz RViz-a, pa tipke u `scripts/nav_gui.py`. Otvoreno ostaje
+ručni cilj iz RViz-a, pa tipke u panelu `nav_gui` (diže ga `nav2.launch.py`). Otvoreno ostaje
 [[P-37_arm_position_gain_sag]] — ruke su nakon gibanja bile izmjerene na 1.109 m, šire od
 otvora, pa `room_navigator` prije svakog prolaza provjerava pozu i odbija voziti ako ne drži.
 Ne podizati stolove samo radi lidara: to mijenja visinu kutije i neprovjereni hvat.

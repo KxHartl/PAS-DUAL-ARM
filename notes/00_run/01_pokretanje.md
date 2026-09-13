@@ -105,28 +105,36 @@ Nakon spremanja napravi rebuild paketa kako bi `install/` vidio novu kartu:
 
 ## 5. Lokalizacija i Nav2 navigacija
 
-Nakon što je `seminar_map.yaml` spremljena i instalirana, navigacija se pokreće u čistoj sesiji (**bez** `mapping.launch.py`):
+Nakon što je `seminar_map.yaml` spremljena i instalirana, navigacija se pokreće u čistoj sesiji
+(**bez** `mapping.launch.py`). Za vožnju praznog robota trebaju **dva terminala**:
 
-1. **Terminal 1** (Simulacija):
+> [!warning] Prvo provjeri da nema zaostalih čvorova iz prethodne sesije
+> Živ čvor istog imena iz starog runa ostane u stanju `active`; novi `lifecycle_manager` ga
+> pokuša konfigurirati, dobije `No transition matching 1 found for current state active` i
+> **prekine cijeli bringup** (karta i costmap se onda ne pojave). Provjera i čišćenje:
+> ```bash
+> ps -eo pid,comm,etimes | grep -E 'velocity_smoo|smoother_ser|controller_se|planner_serv|bt_navigat|behavior_ser|waypoint_fol|lifecycle_ma|map_server|amcl|nav_zones|room_navigat|ign'
+> ```
+> Ako išta izlista, ugasi po PID-u. (`comm` je skraćen na 15 znakova, pa `velocity_smoother`
+> izgleda kao `velocity_smooth` — zato je u obrascu baš tako.)
+
+1. **Terminal 1** (simulacija; ruke se spawnaju odmah u `ARM_CARRY_V2`):
    ```bash
-   ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py
+   PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py
    ```
-2. **Terminal 2** (MoveIt):
-   ```bash
-   ./scripts/run_native.sh ros2 launch pas_dual_arm_moveit_config move_group.launch.py
-   ```
-3. **Terminal 3** (Sklapanje ruku u `ARM_CARRY_V2` prije vožnje):
-   ```bash
-   ./scripts/run_native.sh ros2 run pas_dual_arm_scripts set_posture ARM_CARRY_V2
-   ```
-4. **Terminal 4** (Nav2 stog + zone + RViz; `mode:=localization` je sada zadano):
+2. **Terminal 2** (Nav2 + zone + RViz + tipke; `mode:=localization` je zadano):
    ```bash
    ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py
    ```
-5. **Terminal 5** (tipke za vožnju po sobama):
-   ```bash
-   ./scripts/run_native.sh python3 scripts/nav_gui.py
-   ```
+
+Argumenti: `gui:=false` (bez tipaka), `rviz:=false`, `zones:=false` (A/B bez zona).
+
+MoveIt i `set_posture` trebaju samo ako ruke treba **prepozirati** tijekom rada; za vožnju
+praznog robota ne trebaju, jer ih JTC drži u pozi u kojoj su spawnane (tako je radio i run 44):
+```bash
+./scripts/run_native.sh ros2 launch pas_dual_arm_moveit_config move_group.launch.py
+./scripts/run_native.sh ros2 run pas_dual_arm_scripts set_posture ARM_CARRY_V2
+```
 
 AMCL automatski inicijalizira početnu pozu na `(0, 0, yaw=0)` (gdje se robot spawna u HOME sobi).
 
@@ -146,11 +154,12 @@ Ako se to ne vidi, `nav_zones` nije našao vrata — ne voziti. Provjeri offline
 ### Dva načina slanja robota
 - **Ručno (Nav2 izravno)**: alat **„2D Goal Pose"** u RViz-u. Zone vrijede i tu — putanja
   ulazi u prolaz okomito čak i kad je cilj u drugoj sobi.
-- **Tipkom (`nav_gui.py`)**: **PLAVA soba** / **CRVENA soba** vode robota pred stol te sobe,
+- **Tipkom (panel `nav_gui`, diže ga `nav2.launch.py`)**: **PLAVA soba** / **CRVENA soba** vode robota pred stol te sobe,
   **HOME** u sredinu polazne sobe, **STOP** prekida. Isto bez GUI-ja:
   ```bash
   ./scripts/run_native.sh ros2 topic pub --once /room_navigator/goto std_msgs/String "{data: blue}"
   ```
+  (isto vrijedi bez tipaka, ako si pokrenuo `nav2.launch.py gui:=false`.)
   Ruta je uvijek: portal ispred vrata → **ravno kroz vrata** → (kut, ako treba) → pred stol.
 
 ### Kad odbije voziti

@@ -119,6 +119,18 @@ def generate_launch_description():
         condition=IfCondition(zones),
     )
 
+    # The button panel comes up with the stack so a navigation run needs two
+    # terminals, not one per node: this launch and sim.launch.py.
+    gui = LaunchConfiguration('gui')
+    gui_arg = DeclareLaunchArgument('gui', default_value='true',
+                                    description='Open the room navigation button panel')
+    nav_gui = Node(
+        package='pas_dual_arm_scripts', executable='nav_gui',
+        name='nav_gui', output='screen',
+        parameters=[{'use_sim_time': True}],
+        condition=IfCondition(gui),
+    )
+
     rviz = LaunchConfiguration('rviz')
     rviz_arg = DeclareLaunchArgument('rviz', default_value='true',
                                      description='Open RViz with Nav2 default view')
@@ -136,6 +148,7 @@ def generate_launch_description():
         map_arg,
         rviz_arg,
         zones_arg,
+        gui_arg,
         mapping,
         localization,
         nav_zones,
@@ -143,6 +156,7 @@ def generate_launch_description():
         lifecycle_manager_costmap_filters,
         features,
         room_navigator,
+        nav_gui,
         delayed_nav2,
         rviz_cmd,
     ])

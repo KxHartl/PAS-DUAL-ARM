@@ -5,7 +5,7 @@ status: odstupanje
 requirements: ["[[R-14_slam_mapping]]", "[[R-15_region_goal_nav2]]", "[[R-18_door_pass_empty]]", "[[R-19_door_pass_with_box]]"]
 problems: ["[[P-11_nav2_slam_drift]]", "[[P-12_door_too_narrow]]", "[[P-19_aruco_foreshortening_close]]", "[[P-33_nav2_undershoot_base_shift]]", "[[P-39_nav2_enters_doorway_at_an_angle]]"]
 decisions: ["[[D-04_visual_servo_instead_nav2]]", "[[D-08_door_widened]]", "[[D-16_zones_from_detected_features]]"]
-files: ["src/pas_dual_arm_bringup/launch/nav2.launch.py", "src/pas_dual_arm_bringup/config/nav2_params.yaml", "src/pas_dual_arm_scripts/pas_dual_arm_scripts/nav_zones.py", "src/pas_dual_arm_scripts/pas_dual_arm_scripts/room_navigator.py", "src/pas_dual_arm_scripts/pas_dual_arm_scripts/feature_registry.py", "scripts/nav_gui.py", "scripts/check_doors.py", "scripts/check_zones.py"]
+files: ["src/pas_dual_arm_bringup/launch/nav2.launch.py", "src/pas_dual_arm_bringup/config/nav2_params.yaml", "src/pas_dual_arm_scripts/pas_dual_arm_scripts/nav_zones.py", "src/pas_dual_arm_scripts/pas_dual_arm_scripts/room_navigator.py", "src/pas_dual_arm_scripts/pas_dual_arm_scripts/feature_registry.py", "src/pas_dual_arm_scripts/pas_dual_arm_scripts/nav_gui.py", "scripts/check_doors.py", "scripts/check_zones.py"]
 updated: 2026-09-14
 ---
 # S-06: Navigacija (Nav2 + zone iz detektiranih značajki)
@@ -43,7 +43,7 @@ Nav2 i dalje vozi; promijenjeno je **u čemu smije planirati**.
        (KeepoutFilter na           │               (RViz)
         GLOBAL *i* LOCAL)    room_navigator ──▶ Nav2 NavigateToPose
                                    ▲
-                            scripts/nav_gui.py (tipke)
+                                  nav_gui (tipke)
 ```
 
 **Tri sloja**
@@ -60,11 +60,13 @@ prostor, odbaci komponentu koja dodiruje rub karte (to je vanjština zgrade). Iz
 
 **Pokretanje**
 ```bash
-ros2 launch pas_dual_arm_bringup nav2.launch.py mode:=localization   # mode je sada default
-python3 scripts/nav_gui.py                                            # tipke PLAVA / CRVENA / HOME / STOP
-ros2 topic pub --once /room_navigator/goto std_msgs/String "{data: blue}"   # isto bez GUI-ja
+# dva terminala: simulacija (ruke spawnane u ARM_CARRY_V2) i Nav2 + zone + RViz + tipke
+PAS_SIM_CARRY_ARMS=true ros2 launch pas_dual_arm_bringup sim.launch.py
+ros2 launch pas_dual_arm_bringup nav2.launch.py
+
+ros2 topic pub --once /room_navigator/goto std_msgs/String "{data: blue}"   # isto bez tipaka
 ```
-`zones:=false` isključuje zone za A/B usporedbu.
+Argumenti `nav2.launch.py`: `zones:=false` (A/B bez zona), `gui:=false`, `rviz:=false`.
 
 **Offline provjere (bez simulatora)**
 ```bash

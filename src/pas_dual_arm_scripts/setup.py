@@ -34,6 +34,7 @@ setup(
             'set_camera = pas_dual_arm_scripts.set_camera:main',
             'nav_zones = pas_dual_arm_scripts.nav_zones:main',
             'room_navigator = pas_dual_arm_scripts.room_navigator:main',
+            'nav_gui = pas_dual_arm_scripts.nav_gui:main',
         ],
     },
 )

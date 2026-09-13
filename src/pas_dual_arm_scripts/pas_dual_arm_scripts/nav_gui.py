@@ -6,7 +6,8 @@ RViz's "2D Goal Pose", then press a button and watch it go to a room on its own.
 Typing a `ros2 topic pub` line for the second half is a poor way to run a demo
 and a worse way to hit STOP, so this is the panel.
 
-    ./scripts/run_native.sh python3 scripts/nav_gui.py
+Started by nav2.launch.py unless gui:=false; run it on its own with
+`ros2 run pas_dual_arm_scripts nav_gui`.
 
 Buttons publish on /room_navigator/goto; the readout is /room_navigator/status,
 the zone graph from /nav_zones, the localised pose from TF and the side
@@ -16,8 +17,6 @@ so what the robot is deciding is visible while it decides it.
 
 import json
 import math
-import os
-import sys
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -30,10 +29,7 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO, 'src', 'pas_dual_arm_scripts'))
-
-from pas_dual_arm_scripts.room_navigator import HALF_LENGTH, HALF_WIDTH  # noqa: E402
+from pas_dual_arm_scripts.room_navigator import HALF_LENGTH, HALF_WIDTH
 
 COLOURS = {
     'idle': '#4a5568', 'driving': '#2b6cb0', 'arrived': '#276749',
@@ -205,7 +201,3 @@ def main():
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
