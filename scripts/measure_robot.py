@@ -96,7 +96,7 @@ def main():
 
     print(f'\nZa prolaz treba otvor >= {width + 0.10:.2f} m '
           f'(sirina {width:.2f} m + 10 cm rezerve).')
-    print(f'Visina najvise tocke: {z1:.2f} m (nadvoj vrata je na 1.20 m).')
+    print(f'Visina najvise tocke: {z1:.2f} m (zidovi su 3.0 m, vrata su bez nadvoja).')
     node.destroy_node()
     rclpy.shutdown()
     return 0

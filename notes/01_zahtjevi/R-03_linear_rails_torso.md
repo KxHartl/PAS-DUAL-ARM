@@ -21,7 +21,7 @@ se u simulaciji stvarno pomiče gore-dolje preko ros2_control.
 
 **Kriterij prihvaćanja:**
 - [x] STL-ovi u ispravnoj skali (0.001) i orijentaciji, klizači na širokim plohama (`LINKS.md`)
-- [x] `torso_left/right_carriage_joint` (prismatic, 0.05–0.8 m) s `torso_controller`
+- [x] `torso_left/right_carriage_joint` (prismatic, **0.05–0.65 m**, hod stvarne vodilice) s `torso_controller`
 - [ ] klizač se stvarno diže **pod težinom ruke** u Gazebu
 
 ## Trenutno stanje

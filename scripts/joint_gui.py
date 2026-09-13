@@ -12,10 +12,12 @@ Publishes sensor_msgs/JointState on /joint_states at 30 Hz, exactly like the
 stock GUI, so robot_state_publisher and RViz need no changes. Run only ONE of
 the two GUIs at a time.
 """
+import argparse
+import ast
 import math
 import os
+import re
 import subprocess
-import threading
 import tkinter as tk
 import xml.etree.ElementTree as ET
 from tkinter import ttk
@@ -28,8 +30,25 @@ from std_msgs.msg import String
 
 MOVABLE = ('revolute', 'continuous', 'prismatic')
 CONT_LIMIT = math.pi          # range shown for continuous joints
-URDF = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    'src', 'pas_dual_arm_bringup', 'urdf', 'robot.urdf.xacro')
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+URDF = os.path.join(ROOT, 'src', 'pas_dual_arm_bringup', 'urdf', 'robot.urdf.xacro')
+REGISTRY = os.path.join(ROOT, 'notes', '08_poze.md')
+
+
+def load_posture(name):
+    """Read NAME_LEFT / NAME_RIGHT joint dicts out of the posture registry."""
+    if not os.path.exists(REGISTRY):
+        return {}
+    text = open(REGISTRY).read()
+    out = {}
+    for side in ('LEFT', 'RIGHT'):
+        m = re.search(rf'^{re.escape(name)}_{side}\s*=\s*(\{{[^}}]*\}})',
+                      text, re.M)
+        if not m:
+            continue
+        for j, v in ast.literal_eval(m.group(1)).items():
+            out[f'{side.lower()}_joint_{j}'] = float(v)
+    return out
 
 # Joints are grouped so the window reads like the robot, not like an XML dump.
 GROUPS = [
@@ -90,9 +109,12 @@ class JointRow:
         ttk.Label(parent, text=name, width=34, anchor='w').grid(
             row=row, column=0, sticky='w', padx=(4, 6), pady=1)
 
-        self.var = tk.DoubleVar(value=0.0)
+        # Start inside the limits: the carriages run 50-650 mm, so a plain 0
+        # would put them below their lower stop.
+        start = max(self.lo, min(self.hi, 0.0))
+        self.var = tk.DoubleVar(value=start)
         self.entry = ttk.Entry(parent, width=9, justify='right')
-        self.entry.insert(0, '0.0')
+        self.entry.insert(0, f'{start:.1f}')
         self.entry.grid(row=row, column=1, padx=2)
         self.entry.bind('<Return>', self._from_entry)
         self.entry.bind('<FocusOut>', self._from_entry)
@@ -142,7 +164,8 @@ class JointRow:
 
 
 class App:
-    def __init__(self, node, joints):
+    def __init__(self, node, joints, preset=None):
+        self.preset = preset or {}
         self.node = node
         self.pub = node.create_publisher(JointState, '/joint_states', 10)
         self.root = tk.Tk()
@@ -188,7 +211,15 @@ class App:
         self.status.pack(side='right', padx=8)
 
         self.root.protocol('WM_DELETE_WINDOW', self.quit)
-        self.adopt_current()
+        if self.preset:
+            n = 0
+            for name, value in self.preset.items():
+                if name in self.rows:
+                    self.rows[name].set(value)
+                    n += 1
+            self.status.config(text=f'ucitana spremljena poza ({n} zglobova)')
+        else:
+            self.adopt_current()
         self.tick()
 
     def adopt_current(self, timeout=2.0):
@@ -255,12 +286,22 @@ class App:
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--poza', help='ucitaj spremljenu pozu iz notes/08_poze.md '
+                                   '(npr. ARM_CARRY_V2)')
+    args = ap.parse_args()
+
     rclpy.init()
     node = Node('joint_gui')
     urdf = robot_description(node)
     joints = parse_joints(urdf)
     node.get_logger().info(f'{len(joints)} pomicnih zglobova')
-    app = App(node, joints)
+    preset = load_posture(args.poza) if args.poza else None
+    if args.poza:
+        node.get_logger().info(
+            f'poza {args.poza}: {len(preset)} zglobova'
+            if preset else f'poza {args.poza} nije nadena u registru')
+    app = App(node, joints, preset)
     try:
         app.run()
     except KeyboardInterrupt:

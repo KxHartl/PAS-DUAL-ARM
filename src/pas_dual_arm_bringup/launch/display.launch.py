@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.conditions import IfCondition
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -24,10 +25,16 @@ def generate_launch_description():
     robot_description = {'robot_description': ParameterValue(
         Command(['xacro ', LaunchConfiguration('model')]), value_type=str)}
 
+    # sliders:=false leaves /joint_states free for scripts/joint_gui.py, which
+    # offers typed values in degrees. Only ONE publisher may run at a time.
+    sliders_arg = DeclareLaunchArgument(
+        'sliders', default_value='true',
+        description='Start the stock joint_state_publisher_gui (radian sliders).')
     joint_state_publisher_node = Node(
         package='joint_state_publisher_gui',
         executable='joint_state_publisher_gui',
-        name='joint_state_publisher_gui'
+        name='joint_state_publisher_gui',
+        condition=IfCondition(LaunchConfiguration('sliders')),
     )
 
     robot_state_publisher_node = Node(
@@ -50,6 +57,7 @@ def generate_launch_description():
         rmw_env,
         zenoh_env,
         model_arg,
+        sliders_arg,
         joint_state_publisher_node,
         robot_state_publisher_node,
         rviz_node

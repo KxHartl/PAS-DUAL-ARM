@@ -21,7 +21,7 @@ kontaktne senzore i DetachableJoint.
 2. omni_base: **samo** `base/base_sensors.urdf.xacro` (tijelo, kotači, laser, IMU). Namjerno bez
    `robots/omni_base.urdf.xacro` ([[P-03_pal_base_classic_control]]).
 3. Torzo (`dual_arm_torso.urdf.xacro`): vodilice 12 kg, klizači 2 kg, `torso_left/right_carriage_joint`
-   prismatic 0.05–0.8 m, efort 1000 N, 0.5 m/s.
+   prismatic **0.05–0.65 m** (hod stvarne vodilice, 13. 9.), efort 1000 N, 0.5 m/s.
 4. Ruke: `kortex_robot.xacro` ×2 s prefiksima `left_`/`right_`. Montaža na klizač
    `xyz=0.060 0.0735 0.112`, `rpy=-π/2 0 0`; desni klizač je rotiran 180° oko Z (`LINKS.md`).
 5. Pan-tilt (`pan_tilt_description`) + D435 (`realsense2_description`, `sensor_d435` na

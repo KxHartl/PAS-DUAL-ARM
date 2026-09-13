@@ -34,7 +34,7 @@ updated: 2026-09-13
 | trenje kotača mu1 / mu2 | 0.4 / 0.0 (kp 1e6) | `URDF` l. 103–105 | [[P-10_skid_steer_cannot_turn]] |
 | trenje jastučića prstiju | mu1 = mu2 = 5.0 | `URDF` l. 122–123 | squeeze |
 | masa vodilice / klizača | 12 kg / 2 kg | `dual_arm_torso.urdf.xacro` l. 24, 55, 92 | procjena ([[R-06_realistic_parameters]]) |
-| klizač limit | 0.05–0.8 m, 1000 N, 0.5 m/s | `dual_arm_torso.urdf.xacro` l. 71, 104 | [[P-13_torso_prismatic_no_lift]] |
+| klizač limit | **0.05–0.65 m** (13. 9.; bilo 0.05–0.8), 1000 N, 0.5 m/s | `dual_arm_torso.urdf.xacro` l. 71, 105 | hod stvarne vodilice (odluka korisnika); [[P-13_torso_prismatic_no_lift]] |
 | torzo `position_proportional_gain` | 20.0 | `URDF` l. 301, 312 | [[P-13_torso_prismatic_no_lift]] |
 | lidar | 360 zraka, 10 Hz | `URDF` l. 192–201 | [[P-06_classic_only_sensors]] |
 | RGBD kamera | 640×480, 15 Hz, HFOV 1.211 | `URDF` l. 226–236 | [[S-05_perception]] |
