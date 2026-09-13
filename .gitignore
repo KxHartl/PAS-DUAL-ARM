@@ -6,3 +6,7 @@ log/
 .venv/
 __pycache__/
 *.pyc
+# Obsidian: per-user UI state only (vault config itself is tracked)
+.obsidian/workspace*.json
+# Assistant's email contains personal data - quoted in notes/01_zahtjevi/izvori.md instead
+data/raw/zadatak/email_*

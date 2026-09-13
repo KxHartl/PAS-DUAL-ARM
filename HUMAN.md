@@ -1,5 +1,9 @@
 # Vizualna Verifikacija (Zatraženo od AI Agenta)
 
+> ⚠ **ZASTARJELO (od 13. 9. 2026.)**: ovo je zapis iz faze modeliranja (svibanj/lipanj). URDF je
+> potvrđen, a MoveIt paket postoji (`pas_dual_arm_moveit_config`). Aktualni GUI checkpoint protokol:
+> `notes/AGENT_GUIDE.md` §6; stanje: `notes/00_MAPA.md`.
+
 Trenutno sam u procesu generiranja URDF modela robota (`robot.urdf.xacro`). Budući da kao agent nemam pristup grafičkom sučelju (GUI), molim vas da pokrenete sljedeće naredbe kako bismo vizualno potvrdili da su dijelovi (baza, vodilice, 2x ruke, kamera) ispravno spojeni.
 
 ### Koraci za pokretanje verifikacije:

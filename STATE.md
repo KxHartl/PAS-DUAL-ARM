@@ -1,5 +1,10 @@
 # Stanje Projekta (State)
 
+> **13. 9. 2026.:** zahtjevi, problemi (s tablicama pokušaja), odluke i parametri sada žive u
+> Obsidian bilješkama → **`notes/00_MAPA.md`** (ulaz) i `notes/AGENT_GUIDE.md` (pravila). Plan
+> zadnjeg dana: `notes/07_predaja/danas.md`. Sadržaj ispod je povijesni zapis sesija; kod
+> kontradikcije vrijede bilješke.
+
 **Trenutna faza**: KOCKA PO ZADATKU (0.3×0.3×0.3 m, 1 kg) — autonomni
 find → prilaz → centriranje → DVORUČNI SQUEEZE hvat (kontaktom verificiran)
 → podizanje radi (3 uspješna end-to-end ciklusa u GUI-ju). Spuštanje još

@@ -75,7 +75,8 @@ zadano sdformat ime.
   globalno.
 - **Transport do zasebnog stola ne radi**: DART DetachableJoint + gibanje baze
   izbaci kutiju iz hvataljki. Trenutno testirano samo pick+lift+place na ISTI
-  stol (vidi STATE.md).
-- **Kontaktom-verificirani hvat (redizajn 30.6.) još nije testiran u simu** —
-  ovo je prva sesija koja ga stvarno pokreće. Prati STATE.md sekciju
-  "ZA TESTIRATI" za točan checklist.
+  stol. Transport-proba (`probe_transport`) je napisana, ali `task.launch.py` taj
+  parametar još ne prosljeđuje → `notes/03_problemi/P-18_transport_drops_box.md`.
+- **Kontaktom-verificirani hvat je provjeren u GUI-ju** (16. 7., 3 puna ciklusa
+  kocke); zadnje izmjene gatea/odlaganja (`73617e8`) još čekaju run →
+  `notes/03_problemi/P-28_gate_too_strict.md`. Stanje svih zahtjeva: `notes/00_MAPA.md`.

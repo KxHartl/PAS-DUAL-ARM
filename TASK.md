@@ -1,5 +1,9 @@
 # Zadatci i Napredak (Dual Arm Torso)
 
+> ⚠ **ZASTARJELO (od 13. 9. 2026.)**: checkboxovi ispod ne odražavaju stvarno stanje (npr. MoveIt,
+> ros2_control i Aruco su gotovi, a vrata su trenutno 2.0 m). Aktualno stablo zahtjeva i status:
+> `notes/00_MAPA.md`.
+
 Ovdje pratimo zadatke vezane za simulaciju robota s dvije ruke i pokretnom bazom.
 
 ## 1. Pokretanje i Instalacija (Setup)

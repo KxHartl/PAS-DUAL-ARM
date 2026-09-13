@@ -1,14 +1,14 @@
-# ROS2 Workspace Scaffold
+# ROS2 Workspace (`src/`)
 
-Ovaj direktorij sadrži ROS2 pakete za simulaciju i upravljanje dual-arm omni robotom:
+> ⚠ Ranija verzija ovog README-a navodila je nepostojeće pakete (početni kostur). Stvarni sadržaj
+> je niže. Arhitektura i status podsustava: `notes/02_rjesenja/` (ulaz `notes/00_MAPA.md`).
 
-- `pas_dual_arm_description` - URDF/Xacro i robot description launch
-- `pas_dual_arm_gazebo` - Gazebo world i spawn launch
-- `pas_dual_arm_control` - `ros2_control` konfiguracija
-- `pas_dual_arm_moveit_config` - MoveIt launch i konfiguracija
-- `pas_dual_arm_localization` - SLAM Toolbox launch i parametri
-- `pas_dual_arm_nav2` - Nav2 launch i parametri
-- `pas_dual_arm_perception` - ArUco detekcija i camera/perception launch
-- `pas_dual_arm_bringup` - glavni launch koji povezuje stack
+## Vlastiti paketi
+- `pas_dual_arm_bringup` — centralni URDF (`urdf/robot.urdf.xacro`), svijet (`worlds/seminar_world.sdf`),
+  launch (`sim`, `task`, `aruco`, `nav2`, `display`), config (`controllers`, `bridge`, `nav2_params`)
+- `pas_dual_arm_scripts` — `main_task` (orkestracija misije), `aruco_detector`, `cmd_vel_relay`
+- `pas_dual_arm_moveit_config` — MoveIt2 konfiguracija cijelog robota
+- `dual_arm_torso` — vodilice/klizači (STL iz priloga asistenta + xacro)
 
-Svi paketi su tek početni kostur i dalje se proširuju.
+## Vanjski paketi (pinani u `ros2.repos`, zakrpe u `patches/`)
+`omni_base_simulation`, `ros2_kortex`, `pan_tilt_ros`, `realsense-ros`, `aruco_ros`

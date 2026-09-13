@@ -40,9 +40,17 @@ Ako `brain_mode: global` u `project.yaml`, agent ima pristup dijeljenom znanju u
 - **Kod i commit poruke**: Engleski jezik.
 - **Commit format**: Conventional Commits (`feat:`, `fix:`, `docs:`).
 
+## Bilješke projekta (Obsidian, `notes/`)
+
+`notes/` je **izvor istine** za zahtjeve (R), rješenja (S), probleme (P, s tablicom svih
+pokušaja), odluke (D) i parametre. Ulaz: `notes/00_MAPA.md`; pravila rada: `notes/AGENT_GUIDE.md`.
+- Svaki pokušaj → novi red u tablici pripadne P-kartice; svaki run → `notes/05_povijest/runovi.md`.
+- Promjena parametra → `notes/06_parametri.md`. Odstupanje od zadatka → `notes/07_predaja/odstupanja.md`.
+- `TASK.md`, `HUMAN.md`, `src/README.md` su zastarjeli (samo povijest).
+
 ## Workflow
 
-1. Pročitaj `STATE.md` za kontekst trenutnog zadatka.
+1. Pročitaj `notes/00_MAPA.md`, `notes/AGENT_GUIDE.md`, zatim `STATE.md` (primopredaja sesije).
 2. Pročitaj `project.yaml` za LaTeX format i RAG/Brain konfiguraciju.
 3. Radi u `docs/` (tekst) ili `src/` (kod).
 4. Ako je RAG uključen, koristi `query.py` za pronalaženje relevantnih izvora.
