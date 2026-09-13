@@ -87,6 +87,9 @@ updated: 2026-09-13
 
 ## Poze ruku
 Izmjerene dimenzije svake poze su u [[08_poze]] (snima ih `scripts/capture_posture.py` iz RViz-a).
+**Stvarna** širina se mjeri s `scripts/fit_test.py` (zid s prorezom u MoveIt sceni):
+`ARM_CARRY_V2` prolazi kroz **83.4 cm**, kritična je nadlaktica uz rame
+([[P-35_arm_span_too_wide_for_door]]).
 
 ## Hvat
 | Parametar | Vrijednost | Gdje | Zašto / veza |

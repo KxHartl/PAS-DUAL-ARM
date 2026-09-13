@@ -20,9 +20,17 @@ updated: 2026-09-13
 #    (--poza ARM_CARRY_V2 ucita spremljenu pozu iz ovog registra)
 # 3) namjesti zglobove, pa snimi pozu:
 ./scripts/run_native.sh python3 scripts/capture_posture.py ARM_DOOR "prolaz kroz vrata"
-# 4) gabariti cijelog robota u trenutnoj pozi:
+# 4) gabariti cijelog robota u trenutnoj pozi (gruba procjena):
 ./scripts/run_native.sh python3 scripts/measure_robot.py
+# 5) STVARNA sirina: najuzi prorez kroz koji robot prolazi (treba move_group)
+./scripts/run_native.sh python3 scripts/fit_test.py --poza ARM_CARRY_V2
+# 6) prikaz otvora u RViz-u (marker, pomice se s robotom)
+./scripts/run_native.sh python3 scripts/door_gauge.py --sirina 1.00
 ```
+
+> [!warning] Dvije brojke
+> Tablica niže nosi **procjenu** (ishodišta linkova + 6 cm). Za odluke koristi `fit_test.py`, koji
+> mjeri **stvarnom kolizijskom geometrijom**. Za `ARM_CARRY_V2`: procjena 87 cm, stvarno **83.4 cm**.
 
 | Poza | Širina | Vrata | Naprijed | Visina | Najširi link | Simetrična | Svrha | Snimljeno |
 |---|---|---|---|---|---|---|---|---|
@@ -55,10 +63,12 @@ klizači na donjem limitu 0.05 m):
 | glava/kamera | 0.60 m | 0.62 m | 0.40–1.45 m |
 | **UKUPNO** | **1.04 m** | **0.85 m** | **1.45 m** |
 
-- Najširi su zapešća: `right_spherical_wrist_2` (y = −0.38) i `left_spherical_wrist_2` (+0.36).
 - Najdalje naprijed: prsti desne hvataljke (+0.64 m).
-- **Potreban otvor: 0.95 m** (0.85 + 10 cm). Vrata su 0.9 m → **5 cm premalo**
-  ([[P-35_arm_span_too_wide_for_door]]).
+- **Stvarni minimalni otvor: 83.4 cm** (mjereno `scripts/fit_test.py` pravim kolizijskim
+  meshovima). Prvi dodiruje **`right_half_arm_1_link`** (nadlaktica uz rame), ne zapešće.
+  Uz pravilo „+10 cm“ → **vrata 93.4 cm**; kroz sadašnjih 90 cm robot prolazi s 3.3 cm po strani.
+  Brojka 0.85 m u tablici gore je gruba procjena (ishodišta + 6 cm) →
+  [[P-35_arm_span_too_wide_for_door]].
 - Ruke su **nesimetrične** (desna je zrcaljena, ne kopirana), najniža točka 0.26 m.
 - Kamera je na 1.45 m; zato su zidovi podignuti na 3.0 m ([[P-36_walls_lower_than_camera]]).
 

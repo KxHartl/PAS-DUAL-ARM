@@ -19,7 +19,18 @@ problema, ruke ne.
 (`main_task.py:128-131`, „laktovi uvučeni, raspon ~0.6 m“) nikad nije bio izmjeren.
 **Donja granica širine je ~0.64 m** (sama ramena ±0.26 + polumjer linka), bez obzira na pozu.
 
-## Mjerenje poza (13. 9. 2026., MoveIt `/compute_fk` + `/check_state_validity`, `base_link`)
+## ⚠ Dvije metode mjerenja — koristi drugu
+| Metoda | Kako | Točnost |
+|---|---|---|
+| **(A) procjena** `capture_posture.py` / `measure_robot.py` | ishodišta linkova iz TF-a + **pretpostavljenih 0.06 m** | gruba; ne zna gdje geometrija linka stvarno završava |
+| **(B) mjerenje** `fit_test.py` | u MoveIt scenu se ubaci **stvarni zid s prorezom** i binarnom pretragom traži najuži prorez bez sudara, uz **prave kolizijske meshove** | mjerodavna |
+
+Za `ARM_CARRY_V2`: (A) je dala 0.87 m i tvrdila da je najšire **zapešće**, a (B) je dala
+**0.834 m** i pokazala da prvi dodiruje **`right_half_arm_1_link`** (nadlaktica uz rame).
+Procjena je bila 3.6 cm prevelika i pogriješila je koji je link kritičan.
+**Za odluke koristiti (B).** Brojke iz (A) služe samo za brzu usporedbu poza.
+
+## Mjerenje poza (13. 9. 2026., metoda A, MoveIt `/compute_fk` + `/check_state_validity`, `base_link`)
 Širina = 2 × (max |y| svih linkova ruku + 0.06 m polumjera); „vrata“ = širina + 10 cm (pravilo korisnika).
 
 | Poza | Širina | Vrata (+10 cm) | Doseg naprijed | Najširi link | Samokolizija |
@@ -36,12 +47,14 @@ problema, ruke ne.
 Zakret **zgloba 6 za ~−70°** razmakne šake po visini, širina ostaje 0.85 m, a poza postaje validna.
 Simetrična varijanta (j2 = −90°, j4 = −90°, j6 = +70°) daje isto.
 
-## Zaključak
-- **Najuža realno izvediva poza je 0.85 m → vrata 0.95 m.**
-- Trenutna vrata od **0.9 m su 5 cm preuska** po pravilu „širina + 10 cm“
-  ([[D-13_three_room_world]]). Odluka je na korisniku: vrata na 0.95 m (ili 1.0 m radi okruglog
-  broja) ili prolaz s manje rezerve.
-- `ARM_CARRY` treba zamijeniti novom pozom za vrata. To je izmjena koda, **nije napravljena**.
+## Zaključak (mjereno metodom B)
+- **`ARM_CARRY_V2` prolazi kroz 83.4 cm.** Po pravilu „+10 cm“ → **vrata 93.4 cm**.
+- Trenutna vrata od 90 cm: robot **fizički prolazi** (6.6 cm ukupno, 3.3 cm po strani), ali bez
+  tražene rezerve. Otvor od **1.0 m** daje 8.3 cm po strani.
+- Kritična su **ramena i nadlaktice** (`half_arm_1`, `shoulder`), a ne šake ni zapešća. Zato
+  savijanje laktova prema unutra ne pomaže preko određene granice: ramena su fiksno na y = ±0.26 m.
+- `ARM_CARRY` iz koda (1.29 m po metodi A) treba zamijeniti ovom pozom. To je izmjena koda,
+  **nije napravljena**.
 
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
@@ -50,6 +63,8 @@ Simetrična varijanta (j2 = −90°, j4 = −90°, j6 = +70°) daje isto.
 | 2 | 13. 9. | `ARM_CARRY` izvršen preko MoveIt-a, pa izmjereni TF linkovi | MoveIt OK, širina **1.29 m** | poza neupotrebljiva za 0.9 m |
 | 3 | 13. 9. | FK mjerenje 12 kandidata + provjera samokolizije | najuže = **0.85 m**; tražena j2/j4 = 90° pada na sudaru šaka | granica je ~0.85 m, ne 0.6 m |
 | 4 | 13. 9. | sweep j2/j4/j6 za validnu usku pozu | **j2 = ±90°, j4 = ±90°, j6 = ∓70°** → 0.85 m, validno | kandidat za `ARM_DOOR` |
+| 5 | 13. 9. | korisnik sam namjestio pozu u RViz-u (`ARM_CARRY_V2`, višekratnici 45°) | metoda A: 0.87 m | poza je i priprema za hvat i za nošenje |
+| 6 | 13. 9. | **`fit_test.py`: pravi zid s prorezom u MoveIt sceni, binarna pretraga** | **83.4 cm**, prvi dodiruje `right_half_arm_1_link` | mjerodavna brojka; procjena je bila 3.6 cm prevelika i krivo imenovala kritični link |
 
 ## Sljedeći korak (NIJE rađeno: samo identificirano)
 1. Odluka korisnika o širini vrata (0.95 / 1.0 m) prema izmjerenih 0.85 m.
