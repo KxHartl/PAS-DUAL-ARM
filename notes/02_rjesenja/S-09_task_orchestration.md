@@ -34,9 +34,9 @@ updated: 2026-09-13
 ## Što nedostaje za misiju iz [MAIL]
 Između koraka treba umetnuti (vidi [[danas]]):
 - **prije 1:** SLAM + Nav2 do regije koju zada korisnik ([[R-15_region_goal_nav2]]);
-- **nakon 6:** carry poza → staging ispred vrata → kroz vrata → pred `target_table`
+- **nakon 6:** carry poza → staging ispred vrata → kroz vrata → pred `place_table` (crvena soba)
   ([[R-19_door_pass_with_box]]);
-- **8:** odlaganje na `target_table` umjesto na isti stol ([[R-20_place_at_destination]]);
+- **8:** odlaganje na `place_table` (crvena soba) umjesto na isti stol ([[R-20_place_at_destination]]);
 - **nakon 8:** povratak kroz vrata bez kutije ([[R-18_door_pass_empty]]).
 
 ## Ostaci M6

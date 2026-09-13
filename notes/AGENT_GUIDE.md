@@ -74,4 +74,5 @@ Detalji: `RUNNING.md`, [[S-10_build_run_environment]].
 [[D-01_aruco_dict_4x4_50]] · [[D-02_own_aruco_detector]] · [[D-03_diff_drive_base_temporary]] ·
 [[D-04_visual_servo_instead_nav2]] · [[D-05_contact_verified_attach]] · [[D-06_cube_squeeze_grasp]] ·
 [[D-07_carry_on_left_wrist]] · [[D-08_door_widened]] · [[D-09_lift_with_arms_not_torso]] ·
-[[D-10_headless_vs_gui]] · [[D-11_project_scoped_ros_env]] · [[D-12_honesty_abort_over_fake]]
+[[D-10_headless_vs_gui]] · [[D-11_project_scoped_ros_env]] · [[D-12_honesty_abort_over_fake]] ·
+[[D-13_three_room_world]] · [[D-14_light_box_free_size]]

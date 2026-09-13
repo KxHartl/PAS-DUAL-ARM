@@ -15,16 +15,16 @@ updated: 2026-09-13
 > „vrata … kroz koje robot mora proći s i bez kutije.“ [MAIL]
 
 ## Tehnički znači
-Prazan robot (ruke uvučene) prođe kroz otvor od ~0.8 m bez sudara sa zidom, autonomno (Nav2).
+Prazan robot (ruke uvučene) prođe kroz otvor od ~0.9 m bez sudara sa zidom, autonomno (Nav2).
 
 **Kriterij prihvaćanja:**
-- [ ] vrata 0.8 m ([[R-11_door_80cm]])
+- [ ] vrata 0.9 m ([[R-11_door_80cm]])
 - [ ] baza prođe iz sobe A u sobu B bez kontakta sa zidom (GUI + `/scan`)
 - [ ] ruke u `ARM_CARRY` ili tuck pozi tijekom prolaza
 
 ## Trenutno stanje
 ⚠ Jednom provjereno **kroz 1.2 m**, headless, 23. 6. (`45c32f1`): baza je išla x 0.45 → 3.07
-preko Nav2, uz staging poziciju ispred vrata. Kroz 0.8 m nikad. Trenutni `main_task` uopće ne
+preko Nav2, uz staging poziciju ispred vrata. Kroz 0.9 m nikad. Trenutni `main_task` uopće ne
 vozi kroz vrata.
 
 ## Kako se rješava

@@ -3,48 +3,48 @@ id: DANAS
 type: plan
 updated: 2026-09-13
 ---
-# Zadnji dan (13. 9. 2026.): gap analiza i predloženi redoslijed
+# Zadnji dan (13. 9. 2026.): gap analiza i redoslijed
 
-> [!important] Ovo je PRIJEDLOG
-> Redoslijed i time-boxove potvrđuje korisnik. Svaka stavka ima kriterij „dovoljno dobro“ i plan B
-> (ako ne uspije → iskreno u [[odstupanja]]).
+> [!important] Redoslijed misije je iz [MAIL]
+> **Mapiranje (SLAM) → korisnik zada regiju (Nav2 u plavu sobu) → pronađi kutiju → podigni je
+> objema rukama → nosi je kroz vrata (HOME → CRVENA) → odloži je na `place_table`.**
+> Svijet s tri sobe ([[D-13_three_room_world]]) taj redoslijed i nameće: s početne poze kutija se
+> ne vidi.
 
 ## Gap analiza (obavezno iz [ZAD]/[MAIL] vs stanje)
 | Zahtjev | Stanje | Težina popravka | Vrijednost za ocjenu |
 |---|---|---|---|
-| [[R-17_dual_arm_lift]] hvat objema rukama | ✅ (🧪 zadnje izmjene) | nizak (samo run) | visoka, jezgra demoa |
-| [[R-11_door_80cm]] vrata 80 cm | 🔁 2.0 m | **nizak** (SDF) | visoka, eksplicitno traženo |
-| [[R-18_door_pass_empty]] prolaz prazan | ⚠ | nizak–srednji | visoka |
-| [[R-19_door_pass_with_box]] prolaz s kutijom | ❌ | **visok** ([[P-18_transport_drops_box]]) | visoka |
-| [[R-20_place_at_destination]] odlaganje na odredište | ⚠ | srednji (ovisi o R-19) | visoka |
+| [[R-10_mappable_world]] + [[R-11_door_80cm]] + [[R-13_destination_place]] svijet | ✅ tri sobe, vrata 0.9 m (13. 9.), čeka GUI | — | visoka |
+| [[R-14_slam_mapping]] mapiranje | ❌ (radilo 23. 6.) | srednji (kod postoji; rizik [[P-11_nav2_slam_drift]]) | visoka, „koristiti“ |
+| [[R-15_region_goal_nav2]] regija → Nav2 | ❌ | srednji | visoka |
+| [[R-17_dual_arm_lift]] hvat objema rukama | ✅ (🧪 zadnje izmjene) | nizak (run u plavoj sobi) | jezgra demoa |
+| [[R-18_door_pass_empty]] / [[R-19_door_pass_with_box]] prolaz | ⚠ / ❌ | srednji / visok ([[P-18_transport_drops_box]]) | visoka |
+| [[R-20_place_at_destination]] odlaganje | ⚠ | nizak nakon R-19 (isti stol, ista visina) | visoka |
 | [[R-08_omni_controller]] omni_controller | ❌ | srednji–visok ([[P-09_omni_drive_on_fortress]]) | visoka, „obavezno“ |
-| [[R-14_slam_mapping]] + [[R-15_region_goal_nav2]] SLAM + Nav2 | ❌ | srednji (kod postoji) | visoka, „koristiti“ |
 | [[R-21_deliverables]] seminar, video, slajdovi | ❌ | **siguran trošak ~5–6 h** | nužno |
 
-## Predloženi redoslijed
+## Redoslijed (prijedlog, potvrđuje korisnik)
 | # | Stavka | Time-box | Dovoljno dobro | Plan B |
 |---|---|---|---|---|
-| 0 | Sanity: build + GUI sim u novom okolišu ([[S-10_build_run_environment]]) | 20 min | 8 kontrolera aktivno | popraviti okoliš, sve drugo čeka |
-| 1 | **Run 31+** hvat + kontaktni place, **snimiti video** | 45 min | ≥ 1 čist ciklus snimljen | video najboljeg dostupnog runa |
-| 2 | Vrata → 0.8 m + prolaz **bez** kutije ([[P-12_door_too_narrow]]) | 30 min | GUI prolaz bez kontakta | vožnja odometrijom umjesto Nav2 |
-| 3 | Transport-proba → carry kroz vrata → place na `target_table` ([[P-18_transport_drops_box]]) | 90 min | kocka preživi 0.4 m + 60° | matrica B; ako ne → odstupanje |
-| 4 | `mecanum_drive_controller` ([[P-09_omni_drive_on_fortress]]) | 60 min | kontroler aktivan, x + yaw rade | ostati na diff_drive → odstupanje |
-| 5 | SLAM + Nav2 hibrid ([[P-11_nav2_slam_drift]]) | 60 min | karta + 1 cilj koji zada čovjek | karta iz ranijeg testa + odstupanje |
+| 0 | GUI provjera novog svijeta + sanity okoliša ([[S-10_build_run_environment]]) | 20 min | 3 sobe, vrata, stolovi, kutija, 8 kontrolera | popraviti SDF |
+| 1 | **SLAM mapiranje** 3 sobe: `nav2.launch.py` (slam_toolbox) + spora vožnja kroz sobe, spremiti kartu ([[P-11_nav2_slam_drift]]) | 60 min | karta sve 3 sobe u RViz-u, spremljena | teleop mapiranje, bez autonomije |
+| 2 | **Nav2 do regije** (RViz „2D Goal Pose“ u plavoj sobi) → postojeći find/grasp (`main_task` od koraka SCAN) | 60 min | robot u plavoj sobi pred kutijom; run 31+ hvat ([[P-28_gate_too_strict]]) | ručni dovoz + hvat |
+| 3 | **Video** hvata u plavoj sobi | 15 min | 1 čist ciklus snimljen | najbolji dostupni run |
+| 4 | **Nošenje**: `ARM_CARRY` s kutijom → Nav2 kroz vrata u crvenu sobu → odlaganje na `place_table` ([[P-18_transport_drops_box]], [[P-12_door_too_narrow]]) | 90 min | kutija na stolu u crvenoj sobi | proba prijevoza + iskreno odstupanje |
+| 5 | `mecanum_drive_controller` ([[P-09_omni_drive_on_fortress]]) | 60 min | kontroler aktivan, x + yaw rade | diff_drive → odstupanje |
 | ∥ | **Seminar** ([[seminar_mapa]]): pisanje od **najkasnije** sredine dana, usporedno s runovima | 4 h | sva poglavlja + slike | skraćena poglavlja 7–9 |
 | ∥ | **Slajdovi** (iz seminara) | 1 h | 10–12 slajdova | — |
 | end | commit, tag predaje, `dist/` | 20 min | čist repo | — |
 
-**Obrazloženje redoslijeda:**
-- Prvo osigurati ono što se sigurno može predati (demo hvata + video).
-- Zatim najjeftinije zatvaranje obaveznog zahtjeva (vrata).
-- Potom najvrjedniji otvoreni dio misije (transport).
-- Omni i Nav2 su skuplji, pa su time-boxani. Neuspjeh se piše kao iskreno odstupanje.
+**Obrazloženje:** redoslijed prati misiju iz [MAIL] (SLAM prvo, kako je korisnik rekao). Svaki
+korak ostavlja nešto što se može pokazati: kartu, dolazak u regiju, hvat, prijenos. Omni je
+time-boxan, a neuspjeh se piše kao iskreno odstupanje.
 
 ## Checklist predaje ([[R-21_deliverables]])
 - [ ] `docs/seminar.tex` (FSB predložak iz `.ai/templates/fsb-seminar/latex/`) → PDF
       (`.ai/scripts/helpers/build-docs.sh`)
-- [ ] slike: robot (Gazebo), svijet, RViz karta, TF stablo, graf čvorova, hvat (sekvenca), dijagram
-      slijeda misije
+- [ ] slike: robot (Gazebo), svijet s tri sobe, **SLAM karta u RViz-u**, TF stablo, graf čvorova,
+      hvat (sekvenca), dijagram slijeda misije
 - [ ] video (GUI run) → `dist/`
 - [ ] slajdovi → `dist/`
 - [ ] `README.md` + `RUNNING.md` ažurni (jedna naredba do demoa)

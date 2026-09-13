@@ -17,7 +17,7 @@ odleti. Zato se kutija dosad vraćala na isti stol.
 **Nepotvrđeno. Hipoteze, po vjerojatnosti:**
 - **(A)** kontakt prsti/jastučić ↔ kutija se tuče s krutim spojem (isti mehanizam kao
   [[P-17_detachable_joint_explodes]]);
-- **(B)** konzolni teret 1 kg na ispruženoj lijevoj ruci + ubrzanja baze → JTC tracking/solver;
+- **(B)** konzolni teret (1 kg; od 13. 9. 0.3 kg) na ispruženoj lijevoj ruci + ubrzanja baze → JTC tracking/solver;
 - **(C)** DART solver s krutim spojem na pokretnom višetijelnom sustavu;
 - **(D)** kutija dodiruje stol/tijelo tijekom vožnje.
 
@@ -38,13 +38,13 @@ Nema: place na isti stol ([[R-20_place_at_destination]] ⚠).
 2. Pratiti pozu kocke izvana: `ign topic -e -t /world/seminar_world/dynamic_pose/info` (provjeriti
    točan topic s `ign topic -l`).
 3. **Ishod A (kocka preživi):** integrirati carry pozu → staging ispred vrata → kroz vrata → pred
-   `target_table` ([[R-19_door_pass_with_box]]).
+   `place_table` (crvena soba) ([[R-19_door_pass_with_box]]).
 4. **Ishod B (odleti):** matrica, jedno po jedno:
    - (i) sporije rampe ili ω;
    - (ii) kocka bliže tijelu (carry poza iznad baze);
    - (iii) `parent_link` spoja na torzo/`base_link` („kocka leži na robotu“, zapisati kao
      odstupanje);
-   - (iv) manja masa.
+   - (iv) manja masa: **primijenjeno 13. 9.** (1.0 → 0.3 kg, [[D-14_light_box_free_size]]).
    Svaki pokušaj je novi red u ovoj tablici.
 
 **Kriterij uspjeha:** nakon 0.4 m + 60° kocka unutar 5 cm od zgloba, bez rotacije > 10°.

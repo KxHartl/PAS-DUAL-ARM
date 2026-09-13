@@ -8,7 +8,7 @@ problems: ["[[P-14_gripper_too_small_for_cube]]", "[[P-26_one_sided_press_bulldo
 superseded_by: ""
 updated: 2026-09-13
 ---
-# D-06: Kocka 0.3 m / 1 kg + dvoručni squeeze (umjesto hvatljive šipke)
+# D-06: Kocka 0.3 m + dvoručni squeeze (umjesto hvatljive šipke)
 
 ## Kontekst
 Robotiq 2F-85 ima hod ~85 mm i ne može obuhvatiti plohu od 0.3 m. Od 30. 6. do 15. 7. meta je
@@ -31,3 +31,6 @@ Ne odstupa. Napomena ([[izvori]]): dimenzije 0.3 m / 1 kg su **[USM]** i ne obve
 traži samo „kutiju“ s markerom, podignutu objema rukama. **Rezervna opcija za danas:** ako kocka
 bude kočila transport kroz vrata od 0.8 m, manja kutija je legitimna. Ta zamjena mora ići kao nova
 D-kartica, uz korisnikovu odluku.
+
+**13. 9.:** korisnik je potvrdio da su dimenzije i masa slobodne. Masa je smanjena na 0.3 kg, a
+veličina 0.30 m zadržana → [[D-14_light_box_free_size]].

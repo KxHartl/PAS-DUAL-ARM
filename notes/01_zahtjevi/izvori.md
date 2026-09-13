@@ -74,13 +74,22 @@ nisu obvezujući (potvrdio korisnik 13. 9. 2026.). [VLAST] su naše dizajnerske 
 
 ## Napomene i nesigurnosti
 
-- ⚠ **Kocka 0.3 × 0.3 × 0.3 m, 1 kg NIJE ni u [ZAD] ni u [MAIL].** Pojavljuje se od prvog commita
-  (`TASK.md`, 26. 5.), dakle je iz usmenog dogovora [USM]. Po pravilu korisnika to **ne obvezuje**:
-  „kutija“ iz maila može biti i manja, hvataljkom obuhvatljiva kutija. Ipak smo je svjesno
-  implementirali (vidi [[D-06_cube_squeeze_grasp]]). **Potvrditi s korisnikom.**
+- ✅ **Kocka 0.3 × 0.3 × 0.3 m, 1 kg NIJE ni u [ZAD] ni u [MAIL]** (potvrdio korisnik 13. 9.).
+  Dimenzije i masa kutije su **slobodne**, vidi odluke korisnika niže i [[D-14_light_box_free_size]].
 - „aruco_ros“ je u mailu dan kao prijedlog („slobodno“), a ne kao obveza. Vlastiti detektor je
   dopušten, vidi [[D-02_own_aruco_detector]].
 - „omni_controller“ je izričito **obavezan**. PAL-ov `omni_drive_controller` nije dostupan za
   Humble apt, vidi [[P-09_omni_drive_on_fortress]].
 - Formalni ([ZAD]) i proširen ([MAIL]) zadatak ne navode rok ni oblik predaje. Oblik predaje je od
   korisnika (13. 9.): seminar PDF, repo + simulacija, video, prezentacija, vidi [[R-21_deliverables]].
+
+## Odluke korisnika (13. 9. 2026.)
+Unutar slobode koju ostavljaju [ZAD] i [MAIL]:
+1. **Kutija:** dimenzije i masa proizvoljne. Lagana („plastika“), odabrana da je što lakše naći i
+   podignuti, s ArUco markerom → [[D-14_light_box_free_size]].
+2. **Vrata:** 90 cm → [[D-13_three_room_world]].
+3. **Okruženje:** tri sobe u obliku slova L. Srednja (siva) je home pozicija robota, desna (plava)
+   ima stol s kutijom, a gornja (crvena) stol na koji treba donijeti kutiju. Otvori između soba su
+   90 cm → [[D-13_three_room_world]].
+4. **Redoslijed misije** (tumačenje korisnika, u skladu s [MAIL]): prvo mapiranje (SLAM), zatim
+   odlazak po kutiju i nošenje → [[danas]].

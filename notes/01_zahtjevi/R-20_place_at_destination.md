@@ -15,11 +15,11 @@ updated: 2026-09-13
 > „… tamo pronađe kutiju podigne ju i potom ju odnese na decidirano mjesto.“ [MAIL]
 
 ## Tehnički znači
-Kocka završi mirno i uspravno na [[R-13_destination_place]] (`target_table` iza vrata), a ruke se
+Kocka završi mirno i uspravno na [[R-13_destination_place]] (`place_table` (crvena soba) iza vrata), a ruke se
 odmaknu.
 
 **Kriterij prihvaćanja:**
-- [ ] kocka na `target_table` (poza provjerena izvana, npr. `ign topic … dynamic_pose/info`)
+- [ ] kocka na `place_table` (crvena soba) (poza provjerena izvana, npr. `ign topic … dynamic_pose/info`)
 - [ ] kocka nije prevrnuta
 - [ ] detach + odmak ruku bez udaranja kocke
 

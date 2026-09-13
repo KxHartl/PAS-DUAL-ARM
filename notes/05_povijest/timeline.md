@@ -26,7 +26,8 @@ updated: 2026-09-13
 | 15.–16. 7. | kocka | **kocka po zadatku + dvoručni squeeze**, 3 GUI ciklusa | `c504720` | [[D-06_cube_squeeze_grasp]], [[P-24_press_path_chain]]…[[P-27_contact_sensor_topic_ignored]] |
 | 16. 7. (b) | kocka | kontaktni place, REMOVE kocke, transport-proba, popušten gate (**neprovjereno**) | `73617e8` | [[P-28_gate_too_strict]], [[P-29_place_drop_tips_cube]], [[P-30_stale_collision_object]], [[P-18_transport_drops_box]] |
 | 10. 9. | okoliš | projektni ROS okoliš, čisti rebuild, provenance | `31df80e`, `eeefb28`, `ebd392e`, `f046e98` | [[D-11_project_scoped_ros_env]], [[P-31_apt_upgrade_breakage]], [[P-34_source_provenance]] |
-| 13. 9. | organizacija | Obsidian bilješke (ovo), gap analiza, plan zadnjeg dana | — | [[00_MAPA]], [[danas]] |
+| 13. 9. | organizacija | Obsidian bilješke (ovo), gap analiza, plan zadnjeg dana | `5f6d016` | [[00_MAPA]], [[danas]] |
+| 13. 9. | svijet | **tri sobe u L** (HOME / PLAVA s kutijom / CRVENA odredište), vrata 0.9 m, kutija 0.3 kg; redoslijed misije iz [MAIL]: SLAM prvo | (sljedeći commit) | [[D-13_three_room_world]], [[D-14_light_box_free_size]] |
 
 ## Obrasci iz povijesti (za pouku)
 - **Dva puta** smo „zaobišli“ obavezni zahtjev tehničkim prečacem ([[D-03_diff_drive_base_temporary]],

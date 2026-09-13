@@ -15,12 +15,12 @@ updated: 2026-09-13
 > „vrata … kroz koje robot mora proći s i bez kutije.“ [MAIL]
 
 ## Tehnički znači
-Robot drži kocku (0.3 m) i vozi bazu (ravno + okreti) kroz otvor od 0.8 m. Kocka ostaje u
+Robot drži kocku (0.3 m) i vozi bazu (ravno + okreti) kroz otvor od 0.9 m. Kocka ostaje u
 hvatu, a robot s kockom stane u otvor.
 
 **Kriterij prihvaćanja:**
 - [ ] kocka preživi vožnju baze (ravno 0.4 m + okret 60°) bez odlijetanja
-- [ ] kocka + ruke stanu u 0.8 m (kocka ispred tijela, unutar širine baze)
+- [ ] kocka + ruke stanu u 0.9 m (kocka ispred tijela, unutar širine baze)
 - [ ] prolaz iz sobe A u sobu B s kockom
 
 ## Trenutno stanje

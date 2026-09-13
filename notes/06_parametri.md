@@ -17,14 +17,15 @@ updated: 2026-09-13
 ## Svijet
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|
-| širina vrata | **2.0 m** (y ∈ [-1, 1]) | `WORLD` `wall_with_door` (~l. 76–125) | 🔁 zahtjev 0.8 m, [[D-08_door_widened]] |
-| zid | x = 2.0 | `WORLD` l. 78 | — |
-| kutija poza | (1.28, -1.0, 0.25), yaw -0.68 | `WORLD` l. 197 | marker gleda prema ishodištu ([[S-02_world_and_sim_launch]]) |
-| kutija masa / veličina | 1.0 kg / 0.30 m | `WORLD` l. 200, 213 | [USM], [[D-06_cube_squeeze_grasp]] |
-| kutija μ | 5.0 | `WORLD` l. 220 | [[P-15_dart_friction_no_hold]] |
-| ploča markera | 0.22 m (-X ploha, x = -0.1505) | `WORLD` l. 245–247 | [[P-08_marker_not_detected_texture]] |
-| `target_table` | (4.0, 0), ploha ≈ 0.775 | `WORLD` l. 134–144 | odredište ([[R-13_destination_place]]) |
-| `pick_table` | (1.40, -1.0), ploča z ≈ 0.10 | `WORLD` l. 160–164 | — |
+| raspored | tri sobe u L: HOME x,y ∈ [-2, 2]; PLAVA y ∈ [-6, -2]; CRVENA x ∈ [2, 6] | `WORLD` model `rooms` | [[D-13_three_room_world]] (13. 9.) |
+| širina vrata | **0.9 m** (zid y = -2: x ∈ ±0.45; zid x = 2: y ∈ ±0.45) | `WORLD` linkovi `door_*` | [[D-13_three_room_world]]; prije 2.0 m ([[D-08_door_widened]]) |
+| zidovi | 0.1 m debljine × 1.2 m visine | `WORLD` model `rooms` | kamera ne vidi kutiju preko zida |
+| kutija poza | (0, -4.28, 0.25), yaw -π/2 (marker gleda +y, prema vratima) | `WORLD` model `aruco_box` | [[D-13_three_room_world]] |
+| kutija masa / veličina | **0.3 kg** / 0.30 m (I = 0.0045) | `WORLD` model `aruco_box` | [[D-14_light_box_free_size]] (prije 1.0 kg) |
+| kutija μ | 5.0 | `WORLD` model `aruco_box` | [[P-15_dart_friction_no_hold]] |
+| ploča markera | 0.22 m (-X ploha, x = -0.1505) | `WORLD` model `aruco_box` | [[P-08_marker_not_detected_texture]] |
+| `pick_table` | (0, -4.4), yaw -π/2, ploča 0.4 × 0.5 na z = 0.10 | `WORLD` | plava soba |
+| `place_table` | (4.3, 0), ploča 0.6 × 0.6 na z = 0.10 | `WORLD` | crvena soba, odredište ([[R-13_destination_place]]) |
 
 ## Robot
 | Parametar | Vrijednost | Gdje | Zašto / veza |

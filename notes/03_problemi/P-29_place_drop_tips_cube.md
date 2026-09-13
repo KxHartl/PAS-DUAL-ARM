@@ -23,7 +23,7 @@ stola.
 | 2 | 16. 7. `73617e8` | cilj **−2 cm ispod** pick visine (stol zaustavi kocku) + do 3 pokušaja uz provjeru (tol 0.04) | 🧪 nije pokrenuto | — |
 
 ## Sljedeći korak
-Provjeriti u runu 31+. Na `target_table` ([[R-20_place_at_destination]]) isti princip, s visinom
-plohe 0.775 m.
+Provjeriti u runu 31+. Na `place_table` u crvenoj sobi ([[R-20_place_at_destination]]) vrijedi isti
+princip. Ploha je iste visine (0.10 m) kao `pick_table`, pa se odlaže na visinu uzimanja.
 
 **Kriterij uspjeha:** kocka nakon detacha stoji uspravno (nagib < 5°).

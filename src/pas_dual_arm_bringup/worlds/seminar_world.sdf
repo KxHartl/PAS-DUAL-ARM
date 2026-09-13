@@ -1,5 +1,13 @@
 <?xml version="1.0" ?>
 <sdf version="1.8">
+  <!-- Three rooms in an L (decision D-13, 2026-09-13), robot home at the origin
+       facing +X:
+         HOME (grey)  x in [-2, 2], y in [-2, 2]  - robot spawn, mapping start
+         BLUE (right) x in [-2, 2], y in [-6,-2]  - table with the ArUco box
+         RED  (ahead) x in [ 2, 6], y in [-2, 2]  - destination table
+       Each room connects to HOME through a 0.9 m doorway (standard door).
+       The world name must stay "seminar_world": the contact-sensor bridge
+       topics (bridge.yaml) embed it. -->
   <world name="seminar_world">
     <physics name="1ms" type="ignored">
       <max_step_size>0.001</max_step_size>
@@ -29,7 +37,7 @@
       filename="libignition-gazebo-contact-system.so"
       name="ignition::gazebo::systems::Contact">
     </plugin>
-    
+
     <!-- Light -->
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>
@@ -72,92 +80,126 @@
       </link>
     </model>
 
-    <!-- Wall with 2.0m Doorway -->
-    <model name="wall_with_door">
+    <!-- Room floor tints: visual only (no collision), 2 mm above the ground so
+         the rooms read at a glance in the GUI. The 2D lidar scans far above
+         them and the depth box segmentation ignores z < 0.12. -->
+    <model name="room_floors">
       <static>true</static>
-      <pose>2.0 0 0 0 0 0</pose> <!-- Wall is 2 meters in front of origin -->
-
-      <!-- Left part of the wall (inner edge at Y=1.0 -> 2.0m opening) -->
-      <link name="wall_left">
-        <pose>0 2.0 1 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>0.2 2.0 2.0</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.2 2.0 2.0</size></box>
-          </geometry>
-          <material><ambient>0.5 0.5 0.5 1</ambient></material>
+      <link name="floors">
+        <visual name="home_floor">
+          <pose>0 0 0.001 0 0 0</pose>
+          <geometry><box><size>4 4 0.002</size></box></geometry>
+          <material><ambient>0.85 0.85 0.85 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
         </visual>
-      </link>
-
-      <!-- Right part of the wall -->
-      <!-- Door is between Y=-1.0 and Y=1.0 (2.0m wide). -->
-      <link name="wall_right">
-        <pose>0 -2.0 1 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>0.2 2.0 2.0</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.2 2.0 2.0</size></box>
-          </geometry>
-          <material><ambient>0.5 0.5 0.5 1</ambient></material>
+        <visual name="blue_floor">
+          <pose>0 -4 0.001 0 0 0</pose>
+          <geometry><box><size>4 4 0.002</size></box></geometry>
+          <material><ambient>0.70 0.78 0.95 1</ambient><diffuse>0.70 0.78 0.95 1</diffuse></material>
         </visual>
-      </link>
-      
-      <!-- Top header above the door (from Z=2.0 to 2.5) -->
-      <link name="door_header">
-        <pose>0 0 2.25 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>0.2 2.0 0.5</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.2 2.0 0.5</size></box>
-          </geometry>
-          <material><ambient>0.5 0.5 0.5 1</ambient></material>
+        <visual name="red_floor">
+          <pose>4 0 0.001 0 0 0</pose>
+          <geometry><box><size>4 4 0.002</size></box></geometry>
+          <material><ambient>0.95 0.72 0.72 1</ambient><diffuse>0.95 0.72 0.72 1</diffuse></material>
         </visual>
       </link>
     </model>
 
-    <!-- The Table (Final Destination) -->
-    <model name="target_table">
+    <!-- Walls: 0.1 m thick, 1.2 m high (the camera on the pan-tilt cannot see
+         the box over them from HOME, so the mission must drive into BLUE).
+         Lengths carry +0.1 m so the corners close. Doorways are gaps of 0.9 m
+         centred on each shared wall (door edges at +/-0.45). -->
+    <model name="rooms">
       <static>true</static>
-      <!-- Placed 2m beyond the wall, so X=4.0, Y=0.0 -->
-      <pose>4.0 0 0 0 0 0</pose>
-      <link name="table_top">
-        <pose>0 0 0.75 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>1.0 1.5 0.05</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>1.0 1.5 0.05</size></box>
-          </geometry>
-          <material><ambient>0.6 0.4 0.2 1</ambient></material>
-        </visual>
+
+      <!-- HOME: left (+Y) and back (-X) walls -->
+      <link name="home_left">
+        <pose>0 2 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>4.1 0.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>4.1 0.1 1.2</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
       </link>
-      <!-- We can skip legs or add simple boxes for legs -->
+      <link name="home_back">
+        <pose>-2 0 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 4.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 4.1 1.2</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+
+      <!-- HOME <-> RED wall at X=2 with the 0.9 m door at Y in [-0.45, 0.45] -->
+      <link name="door_red_left">
+        <pose>2 1.25 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 1.6 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 1.6 1.2</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+      <link name="door_red_right">
+        <pose>2 -1.25 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 1.6 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 1.6 1.2</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+
+      <!-- HOME <-> BLUE wall at Y=-2 with the 0.9 m door at X in [-0.45, 0.45] -->
+      <link name="door_blue_front">
+        <pose>1.25 -2 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>1.6 0.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>1.6 0.1 1.2</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+      <link name="door_blue_back">
+        <pose>-1.25 -2 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>1.6 0.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>1.6 0.1 1.2</size></box></geometry>
+          <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
+      </link>
+
+      <!-- RED room (destination) -->
+      <link name="red_left">
+        <pose>4 2 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>4.1 0.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>4.1 0.1 1.2</size></box></geometry>
+          <material><ambient>0.8 0.25 0.25 1</ambient><diffuse>0.8 0.25 0.25 1</diffuse></material></visual>
+      </link>
+      <link name="red_far">
+        <pose>6 0 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 4.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 4.1 1.2</size></box></geometry>
+          <material><ambient>0.8 0.25 0.25 1</ambient><diffuse>0.8 0.25 0.25 1</diffuse></material></visual>
+      </link>
+      <link name="red_right">
+        <pose>4 -2 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>4.1 0.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>4.1 0.1 1.2</size></box></geometry>
+          <material><ambient>0.8 0.25 0.25 1</ambient><diffuse>0.8 0.25 0.25 1</diffuse></material></visual>
+      </link>
+
+      <!-- BLUE room (box) -->
+      <link name="blue_back">
+        <pose>-2 -4 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 4.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 4.1 1.2</size></box></geometry>
+          <material><ambient>0.25 0.35 0.8 1</ambient><diffuse>0.25 0.35 0.8 1</diffuse></material></visual>
+      </link>
+      <link name="blue_far">
+        <pose>0 -6 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>4.1 0.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>4.1 0.1 1.2</size></box></geometry>
+          <material><ambient>0.25 0.35 0.8 1</ambient><diffuse>0.25 0.35 0.8 1</diffuse></material></visual>
+      </link>
+      <link name="blue_front">
+        <pose>2 -4 0.6 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 4.1 1.2</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 4.1 1.2</size></box></geometry>
+          <material><ambient>0.25 0.35 0.8 1</ambient><diffuse>0.25 0.35 0.8 1</diffuse></material></visual>
+      </link>
     </model>
 
-    <!-- Pick table: a low table (top at Z=0.10) to the RIGHT of the robot, so
-         the robot must turn to find it. Low enough that the grasp stays within
-         the arms' reach. Square slab. -->
+    <!-- Pick table (BLUE room): low table, top at Z=0.10, rotated so its 0.4 m
+         depth runs along -Y (away from the door). Same design and box overhang
+         as the previously verified setup, so the grasp geometry is unchanged. -->
     <model name="pick_table">
       <static>true</static>
-      <!-- Forward-right of the robot. Front edge at X=1.20 (table extends back,
-           away from the robot) so the box sits at the near edge and the long
-           robot can reach it without the table blocking the base. -->
-      <pose>1.40 -1.0 0 0 0 0</pose>
+      <pose>0 -4.4 0 0 0 -1.5708</pose>
       <link name="table">
         <collision name="slab_c">
           <pose>0 0 0.08 0 0 0</pose>
@@ -180,29 +222,24 @@
       </link>
     </model>
 
-    <!-- The Pick Target: an upright slab (marker ON the box, per the assignment).
-         0.06 (X, the gripped thickness, fits the 85 mm gripper) x 0.30 (Y, length:
-         each arm grips one end) x 0.20 (Z, height: carries the marker and gives
-         the finger pads full contact). 0.4 kg. Sits on the table: centre Z =
-         table top 0.10 + half height 0.10 = 0.20. Yawed so the marked -X face
-         points toward the robot's start for easy detection during the spin. -->
+    <!-- The box (decision D-14): size is free per the assignment, so it keeps
+         the 0.30 m cube the dual-arm squeeze grasp is tuned and verified for,
+         but is a light plastic box (0.3 kg). On the pick table's near edge,
+         yawed so the marked -X face points +Y, i.e. straight at the BLUE door:
+         the robot entering the room sees the marker head-on. The 85 mm gripper
+         cannot enclose a 0.3 m face, so both closed grippers press opposite
+         side faces (contact-verified) and the attach joint carries it.
+         Centre Z = table top 0.10 + 0.15. -->
     <model name="aruco_box">
-      <!-- THE ASSIGNMENT BOX: 0.3 x 0.3 x 0.3 m, 1 kg (TASK.md). On the table's
-           front edge, yawed so the marked -X face points back toward the robot's
-           start (origin): the robot then approaches the marker head-on (robust
-           detection at all ranges) and ends square in front of the box. The 85 mm
-           gripper stroke cannot enclose a 0.3 m face, so the grasp is a dual-arm
-           SQUEEZE: both (closed) grippers press opposite side faces, contact-
-           verified, then the attach joint carries it. Centre Z = 0.10 + 0.15. -->
-      <pose>1.28 -1.0 0.25 0 0 -0.68</pose>
+      <pose>0 -4.28 0.25 0 0 -1.5708</pose>
       <link name="box_link">
         <inertial>
-          <mass>1.0</mass>
-          <!-- Solid cube 0.3 m, m=1 kg: I = m*s^2/6 = 0.015. -->
+          <mass>0.3</mass>
+          <!-- Solid cube 0.3 m, m=0.3 kg: I = m*s^2/6 = 0.0045. -->
           <inertia>
-            <ixx>0.015</ixx>
-            <iyy>0.015</iyy>
-            <izz>0.015</izz>
+            <ixx>0.0045</ixx>
+            <iyy>0.0045</iyy>
+            <izz>0.0045</izz>
             <ixy>0</ixy>
             <ixz>0</ixz>
             <iyz>0</iyz>
@@ -234,8 +271,8 @@
             <box><size>0.30 0.30 0.30</size></box>
           </geometry>
           <material>
-            <ambient>0.8 0.2 0.2 1</ambient>
-            <diffuse>0.8 0.2 0.2 1</diffuse>
+            <ambient>0.9 0.75 0.1 1</ambient>
+            <diffuse>0.9 0.75 0.1 1</diffuse>
           </material>
         </visual>
         <!-- Aruco marker on the -X face (0.30 x 0.30). A 0.22 m plate whose ±X
@@ -262,16 +299,13 @@
       </link>
     </model>
 
-    <!-- Place table: the destination. Forward-left of the robot's start, same
-         low height (top 0.10) and shallow front edge (X=1.20) so the robot can
-         drive up and lower the carried box onto it. -->
+    <!-- Place table (RED room, destination): same low height as the pick table
+         (top 0.10), so the place step lowers the box to the pick height (the
+         existing STEP8 logic) and the table stops it. Generous 0.6 x 0.6 top
+         to absorb navigation spread. -->
     <model name="place_table">
       <static>true</static>
-      <!-- Where the box lands after the (localisation-free) carry maneuver: from
-           the grasp pose the robot turns ~+1.6 rad and drives ~0.6 m, ending with
-           the carried box at ~(1.55, 0.25). Generous 0.6x0.6 top to absorb the
-           run-to-run spread of the blind drive. -->
-      <pose>1.55 0.25 0 0 0 0</pose>
+      <pose>4.3 0 0 0 0 0</pose>
       <link name="table">
         <collision name="slab_c">
           <pose>0 0 0.08 0 0 0</pose>
@@ -280,7 +314,7 @@
         <visual name="slab_v">
           <pose>0 0 0.08 0 0 0</pose>
           <geometry><box><size>0.6 0.6 0.04</size></box></geometry>
-          <material><ambient>0.2 0.4 0.5 1</ambient><diffuse>0.2 0.4 0.5 1</diffuse></material>
+          <material><ambient>0.5 0.35 0.2 1</ambient><diffuse>0.5 0.35 0.2 1</diffuse></material>
         </visual>
         <collision name="pillar_c">
           <pose>0 0 0.04 0 0 0</pose>
@@ -289,7 +323,7 @@
         <visual name="pillar_v">
           <pose>0 0 0.04 0 0 0</pose>
           <geometry><box><size>0.12 0.12 0.08</size></box></geometry>
-          <material><ambient>0.15 0.3 0.4 1</ambient><diffuse>0.15 0.3 0.4 1</diffuse></material>
+          <material><ambient>0.4 0.28 0.16 1</ambient><diffuse>0.4 0.28 0.16 1</diffuse></material>
         </visual>
       </link>
     </model>

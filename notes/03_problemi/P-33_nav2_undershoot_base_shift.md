@@ -24,4 +24,4 @@ pomiču bazu. Ekstremni slučaj je [[P-23_moveit_blind_to_world]] (ruka kroz sto
 
 ## Sljedeći korak
 Ako se Nav2 vrati ([[P-11_nav2_slam_drift]]): nakon Nav2 cilja lokalna korekcija (odometrija ili
-servo na `target_table`) prije odlaganja. Ne gibati ruke dok baza vozi.
+servo na `place_table`) prije odlaganja. Ne gibati ruke dok baza vozi.

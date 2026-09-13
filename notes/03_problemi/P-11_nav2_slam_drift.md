@@ -32,7 +32,7 @@ Bez Nav2/SLAM, što **odstupa od obaveznih** [[R-14_slam_mapping]] i [[R-15_regi
 
 ## Sljedeći korak (hibrid, time-box ~60 min, vidi [[danas]])
 1. SLAM + Nav2 samo za **putovanje**: regija (zadaje korisnik, RViz Goal) → staging ispred vrata →
-   kroz vrata → pred `target_table`. Traženje markera ide **pan-tilt kamerom uz mirnu bazu** (već
+   kroz vrata → pred `place_table` (crvena soba). Traženje markera ide **pan-tilt kamerom uz mirnu bazu** (već
    radi), a finalni prilaz ostaje visual servo.
 2. Okreti spori (ω ≤ 0.3); Nav2 `max_vel_theta` spustiti. U slam_toolboxu provjeriti
    `minimum_travel_heading` / `minimum_travel_distance`.
