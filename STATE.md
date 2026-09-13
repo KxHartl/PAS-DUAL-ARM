@@ -5,12 +5,36 @@
 > zadnjeg dana: `notes/07_predaja/danas.md`. Sadržaj ispod je povijesni zapis sesija; kod
 > kontradikcije vrijede bilješke.
 
-**Trenutna faza**: KOCKA PO ZADATKU (0.3×0.3×0.3 m, 1 kg) — autonomni
-find → prilaz → centriranje → DVORUČNI SQUEEZE hvat (kontaktom verificiran)
-→ podizanje radi (3 uspješna end-to-end ciklusa u GUI-ju). Spuštanje još
-zna ispustiti kocku par cm previsoko (prevrne se) — vidi TODO. Transport do
-ZASEBNOG stola i dalje otvoren (Faza 1/3 plana).
-**Datum zadnje izmjene**: 2026-07-16
+**Trenutna faza**: NOVI SVIJET + IZMJERENE POZE. Sesija 13. 9. bila je organizacija i
+mjerenje, ne rješavanje. Hvat (dvoručni squeeze) je i dalje zadnje što je GUI-provjereno
+radilo (16. 7.), ali sada u **novom svijetu s tri sobe**, pa ga treba ponovno pokrenuti.
+**Datum zadnje izmjene**: 2026-09-13
+
+## Sesija 2026-09-13 (primopredaja)
+**Napravljeno:**
+- `notes/` — Obsidian baza: 21 zahtjev, 10 podsustava, 36 problema s tablicama pokušaja,
+  15 odluka, registar parametara i poza, plan predaje. Ulaz `notes/00_MAPA.md`.
+- **Svijet prepravljen** (`5f6d016`…`e99316e`): tri sobe u L, svaka 6×6 m, zidovi 3 m,
+  prolazi 1.0 m. HOME (siva, robot) → PLAVA (kutija, stol na (0,−6.5)) i CRVENA
+  (odredište, stol na (6.5,0)). Kutija 0.30 m, **0.3 kg**.
+- **Izmjerene stvarne dimenzije** (prije se samo procjenjivalo): robot je u korisnikovoj
+  pozi `ARM_CARRY_V2` **85.4 cm** širok, 1.04 m dug, 1.45 m visok. Potvrđeno dvjema
+  neovisnim metodama (`scripts/fit_test.py`, `scripts/mesh_extent.py`).
+- **Novi alati**: `scripts/joint_gui.py` (zglobovi u stupnjevima, upis vrijednosti),
+  `capture_posture.py`, `measure_robot.py`, `fit_test.py`, `mesh_extent.py`,
+  `door_gauge.py`. Popravljen `display.launch.py` (bio neupotrebljiv od 12. 6.).
+- Klizači torza: gornji limit 0.8 → **0.65 m**.
+
+**Otvoreno (redom po prioritetu):** vidi `notes/07_predaja/danas.md`.
+1. SLAM mapiranje triju soba, pa Nav2 do plave sobe (`P-11`).
+2. Ponoviti hvat u novom svijetu (`P-28`, runovi 31+).
+3. Poza za prolaz kroz vrata i determinističko provlačenje (`P-35`, `D-15`).
+4. Transport s kutijom i odlaganje u crvenoj sobi (`P-18`).
+5. omni_controller preko `mecanum_drive_controller` (`P-09`).
+6. Seminar, video, prezentacija (`R-21`).
+
+**Slijepe ulice iz ove sesije:** prilagodba Gazebo `<gui>` sekcije (FOV, ViewAngle plugin)
+— pogoršala je stvari, vraćeno na zadano; vidi `notes/02_rjesenja/S-02_world_and_sim_launch.md`.
 
 ## Dvoručni SQUEEZE hvat kocke po zadatku (2026-07-15/16, GUI provjereno)
 Zadatak traži kocku 0.3 m / 1 kg; hvataljke 2f_85 (85 mm) je ne mogu obuhvatiti,

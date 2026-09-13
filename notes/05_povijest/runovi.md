@@ -25,4 +25,8 @@ updated: 2026-09-13
 | 32 | 13. 9. | `2bda09e` | GUI | podizanje novog svijeta (tri sobe) | ✅ svijet valjan (`ign sdf -k`), 8/8 kontrolera aktivno, korisnik potvrdio raspored | — | [[D-13_three_room_world]] |
 | 33 | 13. 9. | (necommitano) | GUI | SLAM + Nav2 + `cmd_vel_relay` podignuti | ✅ stack se digao, `/map` objavljen (158×158, 0.05 m/px); Nav2 javio da je `inflation_radius` (0.05) manji od upisanog radijusa (0.31) | nije vožen nijedan cilj | [[P-12_door_too_narrow]] |
 | 34 | 13. 9. | (necommitano) | GUI | `ARM_CARRY` preko MoveIt-a + TF mjerenje širine | ⚠ MoveIt OK, ali **širina 1.26 m** (laktovi y = ±0.58) | prolaz kroz 0.9 m nije ni pokušan | **[[P-35_arm_span_too_wide_for_door]]** (novo) |
-| 35 | | | | | | | |
+| 35 | 13. 9. | `7f24fbd` | RViz | korisnik namjestio pozu `ARM_CARRY_V2` (višekratnici 45°) | ✅ snimljena, klizači 0.8 → 0.65 m | — | [[08_poze]] |
+| 36 | 13. 9. | `35565cb` | MoveIt | mjerenje širine hodnikom s prorezom + vrhovima meshova | ✅ **85.4 cm**, prva mjera (83.4) bila kriva zbog tankog zida | — | [[P-35_arm_span_too_wide_for_door]] |
+| 37 | 13. 9. | `e99316e` | GUI | novi svijet 6×6 m, vrata 1.0 m | ✅ 8/8 kontrolera, korisnik potvrdio raspored | — | [[D-13_three_room_world]] |
+| 38 | 13. 9. | `cae0376` | GUI | prilagodba `<gui>` (FOV 46°/60°, ViewAngle plugin) | ❌ plosnato, panel odsječen, kamera odlutala na x≈310 m | vraćeno na zadani GUI | [[S-02_world_and_sim_launch]] |
+| 39 | | | | | | | |
