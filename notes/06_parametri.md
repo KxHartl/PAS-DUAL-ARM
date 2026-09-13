@@ -19,7 +19,8 @@ updated: 2026-09-13
 |---|---|---|---|
 | raspored | tri sobe u L: HOME x,y ∈ [-2, 2]; PLAVA y ∈ [-6, -2]; CRVENA x ∈ [2, 6] | `WORLD` model `rooms` | [[D-13_three_room_world]] (13. 9.) |
 | širina vrata | **0.9 m** (zid y = -2: x ∈ ±0.45; zid x = 2: y ∈ ±0.45) | `WORLD` linkovi `door_*` | [[D-13_three_room_world]]; prije 2.0 m ([[D-08_door_widened]]) |
-| zidovi | 0.1 m debljine × 1.2 m visine | `WORLD` model `rooms` | kamera ne vidi kutiju preko zida |
+| zidovi | 0.1 m debljine × **3.0 m visine** (13. 9.; bilo 1.2 m) | `WORLD` model `rooms` | kamera je na 1.39 m i gledala je preko zidova → [[P-36_walls_lower_than_camera]] |
+| visina robota | **1.45 m** (kamera 1.39 m + rub) | izmjereno `scripts/measure_robot.py` | [[08_poze]] |
 | kutija poza | (0, -4.28, 0.25), yaw -π/2 (marker gleda +y, prema vratima) | `WORLD` model `aruco_box` | [[D-13_three_room_world]] |
 | kutija masa / veličina | **0.3 kg** / 0.30 m (I = 0.0045) | `WORLD` model `aruco_box` | [[D-14_light_box_free_size]] (prije 1.0 kg) |
 | kutija μ | 5.0 | `WORLD` model `aruco_box` | [[P-15_dart_friction_no_hold]] |

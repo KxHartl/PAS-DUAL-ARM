@@ -5,7 +5,7 @@ status: ispunjeno
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-02_world_and_sim_launch]]"]
-problems: []
+problems: ["[[P-36_walls_lower_than_camera]]"]
 decisions: ["[[D-13_three_room_world]]"]
 updated: 2026-09-13
 ---

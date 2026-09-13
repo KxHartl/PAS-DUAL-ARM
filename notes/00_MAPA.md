@@ -63,7 +63,7 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 ## R3: Okruženje (tri sobe u L od 13. 9.)
 | Zahtjev | Izvor | Status | Rješenje | Problemi | Odluke |
 |---|---|---|---|---|---|
-| [[R-10_mappable_world]] | MAIL | ✅ tri sobe (GUI potvrđeno 13. 9.) | [[S-02_world_and_sim_launch]] | — | [[D-13_three_room_world]] |
+| [[R-10_mappable_world]] | MAIL | ✅ tri sobe (GUI potvrđeno 13. 9.) | [[S-02_world_and_sim_launch]] | [[P-36_walls_lower_than_camera]] | [[D-13_three_room_world]] |
 | [[R-11_door_80cm]] | MAIL + korisnik (0.9 m) | ⚠ vrata postoje, prolaz netestiran | [[S-02_world_and_sim_launch]], [[S-06_navigation]] | [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-13_three_room_world]] (zamjenjuje [[D-08_door_widened]]) |
 | [[R-12_box_with_aruco]] | MAIL (dimenzije slobodne) | ✅ 0.30 m, 0.3 kg | [[S-02_world_and_sim_launch]], [[S-05_perception]] | [[P-08_marker_not_detected_texture]], [[P-14_gripper_too_small_for_cube]] | [[D-01_aruco_dict_4x4_50]], [[D-06_cube_squeeze_grasp]], [[D-14_light_box_free_size]] |
 | [[R-13_destination_place]] | MAIL | ✅ `place_table` u crvenoj sobi | [[S-02_world_and_sim_launch]] | — | [[D-13_three_room_world]] |

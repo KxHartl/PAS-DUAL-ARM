@@ -4,7 +4,7 @@ type: odluka
 status: vazeca
 deviation: false
 requirements: ["[[R-10_mappable_world]]", "[[R-11_door_80cm]]", "[[R-13_destination_place]]", "[[R-15_region_goal_nav2]]", "[[R-18_door_pass_empty]]", "[[R-19_door_pass_with_box]]", "[[R-20_place_at_destination]]"]
-problems: ["[[P-12_door_too_narrow]]"]
+problems: ["[[P-12_door_too_narrow]]", "[[P-35_arm_span_too_wide_for_door]]", "[[P-36_walls_lower_than_camera]]"]
 superseded_by: ""
 updated: 2026-09-13
 ---
@@ -26,8 +26,8 @@ Tri prostorije u obliku slova **L**. Robot je na ishodištu i gleda prema +x:
 
 - Otvori HOME↔PLAVA (zid y = -2, x ∈ [-0.45, 0.45]) i HOME↔CRVENA (zid x = 2, y ∈ [-0.45, 0.45])
   su široki **0.9 m** (standardna vrata).
-- Zidovi su visoki 1.2 m, pa kamera iz HOME sobe ne vidi kutiju preko zida i robot mora
-  navigirati u plavu sobu.
+- Zidovi su visoki **3.0 m** (13. 9., odluka korisnika). Prvotnih 1.2 m nije blokiralo pogled: kamera
+  je na 1.39 m, dakle iznad njih → [[P-36_walls_lower_than_camera]].
 - **Oba stola su iste niske izvedbe** (ploha z = 0.10). Odlaganje zato spušta kocku na visinu
   uzimanja, a postojeći STEP8 to već radi.
 - Marker na kutiji gleda prema vratima plave sobe (+y).

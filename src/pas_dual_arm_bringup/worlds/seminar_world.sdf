@@ -104,92 +104,93 @@
       </link>
     </model>
 
-    <!-- Walls: 0.1 m thick, 1.2 m high (the camera on the pan-tilt cannot see
-         the box over them from HOME, so the mission must drive into BLUE).
-         Lengths carry +0.1 m so the corners close. Doorways are gaps of 0.9 m
-         centred on each shared wall (door edges at +/-0.45). -->
+    <!-- Walls: 0.1 m thick, 3.0 m high. Height matters: the pan-tilt camera
+         sits at 1.39 m, so the earlier 1.2 m walls let the robot look straight
+         over them into the other rooms and skip navigating there entirely
+         (notes P-36). Lengths carry +0.1 m so the corners close. Doorways are
+         gaps of 0.9 m centred on each shared wall (door edges at +/-0.45). -->
     <model name="rooms">
       <static>true</static>
 
       <!-- HOME: left (+Y) and back (-X) walls -->
       <link name="home_left">
-        <pose>0 2 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>4.1 0.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>4.1 0.1 1.2</size></box></geometry>
+        <pose>0 2 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>4.1 0.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>4.1 0.1 3.0</size></box></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
       </link>
       <link name="home_back">
-        <pose>-2 0 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>0.1 4.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.1 4.1 1.2</size></box></geometry>
+        <pose>-2 0 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 4.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 4.1 3.0</size></box></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
       </link>
 
       <!-- HOME <-> RED wall at X=2 with the 0.9 m door at Y in [-0.45, 0.45] -->
       <link name="door_red_left">
-        <pose>2 1.25 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>0.1 1.6 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.1 1.6 1.2</size></box></geometry>
+        <pose>2 1.25 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 1.6 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 1.6 3.0</size></box></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
       </link>
       <link name="door_red_right">
-        <pose>2 -1.25 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>0.1 1.6 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.1 1.6 1.2</size></box></geometry>
+        <pose>2 -1.25 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 1.6 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 1.6 3.0</size></box></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
       </link>
 
       <!-- HOME <-> BLUE wall at Y=-2 with the 0.9 m door at X in [-0.45, 0.45] -->
       <link name="door_blue_front">
-        <pose>1.25 -2 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>1.6 0.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>1.6 0.1 1.2</size></box></geometry>
+        <pose>1.25 -2 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>1.6 0.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>1.6 0.1 3.0</size></box></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
       </link>
       <link name="door_blue_back">
-        <pose>-1.25 -2 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>1.6 0.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>1.6 0.1 1.2</size></box></geometry>
+        <pose>-1.25 -2 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>1.6 0.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>1.6 0.1 3.0</size></box></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material></visual>
       </link>
 
       <!-- RED room (destination) -->
       <link name="red_left">
-        <pose>4 2 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>4.1 0.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>4.1 0.1 1.2</size></box></geometry>
+        <pose>4 2 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>4.1 0.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>4.1 0.1 3.0</size></box></geometry>
           <material><ambient>0.8 0.25 0.25 1</ambient><diffuse>0.8 0.25 0.25 1</diffuse></material></visual>
       </link>
       <link name="red_far">
-        <pose>6 0 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>0.1 4.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.1 4.1 1.2</size></box></geometry>
+        <pose>6 0 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 4.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 4.1 3.0</size></box></geometry>
           <material><ambient>0.8 0.25 0.25 1</ambient><diffuse>0.8 0.25 0.25 1</diffuse></material></visual>
       </link>
       <link name="red_right">
-        <pose>4 -2 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>4.1 0.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>4.1 0.1 1.2</size></box></geometry>
+        <pose>4 -2 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>4.1 0.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>4.1 0.1 3.0</size></box></geometry>
           <material><ambient>0.8 0.25 0.25 1</ambient><diffuse>0.8 0.25 0.25 1</diffuse></material></visual>
       </link>
 
       <!-- BLUE room (box) -->
       <link name="blue_back">
-        <pose>-2 -4 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>0.1 4.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.1 4.1 1.2</size></box></geometry>
+        <pose>-2 -4 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 4.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 4.1 3.0</size></box></geometry>
           <material><ambient>0.25 0.35 0.8 1</ambient><diffuse>0.25 0.35 0.8 1</diffuse></material></visual>
       </link>
       <link name="blue_far">
-        <pose>0 -6 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>4.1 0.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>4.1 0.1 1.2</size></box></geometry>
+        <pose>0 -6 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>4.1 0.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>4.1 0.1 3.0</size></box></geometry>
           <material><ambient>0.25 0.35 0.8 1</ambient><diffuse>0.25 0.35 0.8 1</diffuse></material></visual>
       </link>
       <link name="blue_front">
-        <pose>2 -4 0.6 0 0 0</pose>
-        <collision name="c"><geometry><box><size>0.1 4.1 1.2</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>0.1 4.1 1.2</size></box></geometry>
+        <pose>2 -4 1.5 0 0 0</pose>
+        <collision name="c"><geometry><box><size>0.1 4.1 3.0</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>0.1 4.1 3.0</size></box></geometry>
           <material><ambient>0.25 0.35 0.8 1</ambient><diffuse>0.25 0.35 0.8 1</diffuse></material></visual>
       </link>
     </model>
