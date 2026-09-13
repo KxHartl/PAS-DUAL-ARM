@@ -33,11 +33,11 @@ updated: 2026-09-13
 ```
 | Model | Poza | Bitno |
 |---|---|---|
-| `rooms` | — | zidovi 0.1 m × **3.0 m** (viši od kamere na 1.39 m, [[P-36_walls_lower_than_camera]]). HOME siva, PLAVA plava, CRVENA crvena. Vrata 0.9 m: zid y = -2 (x ∈ [-0.45, 0.45]) i zid x = 2 (y ∈ [-0.45, 0.45]) |
+| `rooms` | — | zidovi 0.1 m × **3.0 m** (viši od kamere na 1.39 m, [[P-36_walls_lower_than_camera]]). Sobe **6 × 6 m**. HOME siva, PLAVA plava, CRVENA crvena. Vrata **1.0 m**: zid y = -3 (x ∈ ±0.5) i zid x = 3 (y ∈ ±0.5) |
 | `room_floors` | — | obojeni podovi soba, samo vizual (bez kolizije) |
-| `pick_table` | (0, -4.4), yaw -π/2 | plava soba; ploča 0.4 × 0.5 na z = 0.10 |
-| `aruco_box` | (0, -4.28, 0.25), yaw -π/2 | kocka 0.30 m, **0.3 kg**, μ 5.0, žuta; marker (0.22 / 0.165 m) gleda prema vratima (+y) |
-| `place_table` | (4.3, 0) | crvena soba, **odredište**; ploča 0.6 × 0.6 na z = 0.10 |
+| `pick_table` | (0, -6.5), yaw -π/2 | plava soba; ploča 0.4 × 0.5 na z = 0.10 |
+| `aruco_box` | (0, -6.38, 0.25), yaw -π/2 | kocka 0.30 m, **0.3 kg**, μ 5.0, žuta; marker (0.22 / 0.165 m) gleda prema vratima (+y) |
+| `place_table` | (6.5, 0) | crvena soba, **odredište**; ploča 0.6 × 0.6 na z = 0.10 |
 
 Ime svijeta mora ostati `seminar_world`, jer ga sadrže bridge topici kontaktnih senzora.
 

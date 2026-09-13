@@ -17,16 +17,16 @@ updated: 2026-09-13
 ## Svijet
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|
-| raspored | tri sobe u L: HOME x,y ∈ [-2, 2]; PLAVA y ∈ [-6, -2]; CRVENA x ∈ [2, 6] | `WORLD` model `rooms` | [[D-13_three_room_world]] (13. 9.) |
-| širina vrata | **0.9 m** (zid y = -2: x ∈ ±0.45; zid x = 2: y ∈ ±0.45) | `WORLD` linkovi `door_*` | [[D-13_three_room_world]]; prije 2.0 m ([[D-08_door_widened]]) |
+| raspored | tri sobe u L, svaka **6 × 6 m**: HOME x,y ∈ [-3, 3]; PLAVA y ∈ [-9, -3]; CRVENA x ∈ [3, 9] | `WORLD` model `rooms` | [[D-13_three_room_world]] (13. 9.; prije 4 × 4) |
+| širina vrata | **1.0 m** (zid y = -3: x ∈ ±0.5; zid x = 3: y ∈ ±0.5) | `WORLD` linkovi `door_*` | robot je 0.85 m → 7.3 cm po strani; prije 0.9 m pa 2.0 m ([[P-35_arm_span_too_wide_for_door]]) |
 | zidovi | 0.1 m debljine × **3.0 m visine** (13. 9.; bilo 1.2 m) | `WORLD` model `rooms` | kamera je na 1.39 m i gledala je preko zidova → [[P-36_walls_lower_than_camera]] |
 | visina robota | **1.45 m** (kamera 1.39 m + rub) | izmjereno `scripts/measure_robot.py` | [[08_poze]] |
-| kutija poza | (0, -4.28, 0.25), yaw -π/2 (marker gleda +y, prema vratima) | `WORLD` model `aruco_box` | [[D-13_three_room_world]] |
+| kutija poza | (0, **-6.38**, 0.25), yaw -π/2 (marker gleda +y, prema vratima) | `WORLD` model `aruco_box` | [[D-13_three_room_world]] |
 | kutija masa / veličina | **0.3 kg** / 0.30 m (I = 0.0045) | `WORLD` model `aruco_box` | [[D-14_light_box_free_size]] (prije 1.0 kg) |
 | kutija μ | 5.0 | `WORLD` model `aruco_box` | [[P-15_dart_friction_no_hold]] |
 | ploča markera | 0.22 m (-X ploha, x = -0.1505) | `WORLD` model `aruco_box` | [[P-08_marker_not_detected_texture]] |
-| `pick_table` | (0, -4.4), yaw -π/2, ploča 0.4 × 0.5 na z = 0.10 | `WORLD` | plava soba |
-| `place_table` | (4.3, 0), ploča 0.6 × 0.6 na z = 0.10 | `WORLD` | crvena soba, odredište ([[R-13_destination_place]]) |
+| `pick_table` | (0, **-6.5**), yaw -π/2, ploča 0.4 × 0.5 na z = 0.10 | `WORLD` | plava soba |
+| `place_table` | (**6.5**, 0), ploča 0.6 × 0.6 na z = 0.10 | `WORLD` | crvena soba, odredište ([[R-13_destination_place]]) |
 
 ## Robot
 | Parametar | Vrijednost | Gdje | Zašto / veza |
