@@ -43,14 +43,19 @@ Ime svijeta mora ostati `seminar_world`, jer ga sadrže bridge topici kontaktnih
 
 ## GUI kamera (`<gui>` u svijetu)
 Svijet nosi vlastitu `<gui>` sekciju s **cijelim standardnim setom Fortress plugina** (18 komada,
-prepisani iz `/usr/share/ignition/ignition-gazebo6/gui/gui.config`), uz dvije izmjene na
-`MinimalScene`:
-- `horizontal_fov` **0.80 rad (46°)** umjesto zadanih 90° — zadani široki kut je davao izražen
-  „riblje oko“ efekt;
-- `camera_pose` `-8 -16 12 0 0.61 0.87` — pregled sve tri sobe odozgo i sa strane.
+prepisani iz `/usr/share/ignition/ignition-gazebo6/gui/gui.config`), uz izmjene:
+- `MinimalScene.horizontal_fov` **1.05 rad (60°)** — normalni objektiv. Zadanih 90° daje „riblje
+  oko“; ispod ~50° slika postaje plosnata i neprirodna (probano 46°, korisnik odbio).
+- `MinimalScene.camera_pose` `-6 -6 7 0 0.55 0.55` — pogled na sve tri sobe.
+- dodan plugin **`ViewAngle`** („Pogled“): gumbi za gotove poglede (odozgo, sprijeda, sa strane) i
+  `Home` koji vraća na gornju pozu. Time korisnik mijenja pogled sam, bez diranja SDF-a.
 
 Ako se `<gui>` doda, gubi se zadana konfiguracija, pa popis plugina mora biti potpun (inače nestanu
 alatne trake, Component Inspector, Entity Tree…).
+
+**Upravljanje pogledom mišem u Gazebu:** lijevi gumb + pomak = rotacija oko scene; srednji gumb ili
+`Shift` + lijevi = pomak (pan); kotačić ili desni gumb + pomak = zumiranje; dvoklik na objekt =
+centriraj na njega.
 
 ## Launch
 - `IGN_GAZEBO_RESOURCE_PATH` iz svih `AMENT_PREFIX_PATH/share` ([[P-04_mesh_uri_not_found]]).

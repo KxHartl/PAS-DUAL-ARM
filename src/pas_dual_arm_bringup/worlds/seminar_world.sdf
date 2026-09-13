@@ -53,10 +53,10 @@
       <scene>scene</scene>
       <ambient_light>0.4 0.4 0.4</ambient_light>
       <background_color>0.8 0.8 0.8</background_color>
-      <camera_pose>-8 -16 12 0 0.61 0.87</camera_pose>
-      <!-- 0.80 rad = 46 deg. The plugin default is 90 deg,
-           which is what made the view look fish-eyed. -->
-      <horizontal_fov>0.80</horizontal_fov>
+      <camera_pose>-6 -6 7 0 0.55 0.55</camera_pose>
+      <!-- 1.05 rad = 60 deg: a normal lens. The plugin default is 90 deg,
+           which looks fish-eyed; much below 60 deg goes flat and odd. -->
+      <horizontal_fov>1.05</horizontal_fov>
     </plugin>
     <plugin filename="EntityContextMenuPlugin" name="Entity context menu">
       <ignition-gui>
@@ -129,6 +129,15 @@
         <property key="showTitleBar" type="bool">false</property>
       </ignition-gui>
     </plugin>
+    <plugin filename="ViewAngle" name="View angle">
+      <ignition-gui>
+        <property type="string" key="state">docked_collapsed</property>
+        <title>Pogled (View angle)</title>
+      </ignition-gui>
+      <!-- "Home" button returns here -->
+      <camera_pose>-6 -6 7 0 0.55 0.55</camera_pose>
+    </plugin>
+
     <plugin filename="WorldControl" name="World control">
       <ignition-gui>
         <title>World control</title>
