@@ -41,6 +41,32 @@
   gz_type_name: "ignition.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
 
+# Wrist cameras (Gen3 vision modules). The head camera gets the hands to the
+# pre-grasp pose; these close the last stretch onto the marker on each face.
+- ros_topic_name: "/wrist_left/image"
+  gz_topic_name: "/wrist_left/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "ignition.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_left/camera_info"
+  gz_topic_name: "/wrist_left/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "ignition.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_right/image"
+  gz_topic_name: "/wrist_right/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "ignition.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_right/camera_info"
+  gz_topic_name: "/wrist_right/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "ignition.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
 # --- Fingertip contact sensors (defined in robot.urdf.xacro) ---
 # Real finger-on-box contact for honest grasp verification before the attach.
 # NOTE: the Fortress Contact system IGNORES the sensor's custom <topic> tag and

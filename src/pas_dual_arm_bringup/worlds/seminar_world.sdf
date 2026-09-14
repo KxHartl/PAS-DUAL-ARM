@@ -328,6 +328,47 @@
             </pbr>
           </material>
         </visual>
+        <!-- Grasp markers on the two pressed faces, for the wrist cameras. The
+             hands stop about 0.20 m away with their pads facing these, so the
+             plate is 0.12 m (marker proper 0.09 m): the 0.22 m front plate
+             would overflow the frame at that range. Marker 1 is the face the
+             LEFT hand presses (box local +Y), marker 2 the right. -->
+        <visual name="marker_left">
+          <pose>0 0.1505 0 0 0 1.5708</pose>
+          <geometry>
+            <box><size>0.001 0.12 0.12</size></box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0 0 0 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>materials/textures/aruco_marker_1.png</albedo_map>
+                <metalness>0.0</metalness>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
+          </material>
+        </visual>
+        <visual name="marker_right">
+          <pose>0 -0.1505 0 0 0 -1.5708</pose>
+          <geometry>
+            <box><size>0.001 0.12 0.12</size></box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0 0 0 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>materials/textures/aruco_marker_2.png</albedo_map>
+                <metalness>0.0</metalness>
+                <roughness>1.0</roughness>
+              </metal>
+            </pbr>
+          </material>
+        </visual>
       </link>
     </model>
 

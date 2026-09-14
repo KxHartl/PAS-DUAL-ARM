@@ -234,6 +234,40 @@
        (camera/image) + depth image and point cloud (camera/depth_image,
        camera/points) so the box pose and dimensions can be measured by the
        depth sensor for the grasp plan. -->
+  <!-- Wrist cameras. The Kinova description already carries the Gen3 vision
+       module's frames (`*_camera_color_frame`, already in the optical
+       convention), so only the sensor itself was missing. The head camera puts
+       the cube within a couple of centimetres, which is enough to reach the
+       pre-grasp pose but not to close the last 10 cm onto a face; from the
+       pre-grasp pose each wrist looks straight at the marker on the face its
+       own pads will press. Near clip is 0.02 m because the hand ends up within
+       a hand's breadth of the face. -->
+  <xacro:macro name="wrist_camera" params="side">
+    <gazebo reference="${side}_camera_color_frame">
+      <sensor name="${side}_wrist_camera" type="camera">
+        <topic>wrist_${side}</topic>
+        <update_rate>15</update_rate>
+        <always_on>1</always_on>
+        <visualize>false</visualize>
+        <ignition_frame_id>${side}_camera_color_frame</ignition_frame_id>
+        <camera>
+          <horizontal_fov>1.047</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>5.0</far>
+          </clip>
+        </camera>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+  <xacro:wrist_camera side="left"/>
+  <xacro:wrist_camera side="right"/>
+
   <gazebo reference="camera_link">
     <sensor name="rgbd_camera" type="rgbd_camera">
       <topic>camera</topic>

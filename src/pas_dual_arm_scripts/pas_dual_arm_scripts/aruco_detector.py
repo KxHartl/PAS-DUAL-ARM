@@ -71,6 +71,11 @@ class ArucoDetector(Node):
         self.declare_parameter('image_topic', '/camera/image')
         self.declare_parameter('camera_info_topic', '/camera/camera_info')
         self.declare_parameter('marker_frame', 'aruco_marker_frame')
+        # Parameterised because more than one detector now runs at a time (head
+        # camera plus one per wrist); on a shared topic they would overwrite
+        # each other's pose. The default keeps the head detector where every
+        # existing subscriber expects it.
+        self.declare_parameter('pose_topic', '/aruco_single/pose')
 
         self.marker_id = self.get_parameter('marker_id').value
         self.marker_size = self.get_parameter('marker_size').value
@@ -85,7 +90,8 @@ class ArucoDetector(Node):
         self.camera_matrix = None
         self.dist_coeffs = None
 
-        self.pose_pub = self.create_publisher(PoseStamped, '/aruco_single/pose', 10)
+        self.pose_pub = self.create_publisher(
+            PoseStamped, self.get_parameter('pose_topic').value, 10)
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.create_subscription(
