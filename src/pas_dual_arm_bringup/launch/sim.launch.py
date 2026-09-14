@@ -56,6 +56,11 @@ def generate_launch_description():
         'debug_truth', default_value='false',
         description='Bridge Gazebo ground-truth poses on /debug/gz_dynamic_pose '
                     '(diagnostics only - no control node may subscribe).')
+    rviz = LaunchConfiguration('rviz')
+    rviz_arg = DeclareLaunchArgument(
+        'rviz', default_value='false',
+        description='Open RViz with the cube-grasp view (robot, marker TF, '
+                    'computed grasp poses, depth cloud).')
     table_arms_arg = DeclareLaunchArgument(
         'table_arms', default_value='false',
         description='Spawn with the wrists above the 0.75 m tabletop, then '
@@ -257,6 +262,19 @@ def generate_launch_description():
         )
         extra_actions.append(carry_handler)
 
+    # 7a. RViz. sim.launch.py had no view of its own - nav2.launch.py owned the
+    # only one - so a manipulation run had nowhere to see the poses it computes.
+    rviz_config = os.path.join(pkg_bringup, 'rviz', 'cube.rviz')
+    node_rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config],
+        condition=IfCondition(rviz),
+        parameters=[{'use_sim_time': True}],
+        output='both',
+    )
+
     # 7b. Cube-table staging: raise the carriages to tabletop height and hold
     # ARM_HOME. Same mechanism as the carry posture above - a plain trajectory
     # on the position interface, no regulator anywhere.
@@ -278,6 +296,7 @@ def generate_launch_description():
         headless_arg,
         carry_arms_arg,
         table_arms_arg,
+        rviz_arg,
         debug_truth_arg,
         *spawn_args,
         rmw_env,
@@ -289,6 +308,7 @@ def generate_launch_description():
         node_ros_gz_bridge,
         node_ros_gz_bridge_debug,
         node_loc_error,
+        node_rviz,
         detach_box_on_spawn,
         delayed_detach,
         cmd_vel_relay,

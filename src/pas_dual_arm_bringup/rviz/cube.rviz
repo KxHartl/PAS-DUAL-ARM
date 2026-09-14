@@ -1,0 +1,106 @@
+# View for the cube grasp test: the robot, the measured cube, and every pose the
+# grasp is computed from. Everything is on by default - a display that has to be
+# added by hand is a display nobody looks at during a run.
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Description Topic:
+        Value: /robot_description
+      Name: Robot
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Name: TF (marker, hvataljke)
+      Marker Scale: 0.25
+      Show Arrows: false
+      Show Axes: true
+      Show Names: true
+      Frames:
+        All Enabled: false
+        aruco_marker_frame:
+          Value: true
+        base_link:
+          Value: true
+        left_end_effector_link:
+          Value: true
+        right_end_effector_link:
+          Value: true
+        camera_link:
+          Value: true
+      Value: true
+    # Grasp geometry published by the trial script: the fused cube centre, the
+    # two pre-poses and the two contact poses, as one arrow per pose.
+    - Class: rviz_default_plugins/PoseArray
+      Name: Poze hvata
+      Arrow Length: 0.12
+      Axes Length: 0.1
+      Axes Radius: 0.012
+      Color: 255; 170; 0
+      Shape: Axes
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /cube_grasp/poses
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Kocka i oznake
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /cube_grasp/markers
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: AxisColor
+      Axis: Z
+      Name: Oblak dubinske kamere
+      Size (m): 0.006
+      Style: Points
+      Decay Time: 0
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/points
+      Value: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.6
+      Focal Point:
+        X: 0.75
+        Y: 0
+        Z: 0.85
+      Name: Current View
+      Pitch: 0.35
+      Yaw: 3.05
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 900
+  Width: 1400

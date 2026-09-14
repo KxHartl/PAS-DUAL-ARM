@@ -522,6 +522,117 @@ class MainTask(BaseDriver, Node):
         self.get_logger().info(f'{label}: planning {group} (joint-space)')
         return self._send_and_wait(self.move, goal, label)
 
+    def plan_arm_joints(self, group, joints, label):
+        """Plan ONE arm to explicit joint targets WITHOUT executing it, and
+        return the trajectory. Needed because move_group executes one
+        trajectory at a time: a two-arm move driven through it is necessarily
+        sequential, and the arm that arrives first shoves the cube across the
+        table before the opposite one is there to balance it (P-26). Planning
+        both first and releasing them together is the only way the two hands
+        actually travel at the same time."""
+        if not self._wait_server(self.move, 'move_action'):
+            return None
+        goal = MoveGroup.Goal()
+        req = goal.request
+        req.group_name = group
+        req.num_planning_attempts = 10
+        req.allowed_planning_time = 5.0
+        req.max_velocity_scaling_factor = 0.2
+        req.max_acceleration_scaling_factor = 0.2
+        c = Constraints(name=label)
+        for name, val in joints.items():
+            jc = JointConstraint()
+            jc.joint_name = name
+            jc.position = float(val)
+            jc.tolerance_above = 0.02
+            jc.tolerance_below = 0.02
+            jc.weight = 1.0
+            c.joint_constraints.append(jc)
+        req.goal_constraints.append(c)
+        goal.planning_options.plan_only = True
+        self.get_logger().info(f'{label}: planning {group} (joint-space)')
+        send_future = self.move.send_goal_async(goal)
+        handle = self._spin_until_done(send_future)
+        if handle is None or not handle.accepted:
+            self.get_logger().error(f'{label}: planning goal rejected.')
+            return None
+        result_future = handle.get_result_async()
+        result = self._spin_until_done(result_future)
+        if result is None or result.status != GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().error(f'{label}: planning FAILED.')
+            return None
+        traj = result.result.planned_trajectory.joint_trajectory
+        if not traj.points:
+            self.get_logger().error(f'{label}: planner returned an empty path.')
+            return None
+        return traj
+
+    @staticmethod
+    def _stretch_to(traj, duration):
+        """Scale a trajectory's timing so it ends at `duration`. Two separately
+        planned paths have different lengths; without this the short one
+        finishes early and that hand stands alone against the cube for the
+        remainder."""
+        own = (traj.points[-1].time_from_start.sec
+               + traj.points[-1].time_from_start.nanosec * 1e-9)
+        if own <= 0.0 or duration <= own:
+            return
+        scale = duration / own
+        for point in traj.points:
+            t = (point.time_from_start.sec
+                 + point.time_from_start.nanosec * 1e-9) * scale
+            point.time_from_start.sec = int(t)
+            point.time_from_start.nanosec = int((t - int(t)) * 1e9)
+            # The velocities belonged to the original timing.
+            point.velocities = []
+            point.accelerations = []
+
+    def move_arms_parallel(self, trajs, label):
+        """Run both arm trajectories at the same time, sent straight to the two
+        JTCs. Both are stretched to the same duration first, so the hands
+        arrive together rather than one waiting on the other. Returns
+        {side: bool}."""
+        clients = {'left': self.left_jtc, 'right': self.right_jtc}
+        for side, traj in trajs.items():
+            if not self._traj_starts_here(traj, f'{label} {side}'):
+                return {side: False for side in trajs}
+            if not self._wait_server(clients[side], f'{side} JTC'):
+                return {side: False for side in trajs}
+        longest = max(
+            (t.points[-1].time_from_start.sec
+             + t.points[-1].time_from_start.nanosec * 1e-9)
+            for t in trajs.values())
+        for traj in trajs.values():
+            self._stretch_to(traj, longest)
+        self.get_logger().info(
+            f'{label}: releasing {len(trajs)} arms together over '
+            f'{longest:.1f} s')
+        goals = {}
+        for side, traj in trajs.items():
+            goal = FollowJointTrajectory.Goal()
+            goal.trajectory = traj
+            goals[side] = clients[side].send_goal_async(goal)
+        handles = {}
+        for side, future in goals.items():
+            self._spin_until_done(future)
+            handle = future.result()
+            handles[side] = handle if (handle is not None
+                                       and handle.accepted) else None
+        outs = {}
+        for side, handle in handles.items():
+            if handle is None:
+                outs[side] = False
+                self.get_logger().error(f'{label} {side}: JTC rejected the path')
+                continue
+            result_future = handle.get_result_async()
+            self._spin_until_done(result_future)
+            result = result_future.result()
+            outs[side] = (result is not None
+                          and result.status == GoalStatus.STATUS_SUCCEEDED)
+            self.get_logger().info(
+                f'{label} {side}: {"OK" if outs[side] else "FAILED"}')
+        return outs
+
     @staticmethod
     def _roll180(pose):
         """The same pose with the tool rolled 180 deg about its approach axis.
