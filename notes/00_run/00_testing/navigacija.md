@@ -44,11 +44,11 @@ krive i vožnja nema smisla.
 
 ## 2. Terminali
 
-| # | Naredba | Što diže |
-|---|---|---|
-| **T1** | `PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py` | Gazebo, kontroleri, `cmd_vel_relay`, `scan_filter`, **`footprint_publisher`**; ruke se spawnaju u `ARM_CARRY_V2` |
-| **T2** | `./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py` | AMCL + karta, `nav_zones`, `feature_registry`, `room_navigator`, **`collision_monitor`**, Nav2, RViz, panel s tipkama |
-| **T3** | po potrebi, za poze ruku (v. dolje) | — |
+| #      | Naredba                                                                                          | Što diže                                                                                                              |
+| ------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **T1** | `PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py` | Gazebo, kontroleri, `cmd_vel_relay`, `scan_filter`, **`footprint_publisher`**; ruke se spawnaju u `ARM_CARRY_V2`      |
+| **T2** | `./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py`                        | AMCL + karta, `nav_zones`, `feature_registry`, `room_navigator`, **`collision_monitor`**, Nav2, RViz, panel s tipkama |
+| **T3** | po potrebi, za poze ruku (v. dolje)                                                              | —                                                                                                                     |
 
 Pričekaj u T1 da svi kontroleri jave `Configured and activated` prije nego pokreneš T2.
 
@@ -82,8 +82,22 @@ U T3:
 ```
 MoveIt nije potreban — `set_posture` pada na izravno slanje JTC kontrolerima.
 
-**Prihvat:** zeleni poligon u RViz-u se **raširi** pa **stisne**; u T1 se pojavi redak
-`footprint now X m long, Y m wide, N vertices`. U `ARM_CARRY_V2` očekuj ≈ **1.02 × 0.84 m**.
+**Prihvat:** poligon oko robota se **raširi** pa **stisne**; u T1 se pojavi redak
+`footprint now X m long, Y m wide, N vertices`.
+
+Izmjereno (run 48, [[runovi]]) — ovo su brojke s kojima uspoređuješ:
+
+| Poza | Širina | Duljina |
+|---|---|---|
+| `ARM_CARRY_V2` | **0.861 m** | 1.040 m |
+| tijekom zamaha (max) | **1.428 m** | 1.349 m |
+
+> Brojke uključuju `footprint_padding` 0.01 (dakle +0.02 po osi). Bez njega je
+> `ARM_HOME` 1.408 m, što se poklapa s [[P-35_arm_span_too_wide_for_door]] (1.41 m).
+
+> **Zelenog poligona nećeš vidjeti zasebno.** Isti se poligon šalje na oba costmapa, pa
+> `Footprint (lokalni)` (zelen) i `Footprint (globalni)` (narančast) leže jedan na drugome
+> i vidi se samo onaj koji se crta zadnji. Narančasta linija po rubu robota **jest** footprint.
 
 Provjera s naredbenog retka:
 ```bash
