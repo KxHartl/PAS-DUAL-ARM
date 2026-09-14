@@ -326,12 +326,16 @@ def main():
             'lijeva kontakt': contact_left, 'desna kontakt': contact_right,
         })
 
-        # Walk in a step at a time, and watch each hand on its own. A hand
-        # with nothing touching takes a full step; once ONE of its two pads
-        # reports the box it drops to a fine step, so the second pad settles
-        # rather than slams; with both pads down it holds still and becomes the
-        # backstop the other hand presses the cube against. Done when all four
-        # pads are on the box.
+        # Walk in a step at a time, both hands ALWAYS moving together and by
+        # the same amount. Symmetry is the point: equal opposed steps squeeze
+        # the cube rather than shove it, because neither side gets ahead of the
+        # other. Freezing whichever hand lands first would turn the last
+        # millimetres into a one-sided push against a backstop, which is what
+        # bulldozed the cube across the table before (P-26).
+        #
+        # The pads only set the PACE. The moment any one of the four reports
+        # the box, both hands drop to a fine step so the remaining pads settle
+        # instead of slamming. Done when all four report.
         goals = {'left': contact_left, 'right': contact_right}
         limits = {}
         headings = {}
@@ -354,29 +358,31 @@ def main():
                 z=goal.position.z + headings[side][2] * CREEP_OVERSHOOT)
             node.get_logger().info(
                 f'{side}: {span:.3f} m to contact, then at most '
-                f'{CREEP_OVERSHOOT * 100:.1f} cm of interference')
+                f'{CREEP_OVERSHOOT * 100:.1f} cm of squeeze')
 
         for step in range(1, CREEP_MAX_STEPS + 1):
             pads = {side: node.tips_on_box(side) for side in goals}
-            if all(count >= 2 for count in pads.values()):
+            touching = pads['left'] + pads['right']
+            if touching >= 4:
                 break
 
-            moving = {}
-            for side, goal in goals.items():
-                if pads[side] >= 2:
-                    continue                      # holding, backstopping
+            # One step size for both hands, so the squeeze stays balanced.
+            step_size = CREEP_FINE_STEP if touching else CREEP_STEP
+            for side in goals:
                 ee = f'{side}_end_effector_link'
                 here = node._ee_pose(ee)
                 if here is None:
                     raise RuntimeError(f'no TF for {ee}')
-                left_to_go = math.dist(
+                step_size = min(step_size, math.dist(
                     (here.position.x, here.position.y, here.position.z),
-                    (limits[side].x, limits[side].y, limits[side].z))
-                if left_to_go < 1e-3:
-                    continue                      # out of allowed travel
-                step_size = min(
-                    CREEP_FINE_STEP if pads[side] == 1 else CREEP_STEP,
-                    left_to_go)
+                    (limits[side].x, limits[side].y, limits[side].z)))
+            if step_size < 1e-3:
+                break                              # out of allowed squeeze
+
+            moving = {}
+            for side, goal in goals.items():
+                ee = f'{side}_end_effector_link'
+                here = node._ee_pose(ee)
                 pose = Pose()
                 pose.orientation = goal.orientation
                 pose.position = Point(
@@ -385,16 +391,12 @@ def main():
                     z=here.position.z + headings[side][2] * step_size)
                 moving[side] = (f'{side}_arm', ee, pose)
 
-            if not moving:
-                break
-
-            detail = ', '.join(
-                f'{side} {pads[side]}/2 pads, '
-                f'{"fino" if pads[side] == 1 else "normalno"}'
-                for side in sorted(moving))
-            node.get_logger().info(f'step {step}: moving {detail}')
+            node.get_logger().info(
+                f'step {step}: both hands {step_size * 1000:.0f} mm '
+                f'({"fino" if touching else "normalno"}) - pads on the box: '
+                f'left {pads["left"]}/2, right {pads["right"]}/2')
             results = node.approach_both_linear(
-                moving, f'cube contact step {step}',
+                moving, f'cube squeeze step {step}',
                 min_duration=CREEP_SECONDS)
             if results is None or not all(results.values()):
                 raise RuntimeError(f'step {step} did not execute: {results}')

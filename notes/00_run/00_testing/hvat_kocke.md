@@ -167,13 +167,15 @@ ponovno izvede centar i os kocke, pa obje ruke idu **ravnom linijom i istovremen
 Prije pritiska ide poštena provjera: razmak dviju ploha mora biti **0.30 ± 0.03 m**. Krivi marker,
 krivi frame ili preokrenuto PnP rješenje svi ispadnu kao širina koja nije 0.30, i run stane.
 
-#### Prilaz se vodi kontaktnim senzorima, po ruci zasebno
+#### Prilaz se vodi kontaktnim senzorima, obje ruke simetrično
 
-| stanje ruke | korak | zašto |
-|---|---|---|
-| 0 jastučića na kocki | **2 cm** | normalno prilaženje |
-| 1 jastučić na kocki | **5 mm** | drugi prst mora sjesti, ne tresnuti |
-| 2 jastučića na kocki | **stoji** | postaje oslonac o koji druga ruka pritišće kocku |
+Obje ruke se **uvijek miču zajedno i za isti iznos**. Simetrija je bit: jednaki suprotni koraci
+kocku **stegnu**, ne gurnu, jer nijedna strana ne pretekne drugu. Jastučići određuju samo **tempo**:
+
+| kontakt | korak obje ruke |
+|---|---|
+| nijedan jastučić | **2 cm** |
+| bilo koji jastučić javi kocku | **5 mm** |
 
 Staje kad **sva četiri** jastučića jave svjež kontakt s `aruco_box`. Dopušteno je najviše
 **2.5 cm** preko zadane kontaktne poze — kocka (ne poza) zaustavlja jastučić, pa kontakt prolazi i
