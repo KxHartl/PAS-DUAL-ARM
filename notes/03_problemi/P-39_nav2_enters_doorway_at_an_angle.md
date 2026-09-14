@@ -62,6 +62,8 @@ Uz to su zone i waypointi bili magični brojevi na dva mjesta (`generate_keepout
 
 | 13 | 14. 9. `a3cc8da` | run s 8 vrhova i rezolucijom 0.025 | ⚠ prolaz **uspio**, ali robot stane tocno kad ude u vrata, stoji **~30 s**, pa prode uredno. `Control loop missed` pao s 1184 na 3; nova greska je `Failed to make progress` (×3) | `scan_filter` s `half_width` 0.47 brise bliži dovratnik cim je bocni otklon > 3 cm (dovratnik je na 0.50). Bez povrata voxel sloj te celije **ne moze ni oznaciti ni raytraceom ocistiti**, pa oznake s prilaza ostanu zamrznute u prolazu. 30 s je `movement_time_allowance`; oslobodi ga recovery koji ocisti costmap. Maska suzena na **0.30 × 0.45**, prema stvarnoj sirini sasije na visini lasera |
 
+| 14 | 14. 9. | povratak crvena -> home, isti run | ❌ **`ABORT before leg 2/3: 0.095 m off the lane centreline (limit 0.08)`** — gate je ispravno odbio, robot ostao stajati | kontradikcija u konfiguraciji: `xy_goal_tolerance` 0.10 dopusta Nav2-u da parkira 10 cm od portala, a gate trazi <= 8 cm, pa legalan dolazak moze biti nelegalno stanje **bez ikakvog izlaza**. Otkloni kroz run rastu 0.022 -> 0.042 -> 0.076 -> 0.095. Gate se ne smije popustiti (fizicki budzet 7.75 cm po strani), pa je pritegnuta isporuka: `xy_goal_tolerance` -> **0.05**, `required_movement_radius` -> **0.05** |
+
 ## Nalazi koji vrijede neovisno o tome koji je sloj u kodu
 Izračunati 14. 9. pri analizi pokušaja 10 i 11. Vrijede i za referentni run A, pa ih
 treba imati na umu pri svakoj sljedećoj izmjeni:
