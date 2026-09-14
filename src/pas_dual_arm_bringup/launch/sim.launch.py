@@ -48,6 +48,11 @@ def generate_launch_description():
     carry_arms_arg = DeclareLaunchArgument(
         'carry_arms', default_value='false',
         description='Spawn robot with arms folded in carry posture.')
+    spawn_args = [
+        DeclareLaunchArgument('robot_spawn_x', default_value='0.0'),
+        DeclareLaunchArgument('robot_spawn_y', default_value='0.0'),
+        DeclareLaunchArgument('robot_spawn_yaw', default_value='0.0'),
+    ]
 
     world_file = os.path.join(pkg_bringup, 'worlds', 'seminar_world.sdf')
     urdf_file = os.path.join(pkg_bringup, 'urdf', 'robot.urdf.xacro')
@@ -98,6 +103,9 @@ def generate_launch_description():
         executable='create',
         arguments=['-topic', '/robot_description',
                    '-name', 'dual_arm_robot',
+                   '-x', LaunchConfiguration('robot_spawn_x'),
+                   '-y', LaunchConfiguration('robot_spawn_y'),
+                   '-Y', LaunchConfiguration('robot_spawn_yaw'),
                    '-z', '0.0'],
         output='both'
     )
@@ -212,6 +220,7 @@ def generate_launch_description():
     return LaunchDescription([
         headless_arg,
         carry_arms_arg,
+        *spawn_args,
         rmw_env,
         zenoh_env,
         ign_resource_env,

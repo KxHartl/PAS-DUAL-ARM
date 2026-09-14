@@ -30,7 +30,16 @@ this worktree only; never source the main worktree's `install/` overlay.
    interface with JTC PID reached 0.1944 m after 2 s, held 0.2000 m after
    10 s, and returned to 0.0500 m on both sides (C2). Cube-contact load remains
    to be tested. Do not repeat the failed effort-limit/gain-only tweaks.
-2. **Perception:** measure the cube from the established ~0.9 m view; compare
+2. **Perception (marker baseline passed):** `sim.launch.py` now accepts
+   `robot_spawn_x`, `robot_spawn_y`, and `robot_spawn_yaw` so isolated tests can
+   start beside the blue table without exercising navigation. With the base at
+   `(0, -5.0, -pi/2)`, marker 0 was detected at about 13 Hz. Its transform in
+   `base_link` was stable at `(1.211, 0.016, 0.820)` m; adding the known 0.15 m
+   face-to-center offset gives `(1.361, 0.016, 0.820)` m. The world-defined
+   center is 1.35 m ahead of this spawn pose, an approximately 1 cm X error.
+   A fresh `/camera/points` cloud was also observed. This validates marker
+   acquisition only, not the depth-derived box size or pose. Next, move to the
+   established ~0.9 m view and compare
    marker and depth centers, reject stale or disagreeing samples, and recheck
    after base motion. Gazebo pose is diagnostic only, never a control input.
 3. **Contact pick:** derive both pad targets from the measured cube pose and
