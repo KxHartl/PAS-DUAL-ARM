@@ -274,6 +274,16 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}],
         output='both',
     )
+    # The rgbd sensor stamps the optical frame but ships body-convention data,
+    # so RViz draws the raw cloud ~90 deg off to the side. Relay a corrected
+    # copy for display; the control path keeps reading the raw topic.
+    node_cloud_restamp = Node(
+        package='pas_dual_arm_scripts',
+        executable='cloud_restamp',
+        condition=IfCondition(rviz),
+        parameters=[{'use_sim_time': True}],
+        output='both',
+    )
 
     # 7b. Cube-table staging: raise the carriages to tabletop height and hold
     # ARM_HOME. Same mechanism as the carry posture above - a plain trajectory
@@ -309,6 +319,7 @@ def generate_launch_description():
         node_ros_gz_bridge_debug,
         node_loc_error,
         node_rviz,
+        node_cloud_restamp,
         detach_box_on_spawn,
         delayed_detach,
         cmd_vel_relay,

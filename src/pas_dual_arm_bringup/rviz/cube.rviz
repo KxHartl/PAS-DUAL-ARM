@@ -67,7 +67,7 @@ Visualization Manager:
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: AxisColor
       Axis: Z
-      Name: Oblak dubinske kamere
+      Name: Oblak dubinske kamere (ispravljen frame)
       Size (m): 0.006
       Style: Points
       Decay Time: 0
@@ -76,7 +76,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera/points
+        Value: /camera/points_body
       Value: true
   Global Options:
     Background Color: 48; 48; 48
