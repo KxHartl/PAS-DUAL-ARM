@@ -64,7 +64,8 @@ Uz to su zone i waypointi bili magični brojevi na dva mjesta (`generate_keepout
 
 | 14 | 14. 9. | povratak crvena -> home, isti run | ❌ **`ABORT before leg 2/3: 0.095 m off the lane centreline (limit 0.08)`** — gate je ispravno odbio, robot ostao stajati | kontradikcija u konfiguraciji: `xy_goal_tolerance` 0.10 dopusta Nav2-u da parkira 10 cm od portala, a gate trazi <= 8 cm, pa legalan dolazak moze biti nelegalno stanje **bez ikakvog izlaza**. Otkloni kroz run rastu 0.022 -> 0.042 -> 0.076 -> 0.095. Gate se ne smije popustiti (fizicki budzet 7.75 cm po strani), pa je pritegnuta isporuka: `xy_goal_tolerance` -> **0.05**, `required_movement_radius` -> **0.05** |
 
-| 15 | 14. 9. `3679f83` | run nakon pritezanja tolerancije na 0.05 | ❌ robot stoji 76 s na **0.09 m** od cilja, `Recoveries: 3`; izmjereno: `/cmd_vel`, `/cmd_vel_safe`, `reference_unstamped` i odometrija **svi tocno nula** (235 poruka u 12 s) | `xy_goal_tolerance` postoji na **dva** mjesta. Promijenjen je samo `general_goal_checker` (0.05), a `FollowPath` je ostao 0.10 — a `RotateToGoalCritic` cita **taj**: unutar 0.10 m odbacuje svaku trajektoriju koja jos translatira. DWB je dakle smatrao da je stigao i smio se samo rotirati, a gate da nije stigao. Potpun zastoj dok progress checker ne odustane. **Oba moraju biti jednaka** |
+| 16 | 14. 9. | nadogradnja na PAL Tiago Omni Base lidar + SE(2) RotationShimController + fino uzorkovanje | ❌ robot stigao 2.9 cm od portala, ali zakrenut na **+132.6°** (`ABORT before leg 2/3`) | Uzrok: `use_final_approach_orientation: true` u NavFn-u prebrisao je kut cilja ($0.0^\circ$) kutom zadnjeg dijagonalnog koraka A* rešetke ($+132.6^\circ$); `RotationShimController` nepotrebno rotirao omni bazu; `debug_trajectory_details: true` serijalizirao 15.625 trajektorija na 20 Hz |
+| 17 | 14. 9. | uklonjen `use_final_approach_orientation`, uklonjen `RotationShimController`, `debug_trajectory_details: false`; zadržano **20 Hz, 15.625 trajektorija, 1 cm / 0.01 rad rezolucija**, PAL lidar 1080 zraka / 25 Hz | u tijeku verifikacije | NavFn zadržava točan kut portala ($0.0^\circ$ / $-90.0^\circ$); DWB vodi omni bazu direktno bez shima i bez serijalizacijskog laga |
 
 ## Nalazi koji vrijede neovisno o tome koji je sloj u kodu
 Izračunati 14. 9. pri analizi pokušaja 10 i 11. Vrijede i za referentni run A, pa ih
@@ -75,9 +76,11 @@ treba imati na umu pri svakoj sljedećoj izmjeni:
    Sve šire briše dovratnike i noge stolova. Vrijednost je **0.30 × 0.45**. Staro (0.47):
    pa ih maska od 0.52 briše iz `/scan_filtered` — dakle iz `local_costmap.voxel_layer`
    **i** iz AMCL-a, i to baš dok robot prolazi kroz vrata. Vrijednost je 0.47.
-2. **Keepout traka usmjerava, ali ne centrira.** Uz `lane_margin −0.20` guide walls stoje na
-   ±0.675 m, pa robot (±0.427) ima 24.8 cm bočne slobode unutar trake, a fizička vrata
-   dopuštaju 4.8 cm. Zonu drži prolaznom fizički dovratnik, ne maska.
+2. **Keepout traka je gotovo jednako uska kao vrata.** Uz `lane_margin −0.05` guide walls
+   stoje na ±0.525 m, pa je traka 1.05 m široka: robotu (0.845) ostaje **10.3 cm po strani**
+   unutar trake, a fizička vrata (1.0 m) daju 7.75 cm. Traka dakle ne veže — veže dovratnik —
+   ali je dovoljno blizu da se oboje mora računati zajedno.
+   *(Ranija tvrdnja o 24.8 cm bila je iz zastarjele vrijednosti u bilješkama, ne iz koda.)*
 3. **Ploča stola prepušta noge 5 cm po strani** (ploča 0.80, noge 0.70), a lidar na 0.209 m
    vidi samo noge. Ono u što robot udara nije ni u jednom senzorskom sloju.
 4. **Kod stola je problem obilazak, ne prilaz** (korisnik, 14. 9.) — **izmjereno na živoj

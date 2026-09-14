@@ -70,10 +70,10 @@ Nema naredbi. Pogledaj popis prikaza čim se RViz otvori.
 Sve mora biti vidljivo **odmah, bez reseta i bez ručnog dodavanja**:
 
 - **robot** (`RobotModel`) — ne samo TF osi;
-- **zelena traka** kroz oba prolaza, 0.50 m sa svake strane;
+- **zelena traka** kroz oba prolaza, **0.85 m** sa svake strane;
 - **crveni lijevci** lijevo i desno od trake;
 - **narančasti halo** oko oba stola, otvoren prema vratima;
-- **plave strelice** = portalne poze, 1.45 m ispred i iza svakih vrata, okomite na zid;
+- **plave strelice** = portalne poze, **1.80 m** ispred i iza svakih vrata, okomite na zid;
 - **linija po rubu robota** = footprint;
 - **žuti klin ispred robota** = `collision_monitor`, footprint projiciran unaprijed.
 
