@@ -28,8 +28,8 @@ DEFAULT_OUTPUTS = ['/camera/points_body',
                    '/wrist_left/points_body',
                    '/wrist_right/points_body']
 DEFAULT_FRAMES = ['camera_link',
-                  'left_wrist_cam_body_frame',
-                  'right_wrist_cam_body_frame']
+                  'left_camera_color_frame',
+                  'right_camera_color_frame']
 
 
 class CloudRestamp(Node):

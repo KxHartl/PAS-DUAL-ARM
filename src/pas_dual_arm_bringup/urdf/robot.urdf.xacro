@@ -243,31 +243,26 @@
        own pads will press. Near clip is 0.02 m because the hand ends up within
        a hand's breadth of the face. -->
   <xacro:macro name="wrist_camera" params="side">
-    <!-- Aim. kortex_description has two mountings for the vision module and
-         they do not agree: the real one looks along end_effector +Z, which is
-         the gripper's approach axis, while the sim branch looks along +Y - and
-         its own comment says the sim rotation "might not apply to built in
-         vision module". At a side-grasp pre-pose, +Y points straight at the
-         ceiling, so on the sim frame the camera could never see the face its
-         own pads press. Mount on a frame that follows the real module: optical
-         z along the approach axis, at the vision module's own origin. -->
+    <!-- Aiming rule: an Ignition camera looks along the +X axis of the link
+         its sensor is attached to, with +Y left and +Z up. That is why the
+         head camera hangs on camera_link (x forward) and not on an optical
+         frame. Checked against the Kinova frames: camera_color_frame's +X is
+         end_effector +Z, which is exactly the gripper's approach axis - so it
+         is already the right mount, and the sensor goes there unchanged.
+         The cloud data comes out in that same frame.
+
+         What was missing is a frame to NAME the image in. The detectors solve
+         PnP in the optical convention (z along the view, x right, y down), and
+         no Kinova sim frame is that, so declare one: a half turn about the
+         approach axis from the end effector. It matches kortex's own non-sim
+         mounting, which is the real module's orientation. -->
     <link name="${side}_wrist_cam_optical_frame"/>
     <joint name="${side}_wrist_cam_optical_joint" type="fixed">
-      <origin rpy="0 0 0" xyz="0 0.05639 0.01305"/>
+      <origin rpy="0 0 3.14159265358979" xyz="0 0.05639 0.01305"/>
       <parent link="${side}_end_effector_link"/>
       <child link="${side}_wrist_cam_optical_frame"/>
     </joint>
-    <!-- gz ships cloud data in the sensor BODY convention whatever frame it
-         stamps, so give the cloud somewhere correct to be drawn: x along the
-         view, z up in the image. Same role camera_link plays for the head. -->
-    <link name="${side}_wrist_cam_body_frame"/>
-    <joint name="${side}_wrist_cam_body_joint" type="fixed">
-      <origin rpy="1.5707963267948966 -1.5707963267948966 0"
-              xyz="0 0.05639 0.01305"/>
-      <parent link="${side}_end_effector_link"/>
-      <child link="${side}_wrist_cam_body_frame"/>
-    </joint>
-    <gazebo reference="${side}_wrist_cam_optical_frame">
+    <gazebo reference="${side}_camera_color_frame">
       <sensor name="${side}_wrist_camera" type="rgbd_camera">
         <topic>wrist_${side}</topic>
         <update_rate>15</update_rate>
