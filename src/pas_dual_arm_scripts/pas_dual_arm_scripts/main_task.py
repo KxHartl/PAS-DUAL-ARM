@@ -466,7 +466,8 @@ class MainTask(BaseDriver, Node):
             return False
         return self._send_and_wait(self.exec_traj, goal, label)
 
-    def _ik(self, group, ee, pose, seed=None, avoid_collisions=False):
+    def _ik(self, group, ee, pose, seed=None, avoid_collisions=False,
+            timeout=3.0):
         """Joint solution {name: position} for `ee` at `pose`, or None. With
         `seed` (a prior solution dict) the solver starts on that BRANCH, so
         pre-pose and press-pose solutions stay a small joint motion apart."""
@@ -479,7 +480,8 @@ class MainTask(BaseDriver, Node):
         r.pose_stamped.header.frame_id = 'base_link'
         r.pose_stamped.pose = pose
         r.avoid_collisions = avoid_collisions
-        r.timeout.sec = 3
+        r.timeout.sec = int(timeout)
+        r.timeout.nanosec = int((timeout - int(timeout)) * 1e9)
         if seed is None:
             r.robot_state.is_diff = True
         else:
