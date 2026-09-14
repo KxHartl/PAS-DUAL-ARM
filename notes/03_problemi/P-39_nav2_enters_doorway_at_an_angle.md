@@ -72,7 +72,9 @@ treba imati na umu pri svakoj sljedećoj izmjeni:
    dopuštaju 4.8 cm. Zonu drži prolaznom fizički dovratnik, ne maska.
 3. **Ploča stola prepušta noge 5 cm po strani** (ploča 0.80, noge 0.70), a lidar na 0.209 m
    vidi samo noge. Ono u što robot udara nije ni u jednom senzorskom sloju.
-4. **Kod stola je problem obilazak, ne prilaz** (korisnik, 14. 9.): gate pun 1.80 m nije
+4. **Kod stola je problem obilazak, ne prilaz** (korisnik, 14. 9.) — **izmjereno na živoj
+   maski 14. 9.**: presjek kroz crveni stol pokazuje da je od `x=5.64` do `x=6.19` maska
+   potpuno prazna punom širinom halo-a, a tek od `x=6.40` zatvorena. Gate pun 1.80 m nije
    čeoni ulaz nego slobodan koridor uz sam prednji brid ploče, pa je put s jedne strane
    stola na drugu najkraći baš uz stol. Uz to postoji samo **jedno** prilazno lice, pa cilj
    na suprotnoj strani leži u keepoutu i NavFn ga s `tolerance: 0.5` privuče na rub halo-a.
