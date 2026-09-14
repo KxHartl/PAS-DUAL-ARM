@@ -36,6 +36,14 @@ TARGET_RANGE = 0.62
 # to hold the whole face marker in frame.
 PRE_STANDOFF = 0.20
 
+# Robotiq 2F-85 knuckle: 0.0 fully open, 0.8 fully closed. The hands arrive
+# OPEN. Closed pads sit in front of the wrist camera and crowd its view of the
+# face marker, and an open hand puts BOTH fingertip pads on the flat face
+# instead of one closed block - four contact points across the two hands
+# rather than two, which is what the four fingertip contact sensors are there
+# to confirm, and far steadier against yaw.
+GRIPPER_OPEN = 0.0
+
 # What stops the base. Everything on the robot below 0.23 m passes under the
 # tabletop and between the near table legs (they are 0.70 m apart, the base is
 # 0.497 m wide). The limit is the forwardmost structure ABOVE tabletop height:
@@ -144,6 +152,13 @@ def main():
                 raise RuntimeError('Camera pan/tilt command failed')
             center, axis = measure(node)
 
+        # Open first, then measure: the stand-off is read from where the pads
+        # actually are, and an open hand's pads sit differently from a closed
+        # one's.
+        for label, client in (('left', node.left_grip),
+                              ('right', node.right_grip)):
+            if not node.set_gripper(client, GRIPPER_OPEN, f'open {label} hand'):
+                raise RuntimeError(f'{label} gripper did not open')
         node.measure_tip_standoff()
         pre_left, pre_right = node.squeeze_poses(
             center, axis, pre=PRE_STANDOFF)

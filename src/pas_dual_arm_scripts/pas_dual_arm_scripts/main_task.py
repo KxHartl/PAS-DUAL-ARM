@@ -360,6 +360,7 @@ class MainTask(BaseDriver, Node):
         from TF (end_effector_link -> finger_tip_link) so grasp goals can place the
         finger tips, not the wrist, on the bar. Updates self.tip_standoff."""
         vals = []
+        spread = []
         for side in ('left', 'right'):
             for f in ('left', 'right'):
                 try:
@@ -368,14 +369,21 @@ class MainTask(BaseDriver, Node):
                         f'{side}_robotiq_85_{f}_finger_tip_link',
                         rclpy.time.Time())
                     t = tf.transform.translation
-                    vals.append(math.sqrt(t.x * t.x + t.y * t.y + t.z * t.z))
+                    # Project onto the approach axis (+Z) rather than taking
+                    # the distance. With the fingers CLOSED the two are the
+                    # same to within a millimetre, but open pads sit well off
+                    # the axis, and their distance would then read as reach the
+                    # hand does not have - stopping it short of the face.
+                    vals.append(t.z)
+                    spread.append(math.hypot(t.x, t.y))
                 except Exception:
                     continue
         if vals:
             self.tip_standoff = sum(vals) / len(vals)
             self.get_logger().info(
                 f'Measured wrist->fingertip stand-off = {self.tip_standoff:.3f} m '
-                f'({len(vals)} tips).')
+                f'along the approach axis, pads {sum(spread) / len(spread):.3f} m '
+                f'off it ({len(vals)} tips).')
         else:
             self.get_logger().warn(
                 f'Could not measure fingertip stand-off; using nominal '
