@@ -55,6 +55,16 @@ this worktree only; never source the main worktree's `install/` overlay.
    small bounded steps, and require fresh box-only contacts on both sides.
    With Gazebo's rigid joint disabled, lift 0.15 m using the measured carriage
    motion while maintaining the two contacts. Repeat before trying transit.
+   Current read-only pose probe in the GUI sim (base at `(0,-5.5,-pi/2)`):
+   the fused centre is `(0.849,0.000,0.821)` in `base_link`, marker tangent
+   nearly `+Y`, and measured wrist-to-tip stand-off 0.115 m. Left/right
+   pre-contact wrist positions are `(0.849,+0.365,0.821)` and
+   `(0.849,-0.365,0.821)`; contact positions are
+   `(0.849,+0.265,0.821)` and `(0.849,-0.265,0.821)` (all metres).
+   Both contact and pre-contact IK fail from this observation range. Read-only
+   predicted centres at X=0.65 and X=0.55 m pass IK for both arms and both
+   poses. The next trial must move the base closer, remeasure the cube, add
+   collision objects, and verify executable paths before moving the arms.
 4. **Carry:** verify the contact-held cube through a 0.4 m straight move and a
    slow turn; compare its motion with the hands. Check the full robot-plus-box
    swept width before attempting the 1.0 m doors. Stop on loss of contact or

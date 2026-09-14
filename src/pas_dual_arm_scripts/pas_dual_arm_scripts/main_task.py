@@ -928,6 +928,7 @@ class MainTask(BaseDriver, Node):
         smooth out per-frame solvePnP jitter."""
         deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
         xs, ys, zs = [], [], []
+        seen_stamps = set()
         while rclpy.ok() and self.get_clock().now().nanoseconds < deadline:
             try:
                 tf = self.tf_buffer.lookup_transform(
@@ -939,6 +940,11 @@ class MainTask(BaseDriver, Node):
                        - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9))
                 if age > 0.5:
                     raise RuntimeError('stale marker')
+                stamp = (tf.header.stamp.sec, tf.header.stamp.nanosec)
+                if stamp in seen_stamps:
+                    rclpy.spin_once(self, timeout_sec=0.05)
+                    continue
+                seen_stamps.add(stamp)
                 t = tf.transform.translation
                 xs.append(t.x)
                 ys.append(t.y)
