@@ -58,6 +58,8 @@ Uz to su zone i waypointi bili magični brojevi na dva mjesta (`generate_keepout
 | 10 | 14. 9. | na run A naslagan sloj: `realign_to_portal`, `_transit_doorway` (2.9 m s isključenim Nav2), `doorway_margin` umjesto `aligned_with`, prekid kod stola na 25 cm | ❌ **nikad odvoženo**; `aligned_with` ostao u datoteci, ali ga nitko ne zove | novi gate odbija **upravo prolaz iz runa A**: `0.95 − swept(4.2°) − 0.05 = −2.5 cm` → ABORT. Zamijenjen je kriterij koji je propustio stvarni prolaz, bez runa koji bi to opravdao |
 | 11 | 14. 9. | na to naslagano još: `envelope_monitor` s `require_envelope` (po defaultu **odbija voziti**), mjerenje iz dovratnika, 3 pokušaja poravnanja, kutni `scan_filter` | ❌ **nikad odvoženo**; korisnik: „trenutačno sustav radi najgore ikad" | dodan još jedan razlog za abort na stanje koje već nije vozilo. Kod je sačuvan na grani `wip/door-transit-closed-loop`; `main` vraćen na run A |
 
+| 12 | 14. 9. `b5ee64e` | prvi run s ispravnim usmjeravanjem (alat 2D Goal Pose): portal pogoden 9.8 cm / +2.7 stupnjeva, gate prosao | **`No valid trajectories out of 3711`**, status 6, pa Nav2 recovery zavrtio robota u mjestu (to je bio neobjasnjivi yaw) | izmjereno u lokalnom costmapu: u otvoru od **100 cm** slobodno je samo **80 cm**, a robot s paddingom 86.2 cm. DWB je bio u pravu; greska je u tome **sto costmap crta** |
+
 ## Nalazi koji vrijede neovisno o tome koji je sloj u kodu
 Izračunati 14. 9. pri analizi pokušaja 10 i 11. Vrijede i za referentni run A, pa ih
 treba imati na umu pri svakoj sljedećoj izmjeni:
@@ -76,7 +78,13 @@ treba imati na umu pri svakoj sljedećoj izmjeni:
    na suprotnoj strani leži u keepoutu i NavFn ga s `tolerance: 0.5` privuče na rub halo-a.
 5. `_front_clear()` iz pokušaja 10 nije mogao opaliti: tražio je povrat u koridoru koji je
    maska iz točke 1 već obrisala.
-6. **RViz „Nav2 Goal" zaobilazi `room_navigator`.** `nav2_rviz_plugins/GoalTool` šalje
+6. **Costmap izmislja prepreku koje nema - tri izvora, svi nasi:**
+   `footprint_padding` 0.01 (2 cm, dvostruko brojanje otkad je footprint izmjeren),
+   **rezolucija 5 cm** (rezerva od 4 cm po strani je manja od celije, pa se dovratnik
+   zaokruzi prema unutra), i **lidar od 360 zraka** (1 stupanj, na 1.8 m to je 3 cm razmaka).
+   Prva dva rijesena 14. 9. (padding 0, lokalna rezolucija 0.025); lidar ostaje otvoren
+   jer dira model robota, kartu i AMCL.
+7. **RViz „Nav2 Goal" zaobilazi `room_navigator`.** `nav2_rviz_plugins/GoalTool` šalje
    izravno akciju `navigate_to_pose`, dakle nema portalnih poza ni okomitog ulaza — planer
    vuče dijagonalu prema cilju. Alat `rviz_default_plugins/SetGoal` („2D Goal Pose"), koji
    objavljuje na `/goal_pose` i ide kroz navigator, **u konfiguraciji dugo nije ni postojao**
