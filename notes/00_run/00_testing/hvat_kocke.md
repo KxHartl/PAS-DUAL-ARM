@@ -66,6 +66,15 @@ Kad je test gotov, puna vožnja do te poze ide preko `room_navigator` (`blue:doc
 bash scripts/run_cube_isolated.sh ros2 launch pas_dual_arm_bringup task.launch.py auto_start:=false
 ```
 
+> [!danger] Nikad dvije simulacije odjednom
+> Oba Gazeba objavljuju `/clock` na istoj domeni, pa vrijeme skače naprijed-natrag. RViz javlja
+> `Detected jump back in time` stotinama puta u sekundi, resetira se na svaki, i na kraju pukne s
+> `Cannot create GL vertex buffer`. Iz simptoma se uzrok ne vidi. Prije pokretanja:
+> ```bash
+> bash scripts/clean_ros.sh
+> ```
+> `run_cube_isolated.sh` to od 15. 9. i sam odbija — javi `GRESKA: simulacija vec radi`.
+
 > [!danger] Bez `auto_start:=false` robot krene sam
 > `task.launch.py` ima `auto_start` zadano na `true` i **12 s nakon pokretanja sam digne
 > `main_task`** — cijeli stari slijed hvata, s vožnjom i pritiskom. Tako se 15. 9. robot

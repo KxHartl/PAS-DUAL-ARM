@@ -128,9 +128,14 @@ def main():
         node.get_logger().info(
             f'table-ready staging done (carriages={"ok" if carriages_ok else "SHORT"}, '
             f'arms={"ok" if arms_ok else "FAILED"})')
+    except KeyboardInterrupt:
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        # On Ctrl-C the signal handler has already shut the context down, and
+        # calling it again raises over the real exit reason.
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

@@ -46,7 +46,10 @@ def main():
             print(f'{frame} ({p[0]:.3f},{p[1]:.3f},{p[2]:.3f}) m', flush=True)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        # On Ctrl-C the signal handler has already shut the context down, and
+        # calling it again raises over the real exit reason.
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
