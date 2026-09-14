@@ -1008,8 +1008,11 @@ class MainTask(BaseDriver, Node):
         # (seen live: length 0.63 for the 0.30 bar, grippers closed on air).
         # The marker sits on the box face, so nothing of the box can be higher
         # than the face centre + ~box height; points above that are arms/other.
-        m = ((P[:, 2] > 0.12) & (P[:, 2] < min(0.50, seed.z + 0.20))
-             & (P[:, 0] > 0.35) & (P[:, 0] < 1.0)
+        # The pickup table puts the box around z=0.9 m in the current world.
+        # Anchor the crop to the observed marker instead of the old floor-box
+        # height, while excluding tabletop points below the marker.
+        m = ((P[:, 2] > seed.z - 0.10) & (P[:, 2] < seed.z + 0.25)
+             & (P[:, 0] > 0.35) & (P[:, 0] < seed.x + 0.25)
              & (np.abs(P[:, 0] - seed.x) < 0.25)
              & (np.abs(P[:, 1] - seed.y) < 0.30))
         B = P[m]

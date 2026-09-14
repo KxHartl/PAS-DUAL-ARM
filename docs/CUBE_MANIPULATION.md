@@ -37,11 +37,19 @@ this worktree only; never source the main worktree's `install/` overlay.
    `base_link` was stable at `(1.211, 0.016, 0.820)` m; adding the known 0.15 m
    face-to-center offset gives `(1.361, 0.016, 0.820)` m. The world-defined
    center is 1.35 m ahead of this spawn pose, an approximately 1 cm X error.
-   A fresh `/camera/points` cloud was also observed. This validates marker
-   acquisition only, not the depth-derived box size or pose. Next, move to the
-   established ~0.9 m view and compare
-   marker and depth centers, reject stale or disagreeing samples, and recheck
-   after base motion. Gazebo pose is diagnostic only, never a control input.
+   A fresh `/camera/points` cloud was also observed. At the closer
+   `(0, -5.5, -pi/2)` spawn, the original depth crop found zero box points:
+   its `z < 0.50 m` limit came from the old floor-level scene. Anchoring the
+   crop to the observed marker gave 37,789 candidate points, a 0.300 m long
+   axis and 0.252 m visible height. Marker-derived centre was
+   `(0.8535, 0.0157, 0.8211)` m and depth-derived centre was
+   `(0.8490, 0.0000, 0.8479)` m in `base_link`: 4.5 mm X, 15.7 mm Y, and
+   26.8 mm Z disagreement. The partial visible height and Z offset need
+   further validation before using depth height to set a grasp. Recheck after
+   base motion and reject stale or disagreeing samples. Gazebo pose is
+   diagnostic only, never a control input. Reproduce with
+   `bash scripts/run_cube_isolated.sh python3 scripts/probe_cube_perception.py --ros-args -p use_sim_time:=true`
+   while the isolated sim and ArUco launches run.
 3. **Contact pick:** derive both pad targets from the measured cube pose and
    width. Move to collision-checked pregrasp poses, press simultaneously with
    small bounded steps, and require fresh box-only contacts on both sides.
