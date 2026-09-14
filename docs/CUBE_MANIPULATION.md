@@ -1,0 +1,56 @@
+# Cube manipulation workstream
+
+This branch develops perception, pick, carry, and place independently of the
+ongoing navigation work on `main`. Run every ROS/Gazebo command through
+`bash scripts/run_cube_isolated.sh`: it selects ROS domain 75, Gazebo partition
+`pas_dual_arm_cube_75`, and a worktree-local ROS home. Build and launch from
+this worktree only; never source the main worktree's `install/` overlay.
+
+## Ground truth and existing behavior
+
+- The current SDF, not older notes, defines a 0.30 m / 0.3 kg cube at
+  `(0, -6.35, 0.90)` on a table whose top is `z = 0.75 m`. The destination
+  table is centered at `(6.5, 0)` with the same top height.
+- `aruco_detector.py` identifies marker 0; `main_task.py` combines the marker
+  and depth cloud before approaching. This path has prior GUI evidence, but
+  must be repeated against this world's geometry.
+- The current pick uses closed grippers as pads, presses both sides, enables
+  Gazebo's DetachableJoint, and lifts with the left arm. Project requirement
+  R-17 explicitly rejects this as a completed grasp. The current place returns
+  the cube to the pickup table, not the destination.
+- The arm position controller can report success despite substantial measured
+  joint error (P-37); loaded torso carriages currently do not rise (P-13).
+  Read back `/joint_states` and actual transforms after every motion.
+
+## Experiments and acceptance gates
+
+1. **Actuation baseline (passed with arm load):** with no cube contact, command
+   and measure both carriage heights. The old position interface returned
+   `SUCCEEDED` but stayed at 0.050 m for a 0.200 m goal (C1). The new effort
+   interface with JTC PID reached 0.1944 m after 2 s, held 0.2000 m after
+   10 s, and returned to 0.0500 m on both sides (C2). Cube-contact load remains
+   to be tested. Do not repeat the failed effort-limit/gain-only tweaks.
+2. **Perception:** measure the cube from the established ~0.9 m view; compare
+   marker and depth centers, reject stale or disagreeing samples, and recheck
+   after base motion. Gazebo pose is diagnostic only, never a control input.
+3. **Contact pick:** derive both pad targets from the measured cube pose and
+   width. Move to collision-checked pregrasp poses, press simultaneously with
+   small bounded steps, and require fresh box-only contacts on both sides.
+   With Gazebo's rigid joint disabled, lift 0.15 m using the measured carriage
+   motion while maintaining the two contacts. Repeat before trying transit.
+4. **Carry:** verify the contact-held cube through a 0.4 m straight move and a
+   slow turn; compare its motion with the hands. Check the full robot-plus-box
+   swept width before attempting the 1.0 m doors. Stop on loss of contact or
+   tracking. A rigid joint is a fallback only after the user's explicit decision.
+5. **Place:** use a fixed point on the near side of the red table. The
+   cube-center target is `(6.32, 0, 0.90)`, leaving 0.07 m between cube and
+   near tabletop edge. A small visual-only X is in the SDF at `(6.32, 0, 0.751)`.
+   Solve collision-free base/arm staging before lowering. Set the cube down gently,
+   open/retreat both hands, and confirm that it remains upright on the X.
+
+Keep the cube in MoveIt's planning scene throughout: as a world object before
+contact, an [attached collision object](https://moveit.picknik.ai/humble/doc/examples/planning_scene_ros_api/planning_scene_ros_api_tutorial.html)
+during transport, and a world object at the observed destination after release.
+That planning representation does not create a physical Gazebo joint. ROS 2
+Control documents [effort-interface PID tracking](https://control.ros.org/humble/doc/ros2_controllers/joint_trajectory_controller/doc/parameters.html)
+for the carriage experiment.

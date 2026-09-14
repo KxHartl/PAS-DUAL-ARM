@@ -27,6 +27,7 @@ updated: 2026-09-14
 | ploča markera | 0.22 m (-X ploha, x = -0.1505) | `WORLD` model `aruco_box` | [[P-08_marker_not_detected_texture]] |
 | `pick_table` | (0, **-6.5**), 4 noge, ploča 0.8 × 0.8 na **z = 0.75 m** | `WORLD` | plava soba; 4 noge na z=0..0.71 |
 | `place_table` | (**6.5**, 0), 4 noge, ploča 0.8 × 0.8 na **z = 0.75 m** | `WORLD` | crvena soba, odredište ([[R-13_destination_place]]) |
+| točka odlaganja / vizualni X | središte kocke (**6.32**, 0, 0.90), X na z=0.751 | `WORLD` model `place_target_x` | 0.22 m od bližeg ruba; kocka ima 0.07 m rezerve do ruba |
 
 ## Robot
 | trenje kotača mu1 / mu2 | **0.80 / 0.20** (anizotropno, fdir1 ±45° u `base_footprint`) | `src/pas_dual_arm_bringup/urdf/base/wheel.urdf.xacro` | [[P-09_omni_drive_on_fortress]], [[R-08_omni_controller]] |
@@ -35,7 +36,7 @@ updated: 2026-09-14
 | trenje jastučića prstiju | mu1 = mu2 = 5.0 | `URDF` l. 122–123 | squeeze |
 | masa vodilice / klizača | 12 kg / 2 kg | `dual_arm_torso.urdf.xacro` l. 24, 55, 92 | procjena ([[R-06_realistic_parameters]]) |
 | klizač limit | **0.05–0.65 m** (13. 9.; bilo 0.05–0.8), 1000 N, 0.5 m/s | `dual_arm_torso.urdf.xacro` l. 71, 105 | hod stvarne vodilice (odluka korisnika); [[P-13_torso_prismatic_no_lift]] |
-| torzo `position_proportional_gain` | 20.0 | `URDF` l. 301, 312 | [[P-13_torso_prismatic_no_lift]] |
+| torzo command interface / PID | `effort`; p=1500, i=500, d=100, i_clamp=300; goal tolerancija 0.01 m, goal_time 3 s | `URDF` + `CTRL` `torso_controller` | izolirani headless pokus C2: 0.05→0.20→0.05 m, stvarna greška nakon 10 s <1 mm ([[P-13_torso_prismatic_no_lift]]) |
 | lidar | 360 zraka, 10 Hz | `URDF` l. 192–201 | [[P-06_classic_only_sensors]] |
 | RGBD kamera | 640×480, 15 Hz, HFOV 1.211 | `URDF` l. 226–236 | [[S-05_perception]] |
 | pan-tilt početni pitch | **0.45 rad** (~25.8° dolje prema stolu) | `URDF` l. 355 | usmjerenje prema stolu 75 cm |

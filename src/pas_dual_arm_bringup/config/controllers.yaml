@@ -101,10 +101,19 @@ torso_controller:
       - torso_left_carriage_joint
       - torso_right_carriage_joint
     command_interfaces:
-      - position
+      - effort
     state_interfaces:
       - position
       - velocity
+    constraints:
+      goal_time: 3.0
+      torso_left_carriage_joint:
+        goal: 0.01
+      torso_right_carriage_joint:
+        goal: 0.01
+    gains:
+      torso_left_carriage_joint: {p: 1500.0, i: 500.0, d: 100.0, i_clamp: 300.0}
+      torso_right_carriage_joint: {p: 1500.0, i: 500.0, d: 100.0, i_clamp: 300.0}
 
 pan_tilt_controller:
   ros__parameters:
