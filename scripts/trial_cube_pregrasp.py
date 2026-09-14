@@ -61,7 +61,17 @@ WIDTH_TOLERANCE = 0.03
 # for 0.20 m in the first trial - and shoves the cube across the table before
 # anything has a chance to notice a pad has landed.
 CREEP_STEP = 0.02
+CREEP_FINE_STEP = 0.005
 CREEP_SECONDS = 2.0
+
+# Allowed travel past the commanded contact pose. The pads are meant to be
+# stopped by the CUBE, not by arriving at a pose: a couple of centimetres of
+# interference makes contact certain even if the face is read a little short.
+# Nothing presses harder for it - the step stops the instant a pad reports.
+CREEP_OVERSHOOT = 0.025
+
+# Give up rather than creep forever if the pads never report.
+CREEP_MAX_STEPS = 40
 
 # What stops the base. Everything on the robot below 0.23 m passes under the
 # tabletop and between the near table legs (they are 0.70 m apart, the base is
@@ -316,74 +326,100 @@ def main():
             'lijeva kontakt': contact_left, 'desna kontakt': contact_right,
         })
 
-        # Walk in, a step at a time, reading the pads between steps.
+        # Walk in a step at a time, and watch each hand on its own. A hand
+        # with nothing touching takes a full step; once ONE of its two pads
+        # reports the box it drops to a fine step, so the second pad settles
+        # rather than slams; with both pads down it holds still and becomes the
+        # backstop the other hand presses the cube against. Done when all four
+        # pads are on the box.
         goals = {'left': contact_left, 'right': contact_right}
-        starts = {}
-        for side in goals:
+        limits = {}
+        headings = {}
+        for side, goal in goals.items():
             ee = f'{side}_end_effector_link'
             node._wait_settle(ee)
             here = node._ee_pose(ee)
             if here is None:
                 raise RuntimeError(f'no TF for {ee}')
-            starts[side] = here.position
-        travel = max(
-            math.dist((starts[s].x, starts[s].y, starts[s].z),
-                      (goals[s].position.x, goals[s].position.y,
-                       goals[s].position.z))
-            for s in goals)
-        steps = max(1, int(math.ceil(travel / CREEP_STEP)))
-        node.get_logger().info(
-            f'closing {travel:.3f} m in {steps} steps of about '
-            f'{travel / steps * 100:.1f} cm, {CREEP_SECONDS:.0f} s each')
+            dx = goal.position.x - here.position.x
+            dy = goal.position.y - here.position.y
+            dz = goal.position.z - here.position.z
+            span = math.sqrt(dx * dx + dy * dy + dz * dz)
+            if span < 1e-4:
+                raise RuntimeError(f'{side} is already at its contact pose')
+            headings[side] = (dx / span, dy / span, dz / span)
+            limits[side] = Point(
+                x=goal.position.x + headings[side][0] * CREEP_OVERSHOOT,
+                y=goal.position.y + headings[side][1] * CREEP_OVERSHOOT,
+                z=goal.position.z + headings[side][2] * CREEP_OVERSHOOT)
+            node.get_logger().info(
+                f'{side}: {span:.3f} m to contact, then at most '
+                f'{CREEP_OVERSHOOT * 100:.1f} cm of interference')
 
-        landed = False
-        for step in range(1, steps + 1):
-            fraction = step / steps
-            waypoints = {}
+        for step in range(1, CREEP_MAX_STEPS + 1):
+            pads = {side: node.tips_on_box(side) for side in goals}
+            if all(count >= 2 for count in pads.values()):
+                break
+
+            moving = {}
             for side, goal in goals.items():
+                if pads[side] >= 2:
+                    continue                      # holding, backstopping
+                ee = f'{side}_end_effector_link'
+                here = node._ee_pose(ee)
+                if here is None:
+                    raise RuntimeError(f'no TF for {ee}')
+                left_to_go = math.dist(
+                    (here.position.x, here.position.y, here.position.z),
+                    (limits[side].x, limits[side].y, limits[side].z))
+                if left_to_go < 1e-3:
+                    continue                      # out of allowed travel
+                step_size = min(
+                    CREEP_FINE_STEP if pads[side] == 1 else CREEP_STEP,
+                    left_to_go)
                 pose = Pose()
                 pose.orientation = goal.orientation
                 pose.position = Point(
-                    x=starts[side].x + fraction * (goal.position.x - starts[side].x),
-                    y=starts[side].y + fraction * (goal.position.y - starts[side].y),
-                    z=starts[side].z + fraction * (goal.position.z - starts[side].z))
-                waypoints[side] = (f'{side}_arm', f'{side}_end_effector_link',
-                                   pose)
-            results = node.approach_both_linear(
-                waypoints, f'cube contact step {step}/{steps}',
-                min_duration=CREEP_SECONDS)
-            if results is None or not all(results.values()):
-                raise RuntimeError(
-                    f'step {step}/{steps} did not execute: {results}')
-            pads = {side: node.tips_on_box(side) for side in goals}
-            node.get_logger().info(
-                f'step {step}/{steps}: pads on the box - '
-                f'left {pads["left"]}/2, right {pads["right"]}/2')
-            if pads['left'] and pads['right']:
-                node.get_logger().info(
-                    'both hands are touching the box; stopping here rather '
-                    'than driving on to the commanded pose')
-                landed = True
+                    x=here.position.x + headings[side][0] * step_size,
+                    y=here.position.y + headings[side][1] * step_size,
+                    z=here.position.z + headings[side][2] * step_size)
+                moving[side] = (f'{side}_arm', ee, pose)
+
+            if not moving:
                 break
 
-        # Honest report. The first trial printed success while the hands were
-        # 0.115 and 0.150 m off, because nothing read verify_reached back.
-        ok = True
+            detail = ', '.join(
+                f'{side} {pads[side]}/2 pads, '
+                f'{"fino" if pads[side] == 1 else "normalno"}'
+                for side in sorted(moving))
+            node.get_logger().info(f'step {step}: moving {detail}')
+            results = node.approach_both_linear(
+                moving, f'cube contact step {step}',
+                min_duration=CREEP_SECONDS)
+            if results is None or not all(results.values()):
+                raise RuntimeError(f'step {step} did not execute: {results}')
+
+        pads = {side: node.tips_on_box(side) for side in goals}
+        node.get_logger().info(
+            f'pads on the box: left {pads["left"]}/2, right {pads["right"]}/2')
         for side, goal in goals.items():
             ee = f'{side}_end_effector_link'
-            node._wait_settle(ee)
-            if not node.verify_reached(ee, goal, tol=0.02,
-                                       label=f'{side} cube contact'):
-                ok = False
-        pads = {side: node.tips_on_box(side) for side in goals}
-        if not (landed or (pads['left'] and pads['right'])):
+            here = node._ee_pose(ee)
+            if here is not None:
+                gap = math.dist(
+                    (here.position.x, here.position.y, here.position.z),
+                    (goal.position.x, goal.position.y, goal.position.z))
+                node.get_logger().info(
+                    f'{side} stopped {gap * 1000:.0f} mm from the commanded '
+                    'contact pose')
+        # Honest report. The first trial printed success while the hands were
+        # 0.115 and 0.150 m off, because nothing read the check back. Stopping
+        # short of the commanded pose is fine and expected - the pads are what
+        # decides, and four of them have to say so.
+        if not all(count >= 2 for count in pads.values()):
             raise RuntimeError(
-                f'no box contact on both hands (left {pads["left"]}/2, '
-                f'right {pads["right"]}/2)')
-        if not ok:
-            node.get_logger().warn(
-                'pads report box contact but the wrists are off the commanded '
-                'pose - the cube is being touched somewhere other than planned')
+                f'only {pads["left"] + pads["right"]} of 4 pads are on the box '
+                f'(left {pads["left"]}/2, right {pads["right"]}/2)')
         print('BOTH_HANDS_ON_THE_CUBE', flush=True)
     finally:
         node._send_vel(0.0, 0.0)

@@ -167,6 +167,26 @@ ponovno izvede centar i os kocke, pa obje ruke idu **ravnom linijom i istovremen
 Prije pritiska ide poštena provjera: razmak dviju ploha mora biti **0.30 ± 0.03 m**. Krivi marker,
 krivi frame ili preokrenuto PnP rješenje svi ispadnu kao širina koja nije 0.30, i run stane.
 
+#### Prilaz se vodi kontaktnim senzorima, po ruci zasebno
+
+| stanje ruke | korak | zašto |
+|---|---|---|
+| 0 jastučića na kocki | **2 cm** | normalno prilaženje |
+| 1 jastučić na kocki | **5 mm** | drugi prst mora sjesti, ne tresnuti |
+| 2 jastučića na kocki | **stoji** | postaje oslonac o koji druga ruka pritišće kocku |
+
+Staje kad **sva četiri** jastučića jave svjež kontakt s `aruco_box`. Dopušteno je najviše
+**2.5 cm** preko zadane kontaktne poze — kocka (ne poza) zaustavlja jastučić, pa kontakt prolazi i
+kad je ploha očitana koji milimetar prekratko.
+
+Ako sva četiri ne jave kontakt, run **padne** s brojem jastučića. Zaustavljanje prije zadane poze
+nije greška nego cilj — odlučuju jastučići, ne poza.
+
+> [!warning] Senzor sile ne postoji
+> Imamo četiri **kontaktna** senzora u vrhovima prstiju (`/contact/*_tip`), koji nose imena
+> sudarenih tijela pa se broji samo dodir s `aruco_box` — dodir stola ili sebe ne prolazi. To je
+> „dira / ne dira", ne sila. Zglobovi ruku nemaju `effort` u `state_interfaces`.
+
 ## Korak 5 — vodilice +10 cm
 
 Tek kad obje ruke stvarno stoje u svojim točkama. Dignuti obje vodilice za 0.10 m i gledati u
