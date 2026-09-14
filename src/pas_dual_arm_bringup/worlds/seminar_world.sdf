@@ -332,9 +332,18 @@
              hands stop about 0.20 m away with their pads facing these, so the
              plate is 0.12 m (marker proper 0.09 m): the 0.22 m front plate
              would overflow the frame at that range. Marker 1 is the face the
-             LEFT hand presses (box local +Y), marker 2 the right. -->
+             LEFT hand presses (box local +Y), marker 2 the right.
+
+             Raised 0.056 m above the face centre, because that is where the
+             camera is. The Gen3 vision module sits at (0, 0.05639, 0.01305)
+             from the wrist, so with the pads lined up on the face centre the
+             camera looks along a line 5.6 cm higher - which put the old
+             centred marker's top edge (z = 0.881) exactly on the camera's
+             axis (0.877). One hand decoded it and the other did not. Moving
+             the marker instead of pitching the hand keeps the pads flat
+             against the face. -->
         <visual name="marker_left">
-          <pose>0 0.1505 0 0 0 1.5708</pose>
+          <pose>0 0.1505 0.056 0 0 1.5708</pose>
           <geometry>
             <box><size>0.001 0.12 0.12</size></box>
           </geometry>
@@ -352,7 +361,7 @@
           </material>
         </visual>
         <visual name="marker_right">
-          <pose>0 -0.1505 0 0 0 -1.5708</pose>
+          <pose>0 -0.1505 0.056 0 0 -1.5708</pose>
           <geometry>
             <box><size>0.001 0.12 0.12</size></box>
           </geometry>
