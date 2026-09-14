@@ -391,5 +391,24 @@
       </link>
     </model>
 
+    <!-- Visual-only place target: cube center is 0.22 m inboard of the near
+         (west) table edge, leaving 0.07 m clearance for the 0.30 m cube. -->
+    <model name="place_target_x">
+      <static>true</static>
+      <pose>6.32 0 0.751 0 0 0</pose>
+      <link name="mark">
+        <visual name="stroke_a">
+          <pose>0 0 0 0 0 0.785398</pose>
+          <geometry><box><size>0.09 0.01 0.002</size></box></geometry>
+          <material><ambient>1 0.15 0.05 1</ambient><diffuse>1 0.15 0.05 1</diffuse></material>
+        </visual>
+        <visual name="stroke_b">
+          <pose>0 0 0 0 0 -0.785398</pose>
+          <geometry><box><size>0.09 0.01 0.002</size></box></geometry>
+          <material><ambient>1 0.15 0.05 1</ambient><diffuse>1 0.15 0.05 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
   </world>
 </sdf>

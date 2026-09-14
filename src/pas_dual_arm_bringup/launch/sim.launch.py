@@ -56,6 +56,15 @@ def generate_launch_description():
         'debug_truth', default_value='false',
         description='Bridge Gazebo ground-truth poses on /debug/gz_dynamic_pose '
                     '(diagnostics only - no control node may subscribe).')
+    table_arms_arg = DeclareLaunchArgument(
+        'table_arms', default_value='false',
+        description='Spawn with the wrists above the 0.75 m tabletop, then '
+                    'command the carriages up (cube-table staging).')
+    spawn_args = [
+        DeclareLaunchArgument('robot_spawn_x', default_value='0.0'),
+        DeclareLaunchArgument('robot_spawn_y', default_value='0.0'),
+        DeclareLaunchArgument('robot_spawn_yaw', default_value='0.0'),
+    ]
 
     world_file = os.path.join(pkg_bringup, 'worlds', 'seminar_world.sdf')
     urdf_file = os.path.join(pkg_bringup, 'urdf', 'robot.urdf.xacro')
@@ -85,9 +94,18 @@ def generate_launch_description():
         carry_arms = 'false'
     if carry_arms not in ('true', 'false'):
         raise ValueError('carry_arms must be true or false')
+    table_arms = 'false'
+    for arg in sys.argv:
+        if arg.startswith('table_arms:='):
+            table_arms = arg.split(':=', 1)[1].strip().lower()
+    if table_arms not in ('true', 'false'):
+        raise ValueError('table_arms must be true or false')
+    if table_arms == 'true' and carry_arms == 'true':
+        raise ValueError('table_arms and carry_arms cannot both be true')
     robot_xml = subprocess.check_output(
         ['xacro', urdf_file, 'sim_ignition:=true',
-         f'carry_arms:={carry_arms}']).decode('utf-8')
+         f'carry_arms:={carry_arms}',
+         f'table_arms:={table_arms}']).decode('utf-8')
     robot_xml = re.sub(r'(scale="[0-9. ]*)-([0-9])', r'\1\2', robot_xml)
 
     # Do not inject position_proportional_gain into joint interfaces here:
@@ -106,6 +124,9 @@ def generate_launch_description():
         executable='create',
         arguments=['-topic', '/robot_description',
                    '-name', 'dual_arm_robot',
+                   '-x', LaunchConfiguration('robot_spawn_x'),
+                   '-y', LaunchConfiguration('robot_spawn_y'),
+                   '-Y', LaunchConfiguration('robot_spawn_yaw'),
                    '-z', '0.0'],
         output='both'
     )
@@ -236,10 +257,29 @@ def generate_launch_description():
         )
         extra_actions.append(carry_handler)
 
+    # 7b. Cube-table staging: raise the carriages to tabletop height and hold
+    # ARM_HOME. Same mechanism as the carry posture above - a plain trajectory
+    # on the position interface, no regulator anywhere.
+    if table_arms == 'true':
+        table_ready = Node(
+            package='pas_dual_arm_scripts',
+            executable='table_ready',
+            output='both',
+            parameters=[{'use_sim_time': True}],
+        )
+        extra_actions.append(RegisterEventHandler(
+            event_handler=OnProcessExit(
+                target_action=controller_spawners[-1],
+                on_exit=[table_ready]
+            )
+        ))
+
     return LaunchDescription([
         headless_arg,
         carry_arms_arg,
+        table_arms_arg,
         debug_truth_arg,
+        *spawn_args,
         rmw_env,
         zenoh_env,
         ign_resource_env,

@@ -928,6 +928,7 @@ class MainTask(BaseDriver, Node):
         smooth out per-frame solvePnP jitter."""
         deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
         xs, ys, zs = [], [], []
+        seen_stamps = set()
         while rclpy.ok() and self.get_clock().now().nanoseconds < deadline:
             try:
                 tf = self.tf_buffer.lookup_transform(
@@ -939,6 +940,11 @@ class MainTask(BaseDriver, Node):
                        - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9))
                 if age > 0.5:
                     raise RuntimeError('stale marker')
+                stamp = (tf.header.stamp.sec, tf.header.stamp.nanosec)
+                if stamp in seen_stamps:
+                    rclpy.spin_once(self, timeout_sec=0.05)
+                    continue
+                seen_stamps.add(stamp)
                 t = tf.transform.translation
                 xs.append(t.x)
                 ys.append(t.y)
@@ -1008,10 +1014,13 @@ class MainTask(BaseDriver, Node):
         # (seen live: length 0.63 for the 0.30 bar, grippers closed on air).
         # The marker sits on the box face, so nothing of the box can be higher
         # than the face centre + ~box height; points above that are arms/other.
-        m = ((P[:, 2] > 0.12) & (P[:, 2] < min(0.50, seed.z + 0.20))
-             & (P[:, 0] > 0.35) & (P[:, 0] < 1.0)
-             & (np.abs(P[:, 0] - seed.x) < 0.25)
-             & (np.abs(P[:, 1] - seed.y) < 0.30))
+        # The pickup table puts the box around z=0.9 m in the current world.
+        # Anchor the crop to the observed marker instead of the old floor-box
+        # height, while excluding tabletop points below the marker.
+        m = ((P[:, 2] > seed.z - 0.10) & (P[:, 2] < seed.z + 0.25)
+             & (P[:, 0] > max(0.35, seed.x - 0.19))
+             & (P[:, 0] < seed.x + 0.18)
+             & (np.abs(P[:, 1] - seed.y) < 0.20))
         B = P[m]
         if len(B) < 40:
             self.get_logger().warn(

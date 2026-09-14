@@ -7,6 +7,7 @@
   <xacro:arg name="use_sim_time" default="true"/>
   <xacro:arg name="sim_ignition" default="true"/>
   <xacro:arg name="carry_arms" default="false"/>
+  <xacro:arg name="table_arms" default="false"/>
   
   <!-- 1. OMNI BASE -->
   <!-- We include ONLY the structural part of the omni_base (base_link, base_footprint,
@@ -51,6 +52,14 @@
   <xacro:if value="$(arg carry_arms)">
     <xacro:property name="initial_left_arm" value="${dict(joint_1=0.0,joint_2=1.571,joint_3=2.356,joint_4=-1.571,joint_5=-0.785,joint_6=1.571,joint_7=1.571)}"/>
     <xacro:property name="initial_right_arm" value="${dict(joint_1=0.0,joint_2=1.571,joint_3=0.785,joint_4=1.571,joint_5=0.785,joint_6=-1.571,joint_7=-1.571)}"/>
+  </xacro:if>
+  <!-- Cube-table staging: the wrists start above the 0.75 m tabletop, so the
+       arms cannot catch the table edge on the way out (the carry posture holds
+       them at 0.49 m, below the top). The carriages still start at their lower
+       limit and are commanded up by `table_ready`. -->
+  <xacro:if value="$(arg table_arms)">
+    <xacro:property name="initial_left_arm" value="${dict(joint_1=0.0,joint_2=0.26,joint_3=3.14,joint_4=-2.27,joint_5=0.0,joint_6=0.96,joint_7=1.57)}"/>
+    <xacro:property name="initial_right_arm" value="${dict(joint_1=0.0,joint_2=0.26,joint_3=3.14,joint_4=-2.27,joint_5=0.0,joint_6=0.96,joint_7=1.57)}"/>
   </xacro:if>
   
   <!-- Left Arm -->

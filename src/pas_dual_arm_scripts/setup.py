@@ -29,6 +29,7 @@ setup(
             'main_task = pas_dual_arm_scripts.main_task:main',
             'mapping_tour = pas_dual_arm_scripts.mapping_tour:main',
             'set_posture = pas_dual_arm_scripts.set_posture:main',
+            'table_ready = pas_dual_arm_scripts.table_ready:main',
             'scan_filter = pas_dual_arm_scripts.scan_filter:main',
             'footprint_publisher = pas_dual_arm_scripts.footprint_publisher:main',
             'feature_registry = pas_dual_arm_scripts.feature_registry:main',
