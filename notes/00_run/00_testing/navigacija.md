@@ -218,6 +218,7 @@ Upisati u [[runovi]] i u pripadnu P-karticu — **i kad ne uspije**.
 | `alignment: … off the lane centreline (limit 0.08)` | gate je **ispravno** odbio: s tolikim bočnim otklonom robot fizički ne prolazi (budžet je 7.75 cm po strani). Robot ostaje stajati jer nema oporavka | pošalji ga malo unazad i ponovi. Ako se ponavlja, provjeri da je `xy_goal_tolerance` **uži** od `centreline_tolerance` — inače Nav2 smije isporučiti stanje koje gate mora odbiti |
 | `No valid trajectories out of N!` (DWB) | u costmapu **nema** prolaza dovoljno širokog za footprint — nije greška upravljača | izmjeri stvarnu širinu koju costmap vidi (dolje) |
 | `Control loop missed its desired rate` (×1000) | upravljač ne stigne u 10 Hz; Nav2 to čita kao zaglavljenog robota → `Failed to make progress` → recovery `Spin` | smanji trošak: `max_vertices` footprinta, rezoluciju lokalnog costmapa ili broj uzoraka DWB-a |
+| robot stoji, a sve je `active` | provjeri je li lanac naredbi **nula**: `ros2 topic echo /cmd_vel --once`. Ako jest, DWB odlučuje stajati — najčešće jer su `xy_goal_tolerance` u `general_goal_checker` i u `FollowPath` **različiti** ([[P-39_nav2_enters_doorway_at_an_angle]] #15) | izjednači ih |
 | `Failed to make progress` | robot se nije pomaknuo 10 cm u 30 s; Nav2 pokrene recovery koji **očisti costmap**, pa nastavi | ako staje baš na ulazu u vrata pa nakon ~30 s prođe: zastarjele ćelije koje laser više ne vidi (provjeri `scan_filter` masku) |
 
 Kad DWB javi da nema valjanih trajektorija, izmjeri koliko je slobodno **u costmapu**, ne u svijetu:

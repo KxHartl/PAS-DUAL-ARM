@@ -176,7 +176,14 @@ controller_server:
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.10
+      # Must equal general_goal_checker's. RotateToGoalCritic reads THIS one and,
+      # inside it, rejects any trajectory that still translates - the robot is
+      # meant to be rotating onto the goal heading by then. Leaving it at 0.10
+      # while the goal checker asked for 0.05 deadlocked the robot at 0.09 m:
+      # DWB refused to drive the last four centimetres and the checker refused to
+      # call it arrived, so every topic from /cmd_vel down carried exact zero
+      # until the progress checker gave up and Nav2 ran a recovery.
+      xy_goal_tolerance: 0.05
       trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True

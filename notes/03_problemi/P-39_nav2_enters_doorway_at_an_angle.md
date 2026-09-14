@@ -64,6 +64,8 @@ Uz to su zone i waypointi bili magični brojevi na dva mjesta (`generate_keepout
 
 | 14 | 14. 9. | povratak crvena -> home, isti run | ❌ **`ABORT before leg 2/3: 0.095 m off the lane centreline (limit 0.08)`** — gate je ispravno odbio, robot ostao stajati | kontradikcija u konfiguraciji: `xy_goal_tolerance` 0.10 dopusta Nav2-u da parkira 10 cm od portala, a gate trazi <= 8 cm, pa legalan dolazak moze biti nelegalno stanje **bez ikakvog izlaza**. Otkloni kroz run rastu 0.022 -> 0.042 -> 0.076 -> 0.095. Gate se ne smije popustiti (fizicki budzet 7.75 cm po strani), pa je pritegnuta isporuka: `xy_goal_tolerance` -> **0.05**, `required_movement_radius` -> **0.05** |
 
+| 15 | 14. 9. `3679f83` | run nakon pritezanja tolerancije na 0.05 | ❌ robot stoji 76 s na **0.09 m** od cilja, `Recoveries: 3`; izmjereno: `/cmd_vel`, `/cmd_vel_safe`, `reference_unstamped` i odometrija **svi tocno nula** (235 poruka u 12 s) | `xy_goal_tolerance` postoji na **dva** mjesta. Promijenjen je samo `general_goal_checker` (0.05), a `FollowPath` je ostao 0.10 — a `RotateToGoalCritic` cita **taj**: unutar 0.10 m odbacuje svaku trajektoriju koja jos translatira. DWB je dakle smatrao da je stigao i smio se samo rotirati, a gate da nije stigao. Potpun zastoj dok progress checker ne odustane. **Oba moraju biti jednaka** |
+
 ## Nalazi koji vrijede neovisno o tome koji je sloj u kodu
 Izračunati 14. 9. pri analizi pokušaja 10 i 11. Vrijede i za referentni run A, pa ih
 treba imati na umu pri svakoj sljedećoj izmjeni:
