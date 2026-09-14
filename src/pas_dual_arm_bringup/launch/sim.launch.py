@@ -88,7 +88,7 @@ def generate_launch_description():
     node_robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        output='screen',
+        output='both',
         parameters=[robot_description, {'use_sim_time': use_sim_time}]
     )
     
@@ -99,7 +99,7 @@ def generate_launch_description():
         arguments=['-topic', '/robot_description',
                    '-name', 'dual_arm_robot',
                    '-z', '0.0'],
-        output='screen'
+        output='both'
     )
     
     # 4. ROS-GZ Bridge (Clock, Joint States, Cmd Vel, Odom, TF)
@@ -112,7 +112,7 @@ def generate_launch_description():
             'config_file': bridge_config,
             'qos_overrides./tf_static.publisher.durability': 'transient_local',
         }],
-        output='screen'
+        output='both'
     )
 
     # 5. Controller Spawners
@@ -125,7 +125,7 @@ def generate_launch_description():
             # Large CM timeout: Gazebo Fortress needs ~50-60 s to load this big model,
             # so a short default makes spawners retry and double-load ("already loaded").
             arguments=[name, '--controller-manager-timeout', '120'],
-            output='screen',
+            output='both',
         )
 
     controller_names = [
@@ -145,12 +145,12 @@ def generate_launch_description():
     cmd_vel_relay = Node(
         package='pas_dual_arm_scripts',
         executable='cmd_vel_relay',
-        output='screen',
+        output='both',
     )
     scan_filter = Node(
         package='pas_dual_arm_scripts',
         executable='scan_filter',
-        output='screen',
+        output='both',
         parameters=[{'use_sim_time': True}],
     )
     # Publishes the robot's real outline to both costmaps' footprint topics.
@@ -161,7 +161,7 @@ def generate_launch_description():
         package='pas_dual_arm_scripts',
         executable='footprint_publisher',
         name='footprint_publisher',
-        output='screen',
+        output='both',
         parameters=[{'use_sim_time': True}],
     )
 
@@ -175,7 +175,7 @@ def generate_launch_description():
                 ExecuteProcess(
                     cmd=['ign', 'topic', '-t', '/aruco_box/detach',
                          '-m', 'ignition.msgs.Empty', '-p', 'unused: true'],
-                    output='screen',
+                    output='both',
                 )
             ]
         )
@@ -186,7 +186,7 @@ def generate_launch_description():
             ExecuteProcess(
                 cmd=['ign', 'topic', '-t', '/aruco_box/detach',
                      '-m', 'ignition.msgs.Empty', '-p', 'unused: true'],
-                output='screen',
+                output='both',
             )
         ]
     )
@@ -198,7 +198,7 @@ def generate_launch_description():
             package='pas_dual_arm_scripts',
             executable='set_posture',
             arguments=['ARM_CARRY_V2'],
-            output='screen',
+            output='both',
             parameters=[{'use_sim_time': True}],
         )
         carry_handler = RegisterEventHandler(

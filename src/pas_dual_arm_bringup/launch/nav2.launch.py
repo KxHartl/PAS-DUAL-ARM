@@ -32,7 +32,7 @@ def generate_launch_description():
         description='Saved occupancy map for AMCL localization')
     mapping = Node(
         package='slam_toolbox', executable='async_slam_toolbox_node',
-        name='slam_toolbox', output='screen',
+        name='slam_toolbox', output='both',
         parameters=[os.path.join(pkg_bringup, 'config', 'slam_params.yaml'),
                     {'use_sim_time': True}],
         condition=IfCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
@@ -72,7 +72,7 @@ def generate_launch_description():
                     'Set false to compare against plain Nav2.')
     nav_zones = Node(
         package='pas_dual_arm_scripts', executable='nav_zones',
-        name='nav_zones', output='screen',
+        name='nav_zones', output='both',
         parameters=[{'use_sim_time': True}],
         condition=IfCondition(zones),
     )
@@ -80,7 +80,7 @@ def generate_launch_description():
         package='nav2_map_server',
         executable='costmap_filter_info_server',
         name='costmap_filter_info_server',
-        output='screen',
+        output='both',
         parameters=[{
             'use_sim_time': True,
             'type': 0,
@@ -94,7 +94,7 @@ def generate_launch_description():
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='lifecycle_manager_costmap_filters',
-        output='screen',
+        output='both',
         parameters=[{
             'use_sim_time': True,
             'autostart': True,
@@ -116,7 +116,7 @@ def generate_launch_description():
         package='nav2_collision_monitor',
         executable='collision_monitor',
         name='collision_monitor',
-        output='screen',
+        output='both',
         parameters=[os.path.join(pkg_bringup, 'config', 'collision_monitor.yaml')],
         condition=IfCondition(safety),
     )
@@ -124,7 +124,7 @@ def generate_launch_description():
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='lifecycle_manager_safety',
-        output='screen',
+        output='both',
         parameters=[{
             'use_sim_time': True,
             'autostart': True,
@@ -146,13 +146,13 @@ def generate_launch_description():
     delayed_nav2 = TimerAction(period=7.0, actions=[nav2_group])
     features = Node(
         package='pas_dual_arm_scripts', executable='feature_registry',
-        output='screen', parameters=[{'use_sim_time': True}],
+        output='both', parameters=[{'use_sim_time': True}],
     )
     # Drives room-to-room legs off the zone graph. Started with Nav2 so the
     # GUI has something to talk to; it does nothing until asked.
     room_navigator = Node(
         package='pas_dual_arm_scripts', executable='room_navigator',
-        name='room_navigator', output='screen',
+        name='room_navigator', output='both',
         parameters=[{'use_sim_time': True}],
         condition=IfCondition(zones),
     )
@@ -164,7 +164,7 @@ def generate_launch_description():
                                     description='Open the room navigation button panel')
     nav_gui = Node(
         package='pas_dual_arm_scripts', executable='nav_gui',
-        name='nav_gui', output='screen',
+        name='nav_gui', output='both',
         parameters=[{'use_sim_time': True}],
         condition=IfCondition(gui),
     )

@@ -52,29 +52,29 @@ krive i vožnja nema smisla.
 
 Pričekaj u T1 da svi kontroleri jave `Configured and activated` prije nego pokreneš T2.
 
-### Log u datoteku (da se ispis ne mora prepisivati)
+### Log se piše sam (ne treba ništa kopirati)
 
-Agent **ne vidi** tvoje terminale. Terminatorov broadcast šalje *unos* u više terminala i tu
-ne pomaže. Najjednostavnije je pustiti izlaz kroz `tee`, pa ga onda može pročitati bilo tko,
-i ti i agent, bez kopiranja u chat:
+Agent **ne vidi** tvoje terminale, a Terminatorov broadcast šalje *unos* u više terminala i
+tu ne pomaže. Ali ne treba ni `tee`: oba launcha imaju `output='both'`, pa svaki čvor piše i
+na ekran **i** u datoteku. Ništa ne moraš raditi drukčije nego dosad.
 
+Zadnji run:
 ```bash
-mkdir -p /tmp/pas
-# T1
-PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py 2>&1 | tee /tmp/pas/t1.log
-# T2
-./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py 2>&1 | tee /tmp/pas/t2.log
+ls -dt ~/.ros/log/*/ | head -2            # dvije najnovije mape: sim i nav2
+d=$(ls -dt ~/.ros/log/*/ | head -1); ls "$d"
 ```
 
-Izlaz i dalje ide na ekran, a usput se sprema. Korisni izvadci:
-
+Ono što nas zanima nakon vožnje:
 ```bash
-grep -E "footprint now|alignment:|arms:|tightest|aborted|ABORT" /tmp/pas/*.log
-tail -f /tmp/pas/t2.log
+grep -hE "footprint now|alignment:|arms:|tightest|aborted|ABORT|Recover" ~/.ros/log/*/*stdout*
 ```
 
-Alternativa u Terminatoru: Preferences → Plugins → uključi **Logger**, pa desni klik u
-terminalu → **Log to File**. Isti učinak, bez mijenjanja naredbe.
+> `~/.ros/log` raste (već je ~120 MB). Povremeno počistiti stare mape:
+> `find ~/.ros/log -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +`
+
+Ako ti zatreba da agent gleda **bilo koji** terminal, a ne samo ROS: `sudo apt install tmux`,
+pokreni poslove unutar `tmux`, pa agent čita živi sadržaj s
+`tmux capture-pane -p -t <sesija>`. Za ROS to nije potrebno.
 
 **Argumenti za T2:** `gui:=false` (bez panela), `rviz:=false`, `zones:=false` (A/B bez zona),
 `safety:=false` (bez `collision_monitor`; tada sirovi `/cmd_vel` opet izravno vozi bazu).
