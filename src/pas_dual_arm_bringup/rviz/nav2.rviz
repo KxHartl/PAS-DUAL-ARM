@@ -307,6 +307,20 @@ Visualization Manager:
         Value: /keepout_filter_mask
       Use Timestamp: false
       Value: true
+    - Alpha: 0.25
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Draw Behind: false
+      Enabled: false
+      Name: Keepout (planer, napuhano)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /keepout_filter_mask_planner
+      Use Timestamp: false
+      Value: true
     - Class: rviz_common/Group
       Displays:
         - Alpha: 0.3

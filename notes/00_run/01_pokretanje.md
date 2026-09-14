@@ -1,7 +1,7 @@
 ---
 id: RUN_POKRETANJE
 type: upute
-updated: 2026-09-13
+updated: 2026-09-14
 ---
 # Pokretanje
 
@@ -41,6 +41,15 @@ Za test bez GUI-ja dodaj `headless:=true`. Pričekaj aktivaciju kontrolera.
 Robot se pojavi sa širokim početnim položajem ruku; **ne šalji ga kroz vrata**.
 
 ## 3. Mapiranje — terminal 2
+
+> [!important] Kartu treba snimiti **iznova** (14. 9.)
+> `maps/seminar_map.*` je snimljena 13. 9., **prije** commita `bd61802` koji je
+> postavio lidar na 1080 zraka / 1 mm / 25 Hz — nikad nije vidjela novi senzor.
+> Uz to je bila na rešetki od 0.05 m, pa je `scripts/check_map_geometry.py` na njoj
+> izmjerio: zid od 0.10 m nacrtan **0.15 m** debelo (+2.5 cm po licu), otvor od
+> 1.00 m očitan kao **0.950 m**, os prolaza pomaknuta **1.5 cm**, a jedno lice zida
+> uz svaka vrata zakrenuto 1.4–2.2°. Mjerilo karte je pritom točno (0.0 mm), dakle
+> nije riječ o driftu nego o rezoluciji. `slam_params.yaml` je sada na **0.02 m**.
 
 ```bash
 ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mapping.launch.py
@@ -95,7 +104,28 @@ Spremanje se uvijek vrši u projektni direktorij `src/pas_dual_arm_bringup/maps/
 Skripta automatski:
 1. Sprema trajnu arhivsku kopiju s datumom i vremenom: `maps/map_YYYYMMDD_HHMMSS_<tag>.{yaml,pgm,posegraph,data}`
 2. Ažurira aktivnu kartu `maps/seminar_map.{yaml,pgm,posegraph,data}` kako bi Nav2 odmah radio sa zadanom kartom.
-3. Pokreće `check_map.py` koji provjerava pokrivenost (>9×9 m raspon, >55 m² slobodnog prostora za sve tri sobe).
+3. Pokreće `check_map.py` (pokrivenost: >9×9 m raspon, >55 m² slobodnog prostora)
+   i `check_map_geometry.py` (geometrija na vratima).
+
+**Karta se prihvaća tek ako prođe i geometrijski gate.** On mjeri ono što troši
+rezervu od 7.3 cm po strani:
+
+| Mjera | Prolazi ako |
+|---|---|
+| širina oboja vrata | ≥ **0.97 m** (stvarno 1.00 m) |
+| os prolaza (uzduž zida) | ≤ **1 cm** od stvarne |
+| debljina zida | ≤ **0.14 m** (stvarno 0.10 m) |
+| lice zida: RMS / nagib | ≤ **10 mm** / ≤ **1.0°** |
+| stepenica između lica s obje strane otvora | ≤ **20 mm** |
+| razmak dvaju vrata (mjerilo karte) | ≤ **20 mm** od stvarnih 4.243 m |
+
+Ako gate padne, karta se **ne** prihvaća i tura se ponavlja; stara ostaje u arhivi
+(`maps/map_YYYYMMDD_*`). Gate se može pustiti i naknadno, bez simulatora:
+
+```bash
+./scripts/run_native.sh python3 scripts/check_map_geometry.py
+./scripts/run_native.sh python3 scripts/check_map_geometry.py maps/map_20260914_..._run60.yaml
+```
 
 Nakon spremanja napravi rebuild paketa kako bi `install/` vidio novu kartu:
 
@@ -163,6 +193,49 @@ Ako se to ne vidi, `nav_zones` nije našao vrata — ne voziti. Provjeri offline
   ```
   (isto vrijedi bez tipaka, ako si pokrenuo `nav2.launch.py gui:=false`.)
   Ruta je uvijek: portal ispred vrata → **ravno kroz vrata** → (kut, ako treba) → pred stol.
+
+### Mjerenje stvarne greške lokalizacije (samo simulacija, samo debug)
+
+Do 14. 9. se nije mjerilo koliko AMCL griješi, pa se o tome samo nagađalo.
+Iz runa 59 je izračunato: lidar je otvor od 1.00 m očitao kao **1.002 m** i robota
+**7.8 cm** od osi, dok je AMCL tvrdio da je centriran — greška lokalizacije od
+~7 cm, uz budžet od 7.3 cm ([[P-40_amcl_pose_disagrees_with_lidar]]).
+
+**Terminal 1 umjesto običnog starta:**
+```bash
+PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh \
+  ros2 launch pas_dual_arm_bringup sim.launch.py debug_truth:=true
+```
+
+To podiže drugi `parameter_bridge` (`config/bridge_debug.yaml`) s Gazebo pozom na
+`/debug/gz_dynamic_pose` i čvor `loc_error`, koji ispisuje
+
+```
+dx +0.4 cm  dy -7.1 cm  dyaw +0.8 deg   | peak +0.6 / -7.6 cm, +1.2 deg
+leg done ["straight through the doorway"]: peak dx ... dy ...
+```
+
+te na kraju runa `loc_error final peak: ...`.
+
+> [!warning] Ground truth je isključivo dijagnostika
+> `debug_truth` je po defaultu **false**. Nijedan upravljački čvor ne smije čitati
+> `/debug/gz_dynamic_pose` ni `/debug/loc_error` — isti stack mora raditi i na
+> fizičkom robotu, koji tu pozu nema. Topic namjerno **nije** `/tf`.
+
+Prva izmjerena vrijednost se ispisuje zasebno kao provjera okvira: robot se spawna
+u ishodištu i AMCL je tamo sjeme (`set_initial_pose`), pa u t=0 razlika mora biti
+milimetarska. Veći konstantan offset znači krivi okvir ili ishodište karte, a ne drift.
+
+**Bez simulacije** (dakle i na stvarnom robotu) isto se vidi iz `room_navigator`,
+koji u svakom prolazu ispisuje razliku između lidara i lokalizacije:
+
+```
+straight through the doorway: in a 1.002 m opening the lidar put the robot
++7.8 cm off its axis, the localised pose +0.5 cm - they disagree by +7.3 cm
+```
+
+Ispisuje **samo**; ništa se na tome ne gate-a niti se po tome vozi
+([[D-18_verified_baseline_first]]).
 
 ### Kad odbije voziti
 `room_navigator` prije svakog prolaza provjerava ruke i poravnatost i **pošteno stane**

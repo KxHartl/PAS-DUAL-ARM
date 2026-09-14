@@ -1,7 +1,7 @@
 ---
 id: RUN_TESTIRANJE
 type: upute
-updated: 2026-09-13
+updated: 2026-09-14
 ---
 # Testiranje i kriteriji uspjeha
 
@@ -59,8 +59,10 @@ Redom, i ne preskakati — prva dva koraka ne trebaju simulator:
 | # | Provjera | Prolazi ako |
 |---|---|---|
 | 1 | `python3 scripts/check_doors.py` | oboja vrata nađena, promašaj centra < 10 cm, širina 0.85–1.05 m |
-| 2 | `python3 scripts/check_zones.py` | 3 sobe, 2 vrata, 2 stola; sve portalne poze izvan zona i robot se u njima smije okrenuti u mjestu |
-| 3 | RViz `/nav_zones_markers` | zelena traka u oba otvora, halo stolova otvoren prema vratima |
+| 2 | `python3 scripts/check_zones.py` | 3 sobe, 2 vrata, 2 stola; sve poze na kojima navigator stane izvan zona i robot se u njima smije okrenuti u mjestu (osim `dock`); **brazde nulte cijene** kroz vrata i prilaz stolu čiste; **napuhana maska ne zatvara prolaz** (≥ 2 × tolerancija cilja za centar robota); **soba prohodna** — slobodan prostor erodiran za polovicu širine robota i dalje spaja sve poze |
+| 2b | `python3 scripts/check_costmap_path.py` | sve poze na koje navigator šalje robota međusobno dostupne, i putanja drži razmak od stvarnih prepreka u rasponu **0.60–0.90 m** (ispod 0.52 m `collision_monitor` zaglavi robota, iznad 0.90 m putanja nepotrebno struže po suprotnom zidu). Traje ~1 min |
+| 2c | brazde i polje (dio `check_zones.py`) | sve brazde **nulte** cijene po cijeloj duljini i širini (uvjet iz runa 65 — NavFn ne može proći zasićeni potencijal), jezgra netaknuta uz svaku uzorkovanu zidnu ćeliju, koridor kroz vrata nije uži od onoga što sam otvor dopušta, dock poza nije lethal |
+| 3 | RViz `/nav_zones_markers` | zelena traka u oba otvora; **oko stolova nema zone** (od 14. 9.). Za usporedbu se u RViz-u može uključiti `Keepout (planer, napuhano)` — to je ista zona narasla za 0.427 m, onako kako je vidi globalni planer |
 | 4 | **ručni** „2D Goal Pose" unutar polazne sobe | stigao, |Δyaw| < 0.05 rad, bez dodira zida |
 | 5 | **ručni** „2D Goal Pose" u drugoj sobi | putanja ulazi u otvor **okomito**, prolaz bez dodira |
 | 6 | **tipka** PLAVA, pa CRVENA, pa HOME | stane pred stol; log javi bočni razmak > 2.5 cm i |Δyaw| na pragu < 0.05 rad |

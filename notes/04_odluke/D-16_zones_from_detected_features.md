@@ -5,7 +5,7 @@ status: vazeca
 deviation: false
 requirements: ["[[R-14_slam_mapping]]", "[[R-15_region_goal_nav2]]", "[[R-18_door_pass_empty]]"]
 problems: ["[[P-39_nav2_enters_doorway_at_an_angle]]", "[[P-12_door_too_narrow]]", "[[P-35_arm_span_too_wide_for_door]]"]
-superseded_by: ""
+superseded_by: "[[D-20_single_potential_field_costmap]]"
 updated: 2026-09-14
 ---
 # D-16 — Zone orijentacije generirane iz prepoznatih značajki

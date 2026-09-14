@@ -5,7 +5,7 @@
   gz_type_name: "ignition.msgs.Clock"
   direction: GZ_TO_ROS
 
-# Base motion and odometry go through ros2_control (diff_drive base_controller),
+# Base motion and odometry go through ros2_control (mecanum base_controller),
 # so no cmd_vel/odom/tf bridging is needed here.
 
 # --- Sensors (Ignition gpu_lidar + camera defined in robot.urdf.xacro) ---

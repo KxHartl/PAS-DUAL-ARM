@@ -59,6 +59,9 @@ su zastarjeli). Kad nađeš kontradikciju, **ne biraj tiho**: zapiši je u karti
 | keepout zone samo na globalnom costmapu | upravljač ih ne vidi | [[P-39_nav2_enters_doorway_at_an_angle]] |
 | **graditi novi sloj na stanju koje nije odvoženo** | dva sloja bez ijednog runa učinila su sustav gorim nego prije; 14. 9. | [[D-18_verified_baseline_first]] |
 | **zamijeniti gate koji je propustio stvarni prolaz strožim izračunom** | `doorway_margin` odbija prolaz od 4.2° koji je dokazano uspio | [[P-39_nav2_enters_doorway_at_an_angle]] |
+| popuštanje `min_side_clearance` da prolaz „prođe" | već je na 5 mm, a stvarna greška poze je ~7 cm; prag skriva pomaknutu pozu umjesto da je popravi | [[P-40_amcl_pose_disagrees_with_lidar]] |
+| ground truth iz Gazeba bilo gdje u upravljačkom lancu | stack mora raditi i na fizičkom robotu, koji tu pozu nema; `debug_truth` je zato po defaultu isključen | [[P-40_amcl_pose_disagrees_with_lidar]] |
+| zaključivanje o točnosti lokalizacije bez mjerenja | do 14. 9. se o 7 cm nagađalo; sad to mjere `loc_error` i `_report_disagreement` | [[P-40_amcl_pose_disagrees_with_lidar]] |
 | `scan_filter` `half_width` ≥ 0.35 | briše dovratnike (±0.50) i noge stolova; bez povrata voxel sloj ih ne može ni označiti ni očistiti, pa stare oznake zamrznu prolaz | [[P-39_nav2_enters_doorway_at_an_angle]] |
 
 ## 6. Rad s korisnikom
@@ -84,4 +87,4 @@ Detalji: `RUNNING.md`, [[S-10_build_run_environment]].
 [[D-13_three_room_world]] · [[D-14_light_box_free_size]] ·
 [[D-15_door_transit_behaviour]] (zamijenjena) · [[D-16_zones_from_detected_features]] ·
 [[D-17_closed_loop_door_transit]] (povučena) · [[D-18_verified_baseline_first]] ·
-[[D-19_dynamic_footprint]]
+[[D-19_dynamic_footprint]] · [[D-20_single_potential_field_costmap]]

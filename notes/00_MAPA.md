@@ -30,7 +30,18 @@ updated: 2026-09-14
 - **Povučeno 14. 9.:** dva sloja naslagana na run 46 bez ijedne vožnje (zatvoreni tranzit i
   širinski gate) zaustavila su sustav; `main` je vraćen na run 46, kod je na grani
   `wip/door-transit-closed-loop` ([[D-18_verified_baseline_first]], [[P-39_nav2_enters_doorway_at_an_angle]]).
-- **Otvoreno:** obilazak stola — put s jedne strane stola na drugu vodi uz sam brid ploče.
+- **Novo 14. 9. (SLAM/lokalizacija):** iz runa 59 je **izračunato** da lidar otvor od 1.00 m
+  vidi točno (1.002 m) i robota 7.8 cm od osi, dok AMCL tvrdi da je centriran — greška
+  lokalizacije ~7 cm uz budžet od 7.3 cm ([[P-40_amcl_pose_disagrees_with_lidar]]). Karta iz
+  runa 44 je snimljena **prije** lidara od 1080 zraka i na rešetki od 0.05 m, pa zid od 0.10 m
+  crta 0.15 m debelo i otvor očitava kao 0.950 m. `slam_params.yaml` je na **0.02 m**, dodani
+  su `scripts/check_map_geometry.py` (geometrijski gate karte), `loc_error` (debug-only mjerenje
+  greške lokalizacije) i telemetrija lidar-vs-poza u navigatoru.
+- **Novo 14. 9. (run 60):** **nova karta je prihvaćena** — otvor se očitava kao **0.980 m** (bilo 0.950), os prolaza **0.0 cm** (bilo +1.5), zid 120 mm (bilo 150–178), lica zidova ravna (nagib ≤ 0.02°, RMS ≤ 2.3 mm). Rezerva po strani **4.8 → 6.3 cm** od fizičkih 7.3. Sljedeće: vožnja na novoj karti uz **nepromijenjen** AMCL, pa mjerenje `loc_error`-om.
+- **Novo 14. 9. (run 62):** novi AMCL mjerni model → **5/5 prolaza kroz vrata bez aborta**; razlika lidar-vs-AMCL 1.8–3.5 cm izmiješanih predznaka (bilo 4.4–6.0 jednog), a `loc_error` ground truthom mjeri vršnu grešku **3.0 / 2.9 cm i 0.3°** kroz cijeli run, bez rasta. **Vrata su riješena.**
+- **Novo 14. 9. (run 63):** zona oko stola **uklonjena** — robot mora doći do stola po kutiju (korisnik). Uz to je nađen stvarni uzrok zapinjanja uz zone: **NavFn planira točku, DWB provjerava otisak**, a nav2 filtere obrađuje nakon plugina pa `inflation_layer` nikad ne napuhne keepout → putanja legalno ide uz sam rub zone, a izvesti je nemoguće. Zone se sad objavljuju u **dvije veličine**: sirova za lokalni costmap (otisak), napuhana za 0.427 m za globalni (točka) ([[P-39_nav2_enters_doorway_at_an_angle]] #21–23).
+- **Novo 14. 9. (run 69, potencijalna polja):** jedinstveno potencijalno polje u `nav_zones` ([[D-20_single_potential_field_costmap]]), rampa širine 0.30 m i vrha 35 (razmak putanje 0.715 m od prepreka, optimalno unutar 0.60–0.90 m), brazde nulte cijene kroz prolaze i prilaze stolovima (sprječava zasićenje NavFn potencijala na 253), globalni `inflation_layer` ugašen (`enabled: false`), implementirana dock (10 cm od ploče) i undock (1D vožnja unatrag niz prilaznu os) geometrija.
+- **Novo 14. 9. (D-20):** navigacija prešla na **jedno potencijalno polje**. Bila su tri izvora odbijanja oprečne semantike (nav2 `inflation_layer` = tvrda izotropna zabrana, lijevci = binarno, rampa oko stola = cijena); sad `Zones.field` računa cijelu plohu iz karte, a `inflation_layer` je ugašen. **Privlačenje** je izvedeno kao **brazde nulte cijene** kroz prolaze i niz prilaz stolu — na costmapu bez negativnih brojeva prolaz se ne privlači, nego se sve pokraj njega odbija. Dodana **dock** poza: čelo 10.0 cm od ploče, bez okretanja, izlaz unatrag ([[D-20_single_potential_field_costmap]]). Offline provjereno, **čeka vožnju**.
 - **Otvoreno (obavezno iz maila):** vožnja kroz vrata uživo, nošenje kroz vrata, odlaganje
   u crvenoj sobi.
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
@@ -47,7 +58,7 @@ flowchart LR
   G1 --> R01["R-01 omni baza ⚠"] & R02["R-02 2× Kinova ✅"] & R03["R-03 vodilice ⚠"] & R04["R-04 pan-tilt + kamera ✅"] & R05["R-05 izgled ✅"] & R06["R-06 realni parametri ⚠"]
   G2 --> R07["R-07 Humble/Fortress/ros2_control ✅"] & R08["R-08 omni_controller ✅"] & R09["R-09 ruke: ros2_control + MoveIt ✅"]
   G3 --> R10["R-10 tri sobe (mapirljivo) ✅"] & R11["R-11 vrata 0.9 m ⚠"] & R12["R-12 kutija + ArUco ✅"] & R13["R-13 odredište (crvena soba) ✅"]
-  G4 --> R14["R-14 SLAM ✅"] & R15["R-15 regija → Nav2 🧪"] & R16["R-16 pronađi kutiju ✅"] & R17["R-17 dvoručni hvat ❌"] & R18["R-18 kroz vrata prazan 🧪"] & R19["R-19 kroz vrata s kutijom ❌"] & R20["R-20 odloži na odredište ⚠"]
+  G4 --> R14["R-14 SLAM ✅"] & R15["R-15 regija → Nav2 ✅"] & R16["R-16 pronađi kutiju ✅"] & R17["R-17 dvoručni hvat ❌"] & R18["R-18 kroz vrata prazan ✅"] & R19["R-19 kroz vrata s kutijom ❌"] & R20["R-20 odloži na odredište ⚠"]
   G5 --> R21["R-21 seminar, repo, video, slajdovi ❌"]
 ```
 
@@ -71,7 +82,7 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 | Zahtjev | Izvor | Status | Rješenje | Problemi | Odluke |
 |---|---|---|---|---|---|
 | [[R-07_ros2_humble_fortress_control]] | ZAD | ✅ | [[S-02_world_and_sim_launch]], [[S-03_ros2_control_setup]], [[S-10_build_run_environment]] | [[P-01_shell_zenoh_contamination]], [[P-02_robot_description_yaml_parse]], [[P-31_apt_upgrade_breakage]], [[P-32_gui_starves_controllers]] | [[D-10_headless_vs_gui]], [[D-11_project_scoped_ros_env]] |
-| [[R-08_omni_controller]] | MAIL (obavezno) | ❌ | [[S-04_base_drive]] | [[P-09_omni_drive_on_fortress]], [[P-10_skid_steer_cannot_turn]] | [[D-03_diff_drive_base_temporary]] |
+| [[R-08_omni_controller]] | MAIL (obavezno) | ✅ `mecanum_drive_controller`, potvrđen u vožnji (run 70) | [[S-04_base_drive]] | [[P-09_omni_drive_on_fortress]], [[P-10_skid_steer_cannot_turn]] | [[D-03_diff_drive_base_temporary]] (zamijenjena) |
 | [[R-09_moveit_arm_control]] | MAIL | ✅ | [[S-03_ros2_control_setup]], [[S-07_moveit_setup]] | [[P-23_moveit_blind_to_world]], [[P-24_press_path_chain]] | — |
 
 ## R3: Okruženje (tri sobe u L od 13. 9.)
@@ -85,11 +96,11 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 ## R4: Misija
 | Zahtjev | Izvor | Status | Rješenje | Problemi | Odluke |
 |---|---|---|---|---|---|
-| [[R-14_slam_mapping]] | MAIL (obavezno) | ✅ tri sobe mapirane (`seminar_map.*`) | [[S-06_navigation]] | [[P-11_nav2_slam_drift]] | [[D-04_visual_servo_instead_nav2]] |
-| [[R-15_region_goal_nav2]] | MAIL (obavezno) | 🧪 zone + graf soba rade, vožnja neprovjerena | [[S-06_navigation]], [[S-09_task_orchestration]] | [[P-11_nav2_slam_drift]], [[P-33_nav2_undershoot_base_shift]], [[P-39_nav2_enters_doorway_at_an_angle]] | [[D-16_zones_from_detected_features]] |
+| [[R-14_slam_mapping]] | MAIL (obavezno) | ✅ karta runa 60 na 0.02 m novim lidarom; vrata 0.980 m, os 0.0 cm | [[S-06_navigation]] | [[P-11_nav2_slam_drift]] | [[D-04_visual_servo_instead_nav2]] |
+| [[R-15_region_goal_nav2]] | MAIL (obavezno) | ✅ vožnja potvrđena u GUI-ju (run 70); greška AMCL-a 3.0/2.9 cm izmjerena | [[S-06_navigation]], [[S-09_task_orchestration]] | [[P-11_nav2_slam_drift]], [[P-33_nav2_undershoot_base_shift]], [[P-39_nav2_enters_doorway_at_an_angle]] (riješen) | [[D-20_single_potential_field_costmap]] |
 | [[R-16_find_box]] | MAIL | ✅ | [[S-05_perception]], [[S-09_task_orchestration]] | [[P-07_aruco_dict_and_cv_bridge]], [[P-19_aruco_foreshortening_close]], [[P-20_pointcloud_starves_clock]], [[P-22_depth_self_view_clusters]] | [[D-02_own_aruco_detector]] |
 | [[R-17_dual_arm_lift]] | MAIL | ❌ hvat nije dobar (korisnik, 13. 9.) | [[S-08_grasp_squeeze_attach]], [[S-07_moveit_setup]] | [[P-14_gripper_too_small_for_cube]], [[P-15_dart_friction_no_hold]], [[P-16_fake_teleport_grasp]], [[P-17_detachable_joint_explodes]], [[P-24_press_path_chain]], [[P-25_asymmetric_arm_reach]], [[P-26_one_sided_press_bulldozes]], [[P-27_contact_sensor_topic_ignored]], [[P-28_gate_too_strict]] | [[D-05_contact_verified_attach]], [[D-06_cube_squeeze_grasp]], [[D-07_carry_on_left_wrist]], [[D-12_honesty_abort_over_fake]] |
-| [[R-18_door_pass_empty]] | MAIL | 🧪 putanja kroz 1.0 m okomita (planer), vožnja neprovjerena | [[S-06_navigation]] | [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]], [[P-39_nav2_enters_doorway_at_an_angle]] | [[D-16_zones_from_detected_features]] |
+| [[R-18_door_pass_empty]] | MAIL | ✅ 5/5 prolaza u oba smjera kroz oboja vrata (run 62, 70) | [[S-06_navigation]] | [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]], [[P-39_nav2_enters_doorway_at_an_angle]] (riješen) | [[D-20_single_potential_field_costmap]] |
 | [[R-19_door_pass_with_box]] | MAIL | ❌ | [[S-06_navigation]], [[S-08_grasp_squeeze_attach]] | [[P-18_transport_drops_box]], [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-07_carry_on_left_wrist]], [[D-14_light_box_free_size]] |
 | [[R-20_place_at_destination]] | MAIL | ⚠ samo isti stol | [[S-08_grasp_squeeze_attach]], [[S-09_task_orchestration]] | [[P-18_transport_drops_box]], [[P-29_place_drop_tips_cube]], [[P-30_stale_collision_object]] | — |
 
@@ -108,5 +119,5 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 - Povijest: [[timeline]], [[runovi]]
 - Svi podesivi brojevi: [[06_parametri]]
 - Izmjerene poze ruku i njihove dimenzije: [[08_poze]]
-- Odluke (ADR): [[D-01_aruco_dict_4x4_50]] … [[D-18_verified_baseline_first]]. Popis je u [[AGENT_GUIDE]].
+- Odluke (ADR): [[D-01_aruco_dict_4x4_50]] … [[D-20_single_potential_field_costmap]]. Popis je u [[AGENT_GUIDE]].
 - Vizualno stablo: `00_mapa.canvas`

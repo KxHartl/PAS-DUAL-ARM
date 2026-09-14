@@ -1,0 +1,16 @@
+---
+# Debug-only bridge. NOT loaded by default.
+#
+# Gazebo's ground-truth model poses, for measuring how far AMCL is from where the
+# robot actually is.  A physical robot has no such topic, so nothing in the control
+# chain may ever subscribe to it: it exists for `loc_error`, which only prints.
+#
+# Started by:  ros2 launch pas_dual_arm_bringup sim.launch.py debug_truth:=true
+#
+# The topic name is deliberately /debug/... and deliberately NOT /tf - publishing
+# ground truth into the TF tree would silently replace localisation with cheating.
+- ros_topic_name: "/debug/gz_dynamic_pose"
+  gz_topic_name: "/world/seminar_world/dynamic_pose/info"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "ignition.msgs.Pose_V"
+  direction: GZ_TO_ROS

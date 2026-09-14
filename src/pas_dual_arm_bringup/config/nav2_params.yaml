@@ -7,6 +7,10 @@ amcl:
       y: 0.0
       z: 0.0
       yaw: 0.0
+    # Motion-model noise, left at the stock 0.2 on purpose: these should be set
+    # from the mecanum base's measured odometry drift (loc_error, debug_truth:=true),
+    # not guessed, and changing them in the same run as the measurement model would
+    # make neither readable. alpha5 is the strafe term the OmniMotionModel adds.
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
@@ -19,32 +23,65 @@ amcl:
     do_beamskip: false
     global_frame_id: "map"
     lambda_short: 0.1
-    laser_likelihood_max_dist: 2.0
-    laser_max_range: 100.0
-    laser_min_range: -1.0
+    # --- Measurement model, retuned 14 Sep after run 61 (P-40) ------------------
+    # Run 61 measured the filter sitting beside the truth rather than wandering:
+    # through door 1 the lidar and the localised pose disagreed by +6.0 cm one way
+    # and -5.9 cm the other - which is the same +6 cm in map y, because "left"
+    # flips with the direction of travel. Same run, door 0: +4.2 cm in x. A bias
+    # that is stable in the map is not drift, it is a filter that is not being
+    # pulled to the scan; and with the settings below it was not.
+    #
+    # The likelihood field is a distance transform of the map, so its precision
+    # was capped at the map's own grid - which is now 0.02 m, not 0.05, and the
+    # lidar under it resolves 1 mm. The model is finally allowed to use that.
+    #
+    # 0.2 was a 20 cm standard deviation: a particle 5 cm off scored 97% of a
+    # perfect one, so nothing distinguished them. 0.05 is 2.5 map cells - sharp
+    # enough to have an opinion at the scale the doorway is decided on, still
+    # broad enough for the filter to climb the gradient rather than fall off it.
+    sigma_hit: 0.05
+    # Half the probability mass was uniform noise, which flattens the field again
+    # whatever sigma_hit says. This is a simulated lidar against a map of walls
+    # that do not move; 0.1 is already a generous allowance for the unexpected.
+    # (z_max and z_short are inert under likelihood_field; kept for completeness.)
+    z_hit: 0.9
+    z_max: 0.05
+    z_rand: 0.1
+    z_short: 0.05
+    # The field only needs to reach as far as a particle might plausibly be wrong.
+    # 2.0 m of precomputed distance transform is 2.0 m of flat, useless tail.
+    laser_likelihood_max_dist: 0.5
+    # Was 100 m against a sensor that stops at 25 and a map 12 m across; SLAM
+    # clips at 12.0, and AMCL has to score the same returns SLAM drew.
+    laser_max_range: 12.0
+    laser_min_range: 0.05
     laser_model_type: "likelihood_field"
-    # Upgraded for fine positioning: 180 beams (was 60), 3 cm position update (was 25 cm),
-    # 0.03 rad (~1.7 deg) angle update (was 11.5 deg). Eliminates dead-zone drift during docking.
-    max_beams: 180
-    max_particles: 2000
-    min_particles: 500
+    # 180 of the lidar's 1080 beams was right when each beam barely discriminated;
+    # with the model above every beam carries information, so take more of them.
+    max_beams: 360
+    # --- Sample set ------------------------------------------------------------
+    # Resampling on every update, with update_min_d at 3 cm, resamples every 3 cm
+    # of travel. That is how a particle set loses its diversity: the cloud collapses
+    # onto one narrow mode and, under a flat likelihood, has nothing to pull it back.
+    # A bias that survives a whole run in both directions is what that looks like.
+    resample_interval: 2
+    max_particles: 3000
+    min_particles: 1000
     odom_frame_id: "odom"
     pf_err: 0.02
     pf_z: 0.99
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
-    resample_interval: 1
     robot_model_type: "nav2_amcl::OmniMotionModel"
     save_pose_rate: 0.5
-    sigma_hit: 0.2
     tf_broadcast: true
-    transform_tolerance: 1.0
+    # map -> odom was published good for a whole second. At 0.30 m/s that is 30 cm
+    # of pose the costmaps are entitled to keep using after it stopped being true.
+    transform_tolerance: 0.3
+    # 3 cm position / 0.03 rad (~1.7 deg) angle update, from the 14 Sep upgrade
+    # (was 25 cm / 11.5 deg). Removes the dead zone while docking.
     update_min_a: 0.03
     update_min_d: 0.03
-    z_hit: 0.5
-    z_max: 0.05
-    z_rand: 0.5
-    z_short: 0.05
     scan_topic: /scan_filtered
 
 bt_navigator:
@@ -209,7 +246,12 @@ local_costmap:
       # local costmap showed 80 cm of free space in a 100 cm doorway, and DWB
       # correctly reported "No valid trajectories out of 3711". The window is
       # only 3 x 3 m, so the extra cells are cheap.
-      resolution: 0.025
+      #
+      # 14 Sep: down to 2 cm with the map, so the static and voxel layers agree
+      # cell for cell and the same wall is not drawn in two different places.
+      # 3 x 3 m at 0.02 is 150 x 150 cells; watch for "Control loop missed" in
+      # the first run, which is how run 51 said the window had got too expensive.
+      resolution: 0.02
       # The footprint is no longer an estimate that needs a safety margin: it is
       # the measured convex hull of the robot's own collision geometry,
       # published live (D-19). Padding it again subtracts 2 cm of a 8 cm budget
@@ -261,9 +303,12 @@ global_costmap:
       # Replaced at runtime by the measured outline (D-19); this is the fallback.
       footprint: "[[0.52, 0.427], [-0.52, 0.427], [-0.52, -0.427], [0.52, -0.427]]"
       footprint_padding: 0.0
-      # Stays at 5 cm: the static layer comes from a 5 cm map, so a finer grid
-      # here would only upsample it.
-      resolution: 0.05
+      # Matches the map. It used to stay at 5 cm because the map was 5 cm, but
+      # that map drew a 0.10 m wall 0.15 m thick and read the 1.00 m doorway as
+      # 0.95 m (scripts/check_map_geometry.py, P-40); slam_toolbox now builds at
+      # 0.02, and resampling it back to 0.05 here would put the quantisation
+      # straight back into the layer the planner reads.
+      resolution: 0.02
       track_unknown_space: true
       rolling_window: false
       width: 20
@@ -274,14 +319,33 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 5.0
-        # At least the inscribed radius (0.427 m); see local_costmap.
+        # OFF. The repelling is done by one field now, computed in nav_zones and
+        # delivered through the keepout mask (Zones.field).
+        #
+        # This layer could not be part of that field. It is isotropic, and this
+        # robot is 1.04 x 0.854 m: measured at the red table, its inscribed radius
+        # put the planner's limit 0.803 m from the table centre when the robot's
+        # front touches the top at 0.921 m - 12 cm too permissive head-on, while
+        # being too strict sideways. It is also unavoidable: it inflates every
+        # occupied cell including the door jambs, and a field in a 0.98 m opening
+        # is exactly what NavFn cannot plan through (run 65). A mask can be shaped
+        # per feature and cut away where the robot has to go; a layer cannot.
+        #
+        # Left in place, and only disabled, so the comparison can be switched back
+        # on in one word. /global_costmap/costmap keeps publishing either way, so
+        # the RViz costmap displays work unchanged.
+        enabled: false
+        cost_scaling_factor: 2.0
         inflation_radius: 0.45
       always_send_full_costmap: True
+      # The grown mask, not the raw one: NavFn plans the robot's centre, so a
+      # zone it is shown has to already include the body (nav_zones.Zones.mask).
+      # With the raw mask it routed the centre along the zone boundary and DWB,
+      # which scores the real footprint, could not follow a metre of it.
       filters: ["keepout_filter"]
       keepout_filter:
         plugin: "nav2_costmap_2d::KeepoutFilter"
-        filter_info_topic: "/costmap_filter_info"
+        filter_info_topic: "/costmap_filter_info_planner"
 
 map_server:
   ros__parameters:

@@ -53,7 +53,29 @@ U sljedećem, čistom startu simulacije, bez istodobnog SLAM čvora:
 ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup task.launch.py navigate_region:=true region_x:=0.0 region_y:=-4.5 region_yaw:=-1.57079632679
 ```
 
-## Stanje mjerenja 14. 9. 2026.
+## Stanje mjerenja 14. 9. 2026. (navečer, run 60)
+
+**Karta je snimljena iznova i prihvaćena.** Karta iz runa 44 je bila snimljena starim lidarom
+(360 zraka / 10 mm / 10 Hz, prije commita `bd61802`) i na rešetki od 0.05 m; `check_map_geometry.py`
+je na njoj izmjerio zid od 0.10 m nacrtan 0.15–0.18 m debelo, otvor od 1.00 m očitan kao 0.950 m i
+os prolaza pomaknutu 1.5 cm — uz mjerilo karte točno na 0.0 mm, dakle kvantizacija, ne drift
+([[P-40_amcl_pose_disagrees_with_lidar]]).
+
+Run 60 (teleop, novi lidar 1080 zraka / 1 mm / 25 Hz, `slam_params.yaml` na 0.02 m):
+
+| mjera | run 44 | run 60 | stvarno |
+|---|---|---|---|
+| širina otvora | 0.950 m | **0.980 m** | 1.000 m |
+| rezerva po strani (robot 0.854 m) | +4.8 cm | **+6.3 cm** | +7.3 cm |
+| os prolaza | +1.5 cm | **0.0 cm** | 0 |
+| debljina zida | 150–178 mm | **120 mm** | 100 mm |
+| nagib lica zida / RMS | 1.4–2.2° / 14–16 mm | **≤ 0.02° / ≤ 2.3 mm** | 0 |
+| mjerilo karte | 0.0 mm | **0.0 mm** | — |
+
+Oba costmapa su prebačena na istu rezoluciju (0.02 m), da static i voxel sloj ne crtaju isti zid
+na dva mjesta.
+
+## Stanje mjerenja 14. 9. 2026. (ranije)
 
 **Karta je prihvaćena.** Run 44 (teleop, popravljeni `mecanum_drive_controller`, 100 Nm,
 `mu1=0.80`, `mu2=0.20`, `ARM_CARRY_V2`) dao je kartu 11.9 × 11.8 m, 102.3 m² slobodno, oba

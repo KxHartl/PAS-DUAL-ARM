@@ -59,6 +59,15 @@ sed "s/${name}\.pgm/seminar_map.pgm/g" "$maps_dir/$name.yaml" > "$maps_dir/semin
 printf '\nVerifying coverage gate with check_map.py:\n'
 run python3 "$script_dir/check_map.py" "$maps_dir/$name.yaml"
 
+# Coverage says all three rooms are on the map; it says nothing about whether the
+# doorways are still 1.0 m wide on it.  With 7.3 cm of side clearance the geometry
+# is the gate that decides whether the robot gets through, so check it here rather
+# than discovering it from an ABORT three runs later.  Non-fatal on purpose: the
+# map is already written, and the numbers are what you judge it on.
+printf '\nVerifying doorway geometry with check_map_geometry.py:\n'
+run python3 "$script_dir/check_map_geometry.py" "$maps_dir/$name.yaml" || \
+  printf '\n*** Geometry gate FAILED - do not drive Nav2 on this map, re-run the tour.\n'
+
 printf '\nWritten to %s:\n' "$maps_dir"
 ls -la "$maps_dir" | sed 's/^/  /'
 printf '\nRebuild so the installed share/ copy sees it:\n'

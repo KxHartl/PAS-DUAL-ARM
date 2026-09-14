@@ -18,10 +18,47 @@
 > zadnjeg dana: `notes/07_predaja/danas.md`. Sadržaj ispod je povijesni zapis sesija; kod
 > kontradikcije vrijede bilješke.
 
-**Trenutna faza**: NAVIGACIJA RIJEŠENA (4 uzastopna prolaza kroz vrata na punoj rezoluciji) + Fino ugađanje tolerancije.
-**Datum zadnje izmjene**: 2026-09-14
+**Trenutna faza**: NAVIGACIJA RIJEŠENA I POTVRĐENA U GUI-ju — jedinstveno potencijalno polje (D-20), brazde nulte cijene, dock/undock geometrija; omni pogon, SLAM i lokalizacija potvrđeni.
+**Datum zadnje izmjene**: 2026-09-14 (noć)
 
-## Dodatak 2026-09-14 (večer): Puna rezolucija i uspjeh prolazaka kroz vrata (Run 58)
+## Dodatak 2026-09-14 (noć): Run 70 — korisnik potvrdio u GUI-ju
+
+**„super radi“** — potencijalno polje, prolazi kroz oboja vrata u oba smjera, vožnja oko stolova
+i dock/undock potvrđeni uživo. Time su zatvorena tri dijela koja su cijeli dan bila otvorena:
+
+| | stanje |
+|---|---|
+| Omnidirekcijski pogon (`mecanum_drive_controller`) | ✅ potvrđen |
+| SLAM + lokalizacija | ✅ karta run 60 (0.02 m, novi lidar), vršna greška AMCL-a **3.0 / 2.9 cm, 0.3°** izmjerena ground truthom |
+| Gibanje / navigacija | ✅ jedno potencijalno polje, 5/5 prolaza, obilazak stolova, dock 10 cm od ploče |
+
+## Dodatak 2026-09-14 (noć): Jedinstveno potencijalno polje, brazde i dock/undock geometrija (D-20, Run 69)
+
+- **Jedinstvena ploha cijene i gašenje konfliktnih slojeva**:
+  - Globalni `inflation_layer` ugašen (`enabled: false`) u `nav2_params.yaml` — uklonjena "djetelina" oko nogu stola i dvostruko brojanje prepreka.
+  - `Zones.field(grow=...)` u `nav_zones.py` generira jedinstvenu plohu cijene iz karte (`distance_transform_edt`): lethal jezgra do upisanog radijusa (0.427 m), glatka rampa širine **0.40 m** s vrhom **`field_peak = 50`** (cost 127 u Costmap2D, NavFn 152 naspram 50 za slobodan pod), koja drži putanju na **0.835 m** od stvarnih prepreka. Udaljenost se mjeri od **oboda ploče stola (0.80 m)**, ne od nogu koje lidar vidi.
+  - Objavljuju se dvije maske: `/keepout_filter_mask_planner` (napuhana za planera) i `/keepout_filter_mask` (za lokalni DWB).
+- **Brazde nulte cijene (`_furrows`)**:
+  - Kroz prolaze vrata i duž prilaza stolu izrezane su trake nulte cijene koje sprječavaju zasićenje NavFn potencijala na 253 (problem runa 65) i osiguravaju čist gradijentni spust.
+- **Dock / undock geometrija i navigator**:
+  - Uvedena `dock` poza (`half + HALF_LENGTH + 0.10 m = 1.021 m` od centra stola, 10 cm od prednjeg brida ploče).
+  - Na `dock` pozi zabranjena rotacija u mjestu (radijus 0.673 m zakačio bi stol).
+  - `room_navigator.py` dovršen: implementirani `_docked_table()`, `_docked_room()`, `_undock_leg()`, `_table_by_pose()` i podrška za `:dock` / `undock` ciljeve. Robot pri odlasku sa stola obavezno vozi unatrag do `approach` poze (1.55 m) prije skretanja.
+- **Verifikacija offline gate-ova (sve zeleno)**:
+  - `scripts/check_map_geometry.py` → **PASS** (vrata 0.980 m, os 0.0 cm, stepenica ≤0.9 mm).
+  - `scripts/check_zones.py` → **PASS** (brazde nulte cijene, prohodnost soba, 11 poza).
+  - `scripts/check_costmap_path.py` → **PASS** (putanja drži razmak 0.715 m, točno unutar ciljanog raspona 0.60–0.90 m).
+  - `python3 -m py_compile` i `colcon build` prolaze čisto bez grešaka.
+
+## Dodatak 2026-09-14 (večer): Nova karta na 0.02 m i AMCL mjerni model (Runovi 60–62)
+
+- **Nova SLAM karta na punoj rezoluciji 0.02 m**:
+  - Snimljena novim lidarom (1080 zraka, 1 mm, 25 Hz) uz `slam_params.yaml` s rezolucijom 0.02 m i gušćim grafom.
+  - Vrata očitana kao 0.980 m (umjesto 0.950 m), a os prolaza na 0.0 cm (umjesto +1.5 cm).
+- **AMCL kalibracija za milimetarski lidar**:
+  - `sigma_hit: 0.05` (bilo 0.20), `z_hit: 0.9`, `z_rand: 0.1`, `laser_likelihood_max_dist: 0.5`, `max_beams: 360`, `resample_interval: 2`, `min/max_particles: 1000/3000`.
+  - Uklonjen stalan pomak lokalizacije od ~6 cm. Razlika lidar-vs-AMCL smanjena na šum (1.8–3.5 cm).
+
 
 - **Podignute rezolucije i senzori na PAL Tiago standard**:
   - Virtual base lidar nadograđen na službeni PAL SICK TiM571 standard (`1080` zraka, `1 mm` dometna točnost, `25 Hz`, min domet `0.05 m`).

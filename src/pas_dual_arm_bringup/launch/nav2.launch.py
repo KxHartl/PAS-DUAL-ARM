@@ -90,6 +90,24 @@ def generate_launch_description():
             'multiplier': 1.0,
         }],
     )
+    # A second one for the global costmap, serving the grown mask. The planner
+    # reasons about a point and the controller about a footprint, so they are
+    # shown the same zones at two sizes (nav_zones.Zones.mask).
+    costmap_filter_info_server_planner = Node(
+        package='nav2_map_server',
+        executable='costmap_filter_info_server',
+        name='costmap_filter_info_server_planner',
+        output='both',
+        parameters=[{
+            'use_sim_time': True,
+            'type': 0,
+            'filter_info_topic': '/costmap_filter_info_planner',
+            'mask_topic': '/keepout_filter_mask_planner',
+            'base': 0.0,
+            'multiplier': 1.0,
+        }],
+    )
+
     lifecycle_manager_costmap_filters = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
@@ -98,7 +116,8 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': True,
             'autostart': True,
-            'node_names': ['costmap_filter_info_server'],
+            'node_names': ['costmap_filter_info_server',
+                           'costmap_filter_info_server_planner'],
         }],
     )
 
@@ -196,6 +215,7 @@ def generate_launch_description():
         localization,
         nav_zones,
         costmap_filter_info_server,
+        costmap_filter_info_server_planner,
         lifecycle_manager_costmap_filters,
         collision_monitor,
         lifecycle_manager_safety,

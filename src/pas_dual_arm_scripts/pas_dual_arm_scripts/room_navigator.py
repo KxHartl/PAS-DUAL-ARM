@@ -50,6 +50,9 @@ from pas_dual_arm_scripts.postures import ARM_DRIVE, POSTURES
 
 # Nav2 footprint, so the geometry here and the costmap's agree.
 HALF_LENGTH, HALF_WIDTH = 0.52, 0.427
+# Left plus right reading below this means the robot is between the jambs rather
+# than in a room: the doorway is 1.0 m, the narrowest room dimension is 6 m.
+DOORWAY_SPAN = 1.5
 
 
 def yaw_to_quaternion(yaw):
@@ -71,10 +74,11 @@ def swept_width(yaw_error, length=2 * HALF_LENGTH, width=2 * HALF_WIDTH):
 
 
 class Leg:
-    def __init__(self, pose, label, transit=False):
+    def __init__(self, pose, label, transit=False, dock=False):
         self.x, self.y, self.yaw = pose
         self.label = label
         self.transit = transit
+        self.dock = dock
 
 
 class RoomNavigator(Node):
@@ -106,6 +110,11 @@ class RoomNavigator(Node):
         self._pending_request = None
         self._cancel = False
         self._busy = False
+        # Index of the table the robot is currently docked at, if any. A docked
+        # robot has its front 10 cm from a table top and cannot turn: its
+        # circumscribed radius is 0.673 m and the table starts 0.50 m away. So it
+        # leaves the way it came in, and that is not optional - see _undock_leg.
+        self._docked = None
 
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -144,6 +153,8 @@ class RoomNavigator(Node):
 
     def _on_goto(self, msg):
         request = msg.data.strip().lower()
+        if request == 'undock':
+            request = self._docked_room() or 'undock'
         if request in ('stop', 'cancel', 'abort'):
             self._cancel = True
             self._pending_request = None
@@ -238,15 +249,31 @@ class RoomNavigator(Node):
                            f'has to fit the doorway')
         return True, f'{ARM_DRIVE} held, worst joint {worst:.3f} rad'
 
+    @staticmethod
+    def lane_offset_of(pose, leg):
+        """Signed distance of a pose from the leg's centreline, positive to its left.
+
+        The centreline runs along the leg's own heading.  Split out so the gate and
+        the telemetry in `_drive` compare exactly the same number.
+        """
+        return (-(pose[0] - leg.x) * math.sin(leg.yaw)
+                + (pose[1] - leg.y) * math.cos(leg.yaw))
+
+    def lane_offset(self, leg):
+        """`lane_offset_of` for the currently localised pose, or None.
+
+        Only as true as AMCL is - which is the point of comparing it with the lidar.
+        """
+        pose = self.pose()
+        return None if pose is None else self.lane_offset_of(pose, leg)
+
     def aligned_with(self, leg):
         """On the lane centreline and square to it, within the doorway budget."""
         pose = self.pose()
         if pose is None:
             return False, 'no map -> base_footprint transform'
         heading_error = wrap(pose[2] - leg.yaw)
-        # Distance from the leg's centreline, which runs along its own heading.
-        offset = abs(-(pose[0] - leg.x) * math.sin(leg.yaw)
-                     + (pose[1] - leg.y) * math.cos(leg.yaw))
+        offset = abs(self.lane_offset_of(pose, leg))
         lateral = self.get_parameter('centreline_tolerance').value
         heading = self.get_parameter('heading_tolerance').value
         detail = (f'offset {offset:.3f} m, heading {math.degrees(heading_error):+.1f} deg, '
@@ -308,6 +335,46 @@ class RoomNavigator(Node):
                 best_dist, best_room = dist, room['name']
         return best_room
 
+    def _table_by_pose(self, pose, tolerance=0.30):
+        """Find a table whose dock pose matches the given (x, y)."""
+        if self._graph is None:
+            return None
+        for table in self._graph.get('tables', []):
+            dock = table.get('dock')
+            if dock and math.hypot(pose[0] - dock[0], pose[1] - dock[1]) <= tolerance:
+                return table
+        return None
+
+    def _docked_table(self):
+        """Table the robot is currently docked at, or None."""
+        if self._graph is None:
+            return None
+        tables = self._graph.get('tables', [])
+        if self._docked is not None:
+            for table in tables:
+                if table.get('id') == self._docked or table.get('room') == self._docked:
+                    return table
+        pose = self.pose()
+        if pose is not None:
+            for table in tables:
+                dock = table.get('dock')
+                if dock and math.hypot(pose[0] - dock[0], pose[1] - dock[1]) < 0.25:
+                    return table
+        return None
+
+    def _docked_room(self):
+        """Room name of the table the robot is currently docked at, or None."""
+        table = self._docked_table()
+        return table['room'] if table is not None else None
+
+    def _undock_leg(self):
+        """If docked at a table, back off straight along the dock axis to the approach pose."""
+        table = self._docked_table()
+        if table is None:
+            return []
+        return [Leg(table['approach'],
+                    f'{table["room"]}: back off the table to approach pose')]
+
     def plan(self, destination):
         """Legs to `destination`, a room name or an (x, y, yaw), or (None, reason)."""
         if self._graph is None:
@@ -321,6 +388,9 @@ class RoomNavigator(Node):
                           f'any detected room')
 
         target_pose = None
+        want_dock = False
+        if isinstance(destination, str) and destination.endswith(':dock'):
+            destination, want_dock = destination[:-len(':dock')], True
         if isinstance(destination, str):
             known = [room['name'] for room in self._graph['rooms']]
             if destination not in known:
@@ -337,17 +407,21 @@ class RoomNavigator(Node):
         else:
             return None, f'unsupported destination format: {destination}'
 
+        # Backing off a dock comes before anything else, including working out a
+        # route: every other leg assumes the robot may turn where it stands.
+        prefix = self._undock_leg()
+
         # A goal in the room we are already in needs no doorway at all.
         if target_pose is not None and start == target_room:
-            return [Leg(target_pose, f'{start}: direct to goal')], \
-                f'same room ({start}), 1 direct leg'
+            return prefix + [Leg(target_pose, f'{start}: direct to goal')], \
+                f'same room ({start}), {len(prefix) + 1} leg(s)'
 
         path = self._room_path(start, target_room)
         if path is None:
             return None, f'no doorway chain from {start} to {target_room}'
         destination = target_room
 
-        legs = []
+        legs = list(prefix)
         for here, there in zip(path, path[1:]):
             door = self._door_between(here, there)
             portal = (door.get('portals') or {}).get(here)
@@ -363,8 +437,14 @@ class RoomNavigator(Node):
             table = next((t for t in self._graph['tables']
                           if t['room'] == destination), None)
             if table is not None:
-                legs.append(Leg(table['approach'],
-                                f'{destination}: square up in front of the table'))
+                if not prefix or (prefix and start != destination):
+                    legs.append(Leg(table['approach'],
+                                    f'{destination}: square up in front of the table'))
+                if want_dock:
+                    # Straight in along the same axis it just squared up on, so
+                    # the move is a pure translation and nothing swings sideways.
+                    legs.append(Leg(table['dock'],
+                                    f'{destination}: dock at the table', dock=True))
             elif not legs:
                 room = next(r for r in self._graph['rooms'] if r['name'] == destination)
                 legs.append(Leg((room['centre'][0], room['centre'][1], pose[2]),
@@ -461,6 +541,11 @@ class RoomNavigator(Node):
             if not self._drive(leg, label, dest):
                 return
             self._report_arrival(leg, label)
+            if getattr(leg, 'dock', False):
+                table = self._table_by_pose((leg.x, leg.y))
+                self._docked = table['id'] if table is not None else dest.split(':')[0]
+            else:
+                self._docked = None
 
         self._status('arrived', f'reached {dest}', destination=dest)
         self.get_logger().info(f'reached {dest}')
@@ -503,6 +588,9 @@ class RoomNavigator(Node):
         deadline = time.monotonic() + self.get_parameter('leg_timeout').value
         tightest = float('inf')
         limit = self.get_parameter('min_side_clearance').value
+        # Worst disagreement between where the lidar says the robot sits in the
+        # opening and where the localised pose says it sits, as (gap, lidar, amcl).
+        disagreement = None
         while not result.done():
             rclpy.spin_once(self, timeout_sec=0.05)
             if time.monotonic() > deadline:
@@ -519,7 +607,22 @@ class RoomNavigator(Node):
             # the reading minus its half width.
             gap = min(left, right) - HALF_WIDTH
             tightest = min(tightest, gap)
+            if leg.transit:
+                # Only inside the opening do the nearest returns beside the robot
+                # mean the jambs; in the room they are the far walls and the
+                # comparison is meaningless.
+                span = left + right
+                if math.isfinite(span) and span < DOORWAY_SPAN:
+                    # Positive means displaced to the robot's left, same sign
+                    # convention as lane_offset, so the two are comparable.
+                    measured = (right - left) / 2.0
+                    believed = self.lane_offset(leg)
+                    if believed is not None:
+                        delta = measured - believed
+                        if disagreement is None or abs(delta) > abs(disagreement[0]):
+                            disagreement = (delta, measured, believed, span)
             if leg.transit and gap < limit:
+                self._report_disagreement(label, disagreement)
                 self._abort(handle,
                             f'{label}: only {gap * 100:.1f} cm beside the robot '
                             f'(left {left:.3f} m, right {right:.3f} m), limit '
@@ -534,7 +637,29 @@ class RoomNavigator(Node):
         if math.isfinite(tightest):
             self.get_logger().info(
                 f'{label}: tightest gap beside the robot {tightest * 100:.1f} cm')
+        self._report_disagreement(label, disagreement)
         return True
+
+    def _report_disagreement(self, label, disagreement):
+        """Say how far the localised pose was from what the lidar measured.
+
+        Run 59 aborted with the lidar reading the 1.00 m opening as 1.002 m and the
+        robot 7.8 cm off its axis, while the localised pose put it on the axis.  The
+        controller was doing what it was told; the pose it was told was wrong.  That
+        was worked out afterwards, by hand, off a screenshot - so measure it in every
+        transit instead, and from the lidar alone, which a physical robot also has.
+
+        Reports only.  Nothing gates on it and nothing steers on it: turning this
+        into a correction needs a run that shows the lidar number is the better one
+        (D-18), and that run is the next increment, not this one.
+        """
+        if disagreement is None:
+            return
+        delta, measured, believed, span = disagreement
+        self.get_logger().info(
+            f'{label}: in a {span:.3f} m opening the lidar put the robot '
+            f'{measured * 100:+.1f} cm off its axis, the localised pose '
+            f'{believed * 100:+.1f} cm - they disagree by {delta * 100:+.1f} cm')
 
     def _abort(self, handle, reason, destination, level='aborted'):
         self.get_logger().error(reason)

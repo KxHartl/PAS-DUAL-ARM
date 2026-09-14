@@ -9,6 +9,7 @@ from launch.actions import (
     DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription,
     RegisterEventHandler, SetEnvironmentVariable, TimerAction
 )
+from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -48,6 +49,13 @@ def generate_launch_description():
     carry_arms_arg = DeclareLaunchArgument(
         'carry_arms', default_value='false',
         description='Spawn robot with arms folded in carry posture.')
+    # Ground truth is a simulator privilege. It is bridged only on request, so a
+    # run that has to behave like the physical robot simply does not ask for it.
+    debug_truth = LaunchConfiguration('debug_truth')
+    debug_truth_arg = DeclareLaunchArgument(
+        'debug_truth', default_value='false',
+        description='Bridge Gazebo ground-truth poses on /debug/gz_dynamic_pose '
+                    '(diagnostics only - no control node may subscribe).')
 
     world_file = os.path.join(pkg_bringup, 'worlds', 'seminar_world.sdf')
     urdf_file = os.path.join(pkg_bringup, 'urdf', 'robot.urdf.xacro')
@@ -113,6 +121,25 @@ def generate_launch_description():
             'qos_overrides./tf_static.publisher.durability': 'transient_local',
         }],
         output='both'
+    )
+
+    # 4b. Ground-truth bridge, off unless debug_truth:=true. Feeds `loc_error`,
+    # which measures |AMCL - actual| and prints it; nothing else reads it.
+    bridge_debug_config = os.path.join(pkg_bringup, 'config', 'bridge_debug.yaml')
+    node_ros_gz_bridge_debug = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='parameter_bridge_debug',
+        parameters=[{'config_file': bridge_debug_config}],
+        condition=IfCondition(debug_truth),
+        output='both'
+    )
+    node_loc_error = Node(
+        package='pas_dual_arm_scripts',
+        executable='loc_error',
+        condition=IfCondition(debug_truth),
+        parameters=[{'use_sim_time': True}],
+        output='both',
     )
 
     # 5. Controller Spawners
@@ -212,6 +239,7 @@ def generate_launch_description():
     return LaunchDescription([
         headless_arg,
         carry_arms_arg,
+        debug_truth_arg,
         rmw_env,
         zenoh_env,
         ign_resource_env,
@@ -219,6 +247,8 @@ def generate_launch_description():
         node_robot_state_publisher,
         node_spawn_entity,
         node_ros_gz_bridge,
+        node_ros_gz_bridge_debug,
+        node_loc_error,
         detach_box_on_spawn,
         delayed_detach,
         cmd_vel_relay,
