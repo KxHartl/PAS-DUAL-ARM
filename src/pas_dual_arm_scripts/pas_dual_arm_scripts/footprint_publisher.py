@@ -65,7 +65,7 @@ class FootprintPublisher(Node):
 
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self._publishers = {
+        self._costmap_pubs = {
             name: self.create_publisher(Polygon, f'/{name}/footprint', 1)
             for name in self.get_parameter('costmaps').value
         }
@@ -97,7 +97,7 @@ class FootprintPublisher(Node):
         self.get_logger().info(
             f'{len(self._measurer.links)} links of {self._measurer.kind} geometry '
             f'in {self._measurer.frame}; publishing to '
-            f'{", ".join(self._publishers)}')
+            f'{", ".join(self._costmap_pubs)}')
 
     def _tick(self):
         if self._measurer is None:
@@ -128,7 +128,7 @@ class FootprintPublisher(Node):
         message = Polygon()
         message.points = [Point32(x=float(x), y=float(y), z=0.0)
                           for x, y in polygon]
-        for publisher in self._publishers.values():
+        for publisher in self._costmap_pubs.values():
             publisher.publish(message)
         self._own.publish(message)
 
