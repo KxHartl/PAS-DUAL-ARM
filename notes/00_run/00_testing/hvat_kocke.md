@@ -143,6 +143,30 @@ objavi poze za RViz → kolizijska scena (pod, stol, kocka; bez nje MoveIt zamah
 
 To odstupanje je glavni podatak koji izlazi iz testa → [[P-37_arm_position_gain_sag]].
 
+### Provjera kamera na zapešću
+
+Kad ruke stoje na pred-pozama:
+```bash
+bash scripts/run_cube_isolated.sh python3 scripts/probe_wrist_markers.py
+```
+
+Izmjereno 15. 9. 2026. (run 72): obje ruke vide svoj marker na ~0.29 m, **1.2° i 3.2°** od sredine
+slike, a marker u `base_link` odstupa **manje od 3 mm** od stvarne poze. To je red veličine
+točnije od glavne kamere s metar udaljenosti.
+
+### Zatvaranje zadnjih 20 cm po onome što ruka vidi
+
+```bash
+bash scripts/run_cube_isolated.sh python3 scripts/trial_cube_pregrasp.py --contact --ros-args -p use_sim_time:=true
+```
+
+Bez `--contact` run staje na pred-pozama — to je sigurna varijanta. S njim: svaka ruka očita svoj
+marker, oduzme se podizanje markera (0.056 m) da se dobije točka **na plohi**, iz dvije plohe se
+ponovno izvede centar i os kocke, pa obje ruke idu **ravnom linijom i istovremeno** do kontakta.
+
+Prije pritiska ide poštena provjera: razmak dviju ploha mora biti **0.30 ± 0.03 m**. Krivi marker,
+krivi frame ili preokrenuto PnP rješenje svi ispadnu kao širina koja nije 0.30, i run stane.
+
 ## Korak 5 — vodilice +10 cm
 
 Tek kad obje ruke stvarno stoje u svojim točkama. Dignuti obje vodilice za 0.10 m i gledati u

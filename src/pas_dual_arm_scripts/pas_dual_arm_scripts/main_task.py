@@ -597,6 +597,37 @@ class MainTask(BaseDriver, Node):
             point.velocities = []
             point.accelerations = []
 
+    def approach_both_linear(self, targets, label, min_frac=0.85):
+        """Take BOTH hands along a straight line to their targets at once.
+
+        `targets` is {side: (group, ee_link, pose)}. Straight matters here: the
+        pads have to arrive square against the face, and a joint-space plan for
+        the last stretch curves the hand in sideways. Simultaneous matters for
+        the same reason it does everywhere else on this cube - whichever hand
+        lands first pushes it out from under the other (P-26).
+
+        Returns {side: bool}, or None if a line could not be computed.
+        """
+        trajs = {}
+        for side, (group, ee, pose) in targets.items():
+            # Compute from where the arm ACTUALLY is; a line built while it is
+            # still creeping starts from a stale state and the JTC lurches.
+            self._wait_settle(ee)
+            got = self._linear_traj(group, ee, pose, f'{label} {side}')
+            if got is None:
+                self.get_logger().error(f'{label} {side}: no straight line')
+                return None
+            solution, fraction = got
+            if fraction < min_frac:
+                self.get_logger().error(
+                    f'{label} {side}: line only {fraction:.2f} complete')
+                return None
+            if not self._traj_starts_here(solution.joint_trajectory,
+                                          f'{label} {side}'):
+                return None
+            trajs[side] = solution.joint_trajectory
+        return self.move_arms_parallel(trajs, label)
+
     def move_arms_parallel(self, trajs, label):
         """Run both arm trajectories at the same time, sent straight to the two
         JTCs. Both are stretched to the same duration first, so the hands
