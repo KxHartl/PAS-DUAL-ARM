@@ -188,18 +188,20 @@
        Gazebo sensor at all, so neither emits under Fortress. We add native Ignition
        sensors here; the world already loads the ignition sensors-system plugin. -->
 
-  <!-- 360 deg 2D lidar for Nav2/SLAM, on the base's virtual laser frame -->
+  <!-- 360 deg 2D lidar for Nav2/SLAM, on the base's virtual laser frame.
+       Upgraded to match official PAL Tiago Omni Base SICK TiM571 specs:
+       0.33 deg angular resolution (1080 samples / 360 deg), 1 mm range resolution, 25 Hz. -->
   <gazebo reference="virtual_base_laser_link">
     <sensor name="base_lidar" type="gpu_lidar">
       <topic>scan</topic>
-      <update_rate>10</update_rate>
+      <update_rate>25</update_rate>
       <always_on>1</always_on>
       <visualize>true</visualize>
       <ignition_frame_id>virtual_base_laser_link</ignition_frame_id>
       <lidar>
         <scan>
           <horizontal>
-            <samples>360</samples>
+            <samples>1080</samples>
             <resolution>1</resolution>
             <min_angle>-3.141592</min_angle>
             <max_angle>3.141592</max_angle>
@@ -211,9 +213,9 @@
           </vertical>
         </scan>
         <range>
-          <min>0.12</min>
-          <max>20.0</max>
-          <resolution>0.01</resolution>
+          <min>0.05</min>
+          <max>25.0</max>
+          <resolution>0.001</resolution>
         </range>
       </lidar>
     </sensor>

@@ -20,3 +20,4 @@ src/pas_dual_arm_bringup/maps/map_2*
 # Raw assistant session transcripts dumped at the repo root
 /*-local-command-caveat*.txt
 /codex-session-*.md
+/*-zadatak-*.txt

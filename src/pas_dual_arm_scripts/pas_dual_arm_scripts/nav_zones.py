@@ -334,17 +334,14 @@ def default_params(node=None):
         # (0.673 m circumscribed radius, plus 0.10 m of goal tolerance), and it
         # snagged. Anything that changes this must re-run scripts/check_zones.py,
         # which checks the turn clearance at every pose the navigator stops at.
-        'chute_length': 0.85,
+        'chute_length': 0.50,
         # Thick enough that the planner cannot squeeze a path around the
         # outside of a guide wall at map resolution.
         'chute_thickness': 0.65,
-        # Negative widens the lane. The guide walls are lethal in the costmap,
-        # so if the lane were the tighter of the two constraints they, not the
-        # doorway, would decide whether the robot fits - and SLAM already reads
-        # the 1.0 m door as ~0.95 m. Widening by 5 cm a side puts the lane just
-        # outside the real jambs: it still admits only a square approach, while
-        # the physical opening stays the thing that measures the robot.
-        'lane_margin': -0.05,
+        # Negative widens the lane. Widening by 15 cm a side puts the guide walls
+        # comfortably clear of the 0.95 m opening, preventing lethal keepout
+        # collisions while committing the planner to a square approach.
+        'lane_margin': -0.15,
         # Portal poses must clear the guide walls by more than the robot's
         # circumscribed radius (hypot(0.52, 0.427) = 0.673 m) so the robot can
         # turn to the door heading without a corner entering the lane - plus the

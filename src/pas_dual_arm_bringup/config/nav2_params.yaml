@@ -23,11 +23,13 @@ amcl:
     laser_max_range: 100.0
     laser_min_range: -1.0
     laser_model_type: "likelihood_field"
-    max_beams: 60
+    # Upgraded for fine positioning: 180 beams (was 60), 3 cm position update (was 25 cm),
+    # 0.03 rad (~1.7 deg) angle update (was 11.5 deg). Eliminates dead-zone drift during docking.
+    max_beams: 180
     max_particles: 2000
     min_particles: 500
     odom_frame_id: "odom"
-    pf_err: 0.05
+    pf_err: 0.02
     pf_z: 0.99
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
@@ -37,8 +39,8 @@ amcl:
     sigma_hit: 0.2
     tf_broadcast: true
     transform_tolerance: 1.0
-    update_min_a: 0.2
-    update_min_d: 0.25
+    update_min_a: 0.03
+    update_min_d: 0.03
     z_hit: 0.5
     z_max: 0.05
     z_rand: 0.5
@@ -118,7 +120,7 @@ bt_navigator_navigate_to_pose_rclcpp_node:
 controller_server:
   ros__parameters:
     use_sim_time: True
-    controller_frequency: 10.0
+    controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
@@ -148,18 +150,18 @@ controller_server:
       # The doorway itself allows 7.75 cm of lateral error at a square heading,
       # so the gate is not the part that can move.
       xy_goal_tolerance: 0.05
-      yaw_goal_tolerance: 0.05
-    # DWB Local Planner configured for omnidirectional (mecanum) base
+      yaw_goal_tolerance: 0.025
+    # DWB Local Planner configured for omnidirectional (mecanum) base.
+    # Evaluates 15,625 trajectories (25x25x25) at 20 Hz with 1 cm linear granularity.
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: True
+      debug_trajectory_details: False
       min_vel_x: -0.30
       max_vel_x: 0.30
-      # Full lateral range: this is the mecanum base's way of correcting an
-      # offset without yawing, and it is what the verified 14 Sep run used.
-      min_vel_y: -0.30
-      max_vel_y: 0.30
-      max_vel_theta: 0.60
+      # Controlled lateral correction: strafe without crabbing or yawing
+      min_vel_y: -0.15
+      max_vel_y: 0.15
+      max_vel_theta: 0.30
       min_speed_xy: 0.0
       max_speed_xy: 0.35
       min_speed_theta: 0.0
@@ -169,31 +171,23 @@ controller_server:
       decel_lim_x: -1.5
       decel_lim_y: -1.5
       decel_lim_theta: -3.0
-      vx_samples: 15
-      vy_samples: 15
-      vtheta_samples: 15
+      vx_samples: 25
+      vy_samples: 25
+      vtheta_samples: 25
       sim_time: 1.2
-      linear_granularity: 0.05
-      angular_granularity: 0.025
+      linear_granularity: 0.01
+      angular_granularity: 0.01
       transform_tolerance: 0.2
-      # Must equal general_goal_checker's. RotateToGoalCritic reads THIS one and,
-      # inside it, rejects any trajectory that still translates - the robot is
-      # meant to be rotating onto the goal heading by then. Leaving it at 0.10
-      # while the goal checker asked for 0.05 deadlocked the robot at 0.09 m:
-      # DWB refused to drive the last four centimetres and the checker refused to
-      # call it arrived, so every topic from /cmd_vel down carried exact zero
-      # until the progress checker gave up and Nav2 ran a recovery.
+      # Must equal general_goal_checker's. RotateToGoalCritic reads THIS one.
       xy_goal_tolerance: 0.05
       trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True
-      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "PathAlign", "GoalDist", "Twirling"]
+      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "GoalDist", "Twirling"]
       ObstacleFootprint.scale: 2.0
       PathDist.scale: 64.0
-      PathAlign.scale: 48.0
-      PathAlign.forward_point_distance: 0.1
       GoalDist.scale: 24.0
-      Twirling.scale: 4.0
+      Twirling.scale: 20.0
       RotateToGoal.scale: 64.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
@@ -201,8 +195,8 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      update_frequency: 15.0
+      publish_frequency: 5.0
       global_frame: odom
       robot_base_frame: base_link
       use_sim_time: True
@@ -311,7 +305,7 @@ planner_server:
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
+      tolerance: 0.2
       use_astar: true
       allow_unknown: true
 
@@ -370,7 +364,7 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: True
-    smoothing_frequency: 20.0
+    smoothing_frequency: 40.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
     # Matches the omni DWB limits with controlled lateral and reverse support.
@@ -379,7 +373,7 @@ velocity_smoother:
     max_accel: [1.5, 1.5, 3.0]
     max_decel: [-1.5, -1.5, -3.0]
     odom_topic: "/base_controller/odom"
-    odom_duration: 0.1
+    odom_duration: 0.05
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
 

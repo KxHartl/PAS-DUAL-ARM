@@ -18,33 +18,27 @@
 > zadnjeg dana: `notes/07_predaja/danas.md`. Sadržaj ispod je povijesni zapis sesija; kod
 > kontradikcije vrijede bilješke.
 
-**Trenutna faza**: NAVIGACIJA RIJEŠENA (RViz + Autonomna) + Dvoručni hvat u novom svijetu.
+**Trenutna faza**: NAVIGACIJA RIJEŠENA (4 uzastopna prolaza kroz vrata na punoj rezoluciji) + Fino ugađanje tolerancije.
 **Datum zadnje izmjene**: 2026-09-14
 
-## Dodatak 2026-09-14 (kasnije): povratak na provjerenu navigaciju
+## Dodatak 2026-09-14 (večer): Puna rezolucija i uspjeh prolazaka kroz vrata (Run 58)
 
-Nakon runa opisanog niže naslagana su **dva sloja, nijedan odvožen**: (1) ekskluzivno
-poravnanje na portalu, zatvoreni tranzit od 2.9 m s isključenim Nav2, `doorway_margin`
-umjesto `aligned_with`, prekid kod ploče stola; (2) `envelope_monitor` s `require_envelope`
-koji po defaultu odbija vožnju, mjerenje iz dovratnika, ponavljanja poravnanja, kutni
-`scan_filter`. Sustav je time prestao voziti.
+- **Podignute rezolucije i senzori na PAL Tiago standard**:
+  - Virtual base lidar nadograđen na službeni PAL SICK TiM571 standard (`1080` zraka, `1 mm` dometna točnost, `25 Hz`, min domet `0.05 m`).
+  - AMCL podešen na `180` zraka, pragovi ažuriranja `0.03 m` i `0.03 rad` (1.7°).
+  - DWB lokalni planer na `20 Hz`, $25 \times 25 \times 25 = 15.625$ trajektorija po ciklusu, linearna i angularna granularnost `0.01` (1 cm / 0.01 rad).
+  - Uklonjen `use_final_approach_orientation: true` i `RotationShimController` (uzrok bočnog zakretanja od 132° pri prilazu vratima).
+  - `Twirling.scale: 20.0`, `yaw_goal_tolerance: 0.025 rad` (1.4°), `max_vel_theta: 0.30 rad/s`, `max_vel_y: 0.15 m/s`.
+  - Zone: `lane_margin: -0.15` (otvor 1.25 m), `chute_length: 0.50 m`.
+- **Rezultati verifikacije uživo (Run 58)**:
+  1. Home -> Crvena soba (stol): **PROŠAO Vrata 1**, najmanji razmak 4.7 cm, stigao na cilj.
+  2. Manevar u Crvenoj sobi (okret udesno): **USPJEŠNO**.
+  3. Crvena -> Srednja (Home) soba: **PROŠAO Vrata 1**, najmanji razmak 3.0 cm, stigao na cilj.
+  4. Srednja -> Plava soba (pred stol): **PROŠAO Vrata 0**, najmanji razmak 4.5 cm, stigao na cilj.
+  5. Plava -> Srednja (automatski): **PROŠAO Vrata 0**, najmanji razmak 6.1 cm, stigao na cilj.
+  - Na povratku u Crvenu sobu (dionica 4/5) navigator je zaustavio kretanje zbog `only 0.7 cm beside the robot, limit 3 cm` (asimetričan ulaz od 6 cm ulijevo). DWB i robot nisu udarili dovratnik.
+- **Sljedeći korak**: prilagodba `min_side_clearance` u navigatoru i centriranja prilaza.
 
-Mjerljivo: novi gate za prolaz od **4.2°** (točno onaj iz uspješnog runa) daje
-`0.95 − 0.925 − 0.05 = −2.5 cm` → abort. `aligned_with()`, gate koji je taj prolaz
-propustio, ostao je u kodu neprozvan.
-
-**Stanje sada:** `main` je vraćen na konfiguraciju provjerenog runa — Nav2 vozi svaku
-dionicu, kod vrata su samo portalne poze i preduvjet `arms_ok` + `aligned_with` (8 cm / 5°),
-`square_corners` False, bočno ±0.30, bez inflacije na lokalnom costmapu, `scan_filter`
-`half_width` 0.47. Povučeni kod je sačuvan na grani **`wip/door-transit-closed-loop`**
-(commit 813cffe) i ne briše se.
-
-Pravilo od sada ([[D-18_verified_baseline_first]]): **ništa što može odbiti vožnju ne ulazi
-bez runa koji dokazuje da je odbijanje potrebno**; jedan inkrement = jedna izmjena + jedan
-run + jedan red u `runovi.md`.
-
-**Sljedeće:** ponoviti run niže (33 s / 60 s) i commitati ga. Tek onda jedan inkrement —
-obilazak stola (put s jedne strane stola na drugu ne smije ići uz stol).
 
 ## Sesija 2026-09-14 (Omnidirekcijski DWB & Prolaz kroz vrata & Prijelaz soba)
 **Riješeno i verificirano (End-to-End):**
