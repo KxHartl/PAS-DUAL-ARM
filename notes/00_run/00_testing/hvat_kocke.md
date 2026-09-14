@@ -123,77 +123,38 @@ Ako IK prolazi na ~0.87 m → baza se ne miče. Ako pada, primiče se odometrijo
 izvan Nav2. Granica je noga stola na `y = −6.125`. Nakon pomaka marker zna izaći iz vidnog polja
 → naciljati kameru i **ponovno izmjeriti** prije pomicanja ruku.
 
-## Korak 4 — svaka ruka u svoju točku
+## Koraci 3–5 — jedna naredba
 
-**Terminal 3** (robot se miče):
-```bash
-bash scripts/run_cube_isolated.sh python3 scripts/trial_cube_pregrasp.py --ros-args -p use_sim_time:=true
-```
-
-Slijed u skripti: naciljaj kameru → izmjeri → primakni se koliko treba → ponovno izmjeri →
-objavi poze za RViz → kolizijska scena (pod, stol, kocka; bez nje MoveIt zamahne rukom kroz stol)
-→ IK → **isplaniraj obje ruke prije nego se ijedna pomakne** → pusti ih **istovremeno** →
-`verify_reached` ispiše **stvarno** odstupanje iz TF-a, ne ono što je naređeno.
-
-> [!important] Ruke idu paralelno, ne jedna pa druga
-> `move_group` izvršava jednu trajektoriju odjednom, pa dvoručni pokret preko njega nužno ispadne
-> sekvencijalan — ruka koja stigne prva gurne kocku po stolu prije nego je druga ondje da je
-> uravnoteži ([[P-26_one_sided_press_bulldozes]]). Zato se obje putanje prvo isplaniraju, rastegnu
-> na isto trajanje i pošalju ravno na oba JTC-a u istom trenutku (`move_arms_parallel`).
-
-To odstupanje je glavni podatak koji izlazi iz testa → [[P-37_arm_position_gain_sag]].
-
-### Provjera kamera na zapešću
-
-Kad ruke stoje na pred-pozama:
-```bash
-bash scripts/run_cube_isolated.sh python3 scripts/probe_wrist_markers.py
-```
-
-Izmjereno 15. 9. 2026. (run 72): obje ruke vide svoj marker na ~0.29 m, **1.2° i 3.2°** od sredine
-slike, a marker u `base_link` odstupa **manje od 3 mm** od stvarne poze. To je red veličine
-točnije od glavne kamere s metar udaljenosti.
-
-### Zatvaranje zadnjih 20 cm po onome što ruka vidi
+Sve od lociranja do dizanja je u jednoj skripti, u **jednom terminalu**:
 
 ```bash
-bash scripts/run_cube_isolated.sh python3 scripts/trial_cube_pregrasp.py --contact --ros-args -p use_sim_time:=true
+bash scripts/run_cube_isolated.sh python3 scripts/grasp_cube.py --ros-args -p use_sim_time:=true
 ```
 
-Bez `--contact` run staje na pred-pozama — to je sigurna varijanta. S njim: svaka ruka očita svoj
-marker, oduzme se podizanje markera (0.056 m) da se dobije točka **na plohi**, iz dvije plohe se
-ponovno izvede centar i os kocke, pa obje ruke idu **ravnom linijom i istovremeno** do kontakta.
+Zaustavljanje ranije: `--pregrasp-only` (ništa ne dodiruje) ili `--no-lift` (stane na kontaktu).
 
-Prije pritiska ide poštena provjera: razmak dviju ploha mora biti **0.30 ± 0.03 m**. Krivi marker,
-krivi frame ili preokrenuto PnP rješenje svi ispadnu kao širina koja nije 0.30, i run stane.
+Slijed:
 
-#### Prilaz se vodi kontaktnim senzorima, obje ruke simetrično
-
-Obje ruke se **uvijek miču zajedno i za isti iznos**. Simetrija je bit: jednaki suprotni koraci
-kocku **stegnu**, ne gurnu, jer nijedna strana ne pretekne drugu. Jastučići određuju samo **tempo**:
-
-| kontakt | korak obje ruke |
+| # | radnja |
 |---|---|
-| nijedan jastučić | **2 cm** |
-| bilo koji jastučić javi kocku | **5 mm** |
+| 1 | glavna kamera izmjeri kocku (marker + dubina) |
+| 2 | baza se primakne na doseg ruku, uz granicu stola |
+| 3 | hvataljke se otvore, obje ruke **paralelno** na pred-poze (20 cm od ploha) |
+| 4 | svaka ruka očita **svoj** marker na plohi koju će pritisnuti |
+| 5 | obje ruke, **jednim potezom**, na 2 cm od ploha i na **istu visinu** |
+| 6 | **desna** ruka sama, polako, dok oba njena jastučića ne jave kontakt |
+| 7 | **lijeva** ruka isto, pritišće kocku o desnu |
+| 8 | vodilice dignu 10 cm, pa se izmjeri koliko su se stvarno pomaknule |
 
-Staje kad **sva četiri** jastučića jave svjež kontakt s `aruco_box`. Dopušteno je najviše
-**2.5 cm** preko zadane kontaktne poze — kocka (ne poza) zaustavlja jastučić, pa kontakt prolazi i
-kad je ploha očitana koji milimetar prekratko.
+> [!important] Zašto jedna po jedna, a ne obje odjednom
+> Simultano zatvaranje je izgledalo simetrično, ali nije bilo: 15. 9. su zapešća na pred-pozi
+> bila **2 cm razmaknuta po z** (`0.812` i `0.832`), a `verify_reached` s tolerancijom 5 cm to
+> pusti. Dva jastučića na različitim visinama su spreg — kocka se prevrnula. Zato korak 5 obje
+> ruke prvo **poravna po visini**, a koraci 6 i 7 drže naredenu visinu fiksnom dok se prilazi
+> vodoravno.
 
-Ako sva četiri ne jave kontakt, run **padne** s brojem jastučića. Zaustavljanje prije zadane poze
-nije greška nego cilj — odlučuju jastučići, ne poza.
-
-> [!warning] Senzor sile ne postoji
-> Imamo četiri **kontaktna** senzora u vrhovima prstiju (`/contact/*_tip`), koji nose imena
-> sudarenih tijela pa se broji samo dodir s `aruco_box` — dodir stola ili sebe ne prolazi. To je
-> „dira / ne dira", ne sila. Zglobovi ruku nemaju `effort` u `state_interfaces`.
-
-## Korak 5 — vodilice +10 cm
-
-Tek kad obje ruke stvarno stoje u svojim točkama. Dignuti obje vodilice za 0.10 m i gledati u
-GUI-ju. Izmjeriti i ispisati: stvarne visine vodilica, poze obiju hvataljki, pozu kocke.
-Nema attacha — samo opažanje, pa zajednička odluka što dalje.
+Korak po korak, 4 mm, 1.5 s, najviše 2.5 cm stezanja preko zadane poze — kocka (ne poza)
+zaustavlja jastučić. Ako sva četiri jastučića ne jave kontakt, run **padne**.
 
 ---
 
