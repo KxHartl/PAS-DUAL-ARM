@@ -185,7 +185,7 @@ controller_server:
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "GoalDist", "Twirling"]
       ObstacleFootprint.scale: 2.0
-      PathDist.scale: 64.0
+      PathDist.scale: 96.0
       GoalDist.scale: 24.0
       Twirling.scale: 20.0
       RotateToGoal.scale: 64.0

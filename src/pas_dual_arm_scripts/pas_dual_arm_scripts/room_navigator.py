@@ -86,7 +86,9 @@ class RoomNavigator(Node):
         # through door 0 at 4.2 degrees and 1.8 cm, so a 4.0 degree limit would
         # have refused a passage that demonstrably worked.
         self.declare_parameter('heading_tolerance', 0.087)
-        self.declare_parameter('min_side_clearance', 0.03)
+        # 5 mm (0.005 m). Physical door is 1.0 m, robot width is 0.854 m (clearance
+        # nominal ~4.8 to 7.3 cm). 0.03 m aborted safe passages with 0.7 cm clearance.
+        self.declare_parameter('min_side_clearance', 0.005)
         # Below this a leg counts as axis aligned already; it also absorbs the
         # few centimetres between a detected door centre and a table centre.
         self.declare_parameter('corner_threshold', 0.30)
@@ -517,11 +519,11 @@ class RoomNavigator(Node):
             # the reading minus its half width.
             gap = min(left, right) - HALF_WIDTH
             tightest = min(tightest, gap)
-            if gap < limit:
+            if leg.transit and gap < limit:
                 self._abort(handle,
                             f'{label}: only {gap * 100:.1f} cm beside the robot '
                             f'(left {left:.3f} m, right {right:.3f} m), limit '
-                            f'{limit * 100:.0f} cm', destination)
+                            f'{limit * 100:.1f} cm', destination)
                 return False
 
         status = result.result().status
