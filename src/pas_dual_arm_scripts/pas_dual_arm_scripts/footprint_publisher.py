@@ -21,6 +21,8 @@ correct posture's polygon and a sane fallback.
     ros2 topic echo /local_costmap/published_footprint
 """
 
+import time
+
 import numpy as np
 import rclpy
 from geometry_msgs.msg import Point32, Polygon
@@ -53,7 +55,16 @@ class FootprintPublisher(Node):
         # The costmaps' robot_base_frame: a footprint is expressed in it.
         self.declare_parameter('frame', 'base_link')
         self.declare_parameter('geometry', 'collision')
-        self.declare_parameter('max_vertices', 24)
+        # ObstacleFootprint rasterises this outline once per sampled trajectory,
+        # and DWB samples 3711 of them per cycle: at 24 vertices the control loop
+        # missed its 10 Hz rate 1184 times in one run, which Nav2 read as a stuck
+        # robot and answered with a Spin recovery. Eight directions keep the
+        # extent exact where it matters - they include +-x and +-y, so length and
+        # width are unchanged - and only chamfer the corners outward.
+        self.declare_parameter('max_vertices', 8)
+        # Even when the shape has not moved, say so now and then, so a costmap
+        # that subscribes late is not left with the configured polygon.
+        self.declare_parameter('resend_period', 2.0)
         # Every costmap rasterises the polygon on receipt, so republish only
         # when the shape has really moved.
         self.declare_parameter('change_tolerance', 0.01)
@@ -65,8 +76,14 @@ class FootprintPublisher(Node):
 
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        # Latched, and resent periodically. The costmaps subscribe when they
+        # configure, which is after this node starts and again on every restart
+        # of the Nav2 stack; a volatile publisher that only speaks on change
+        # leaves them on the YAML footprint until the arms happen to move. That
+        # is exactly what was seen: the outline only appeared after a posture
+        # change.
         self._costmap_pubs = {
-            name: self.create_publisher(Polygon, f'/{name}/footprint', 1)
+            name: self.create_publisher(Polygon, f'/{name}/footprint', latched)
             for name in self.get_parameter('costmaps').value
         }
         # Also published latched under our own name, so RViz and any later node
@@ -79,6 +96,7 @@ class FootprintPublisher(Node):
 
         self._measurer = None
         self._last = None
+        self._sent_at = None
         self._reported = None
         self.create_timer(1.0 / max(0.5, self.get_parameter('rate').value), self._tick)
         self.get_logger().info('waiting for /robot_description to build the footprint')
@@ -120,10 +138,15 @@ class FootprintPublisher(Node):
                 throttle_duration_sec=5.0)
             return
 
-        if not polygon_changed(self._last, polygon,
-                               self.get_parameter('change_tolerance').value):
+        moved = polygon_changed(self._last, polygon,
+                                self.get_parameter('change_tolerance').value)
+        due = (self._sent_at is None or
+               time.monotonic() - self._sent_at >
+               self.get_parameter('resend_period').value)
+        if not moved and not due:
             return
         self._last = polygon
+        self._sent_at = time.monotonic()
 
         message = Polygon()
         message.points = [Point32(x=float(x), y=float(y), z=0.0)

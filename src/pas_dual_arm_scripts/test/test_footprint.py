@@ -57,3 +57,30 @@ def test_republish_only_when_the_outline_really_moved():
     # An arm swinging out by 10 cm is a change worth sending.
     wider = square + np.array([0.0, 0.10])
     assert polygon_changed(square, wider, 0.01)
+
+
+def test_eight_vertices_keep_width_and_length_exact():
+    # The vertex cap exists because ObstacleFootprint rasterises the outline once
+    # per sampled trajectory, and DWB samples thousands per cycle. Eight is not
+    # an arbitrary compromise: the directions include +-x and +-y, so the extent
+    # that has to fit through a doorway is preserved to the millimetre and only
+    # the corners are chamfered outward. Six drops +-90 degrees and the width
+    # starts to grow, which would hand the doorway back the margin we just won.
+    rng = np.random.default_rng(1)
+    points = np.vstack([
+        rng.uniform([-0.35, -0.42], [0.67, 0.42], size=(4000, 2)),
+        rng.normal([0.55, 0.0], [0.05, 0.30], size=(1000, 2)),
+    ])
+
+    def extent(polygon):
+        return (polygon[:, 0].max() - polygon[:, 0].min(),
+                polygon[:, 1].max() - polygon[:, 1].min())
+
+    exact_l, exact_w = extent(ground_hull(points, max_vertices=10_000))
+    capped = ground_hull(points, max_vertices=8)
+    length, width = extent(capped)
+    assert len(capped) == 8
+    assert abs(width - exact_w) < 1e-9
+    assert abs(length - exact_l) < 1e-9
+    for point in points:
+        assert _inside(capped, point)

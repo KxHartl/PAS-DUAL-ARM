@@ -40,6 +40,15 @@ Oba `check_*` moraju završiti s **`PASS`**. Ako ne prođu, **ne pokretati simul
 su krive i vožnja nema smisla.
 
 ### Što treba znati
+- **Log se piše sam, po čvoru.** ROS svakom procesu piše `~/.ros/log/<cvor>_<pid>_*.log` —
+  uključujući Nav2-ove (`controller_server`, `planner_server`, `bt_navigator`), koji u
+  `launch.log` ne dospiju. `tee` dakle **nije potreban**; ostavljen je samo jer daje jednu
+  datoteku s oba stoga isprepletena. Najkorisnije poslije runa:
+  ```bash
+  ls -t ~/.ros/log/controller_server_*.log | head -1 | xargs grep -cE "WARN|ERROR"
+  grep -oE "\[(WARN|ERROR)\].*" $(ls -t ~/.ros/log/controller_server_*.log | head -1) \
+    | sed -E 's/[0-9]+\.[0-9]+/N/g' | sort | uniq -c | sort -rn | head
+  ```
 - `clean_ros.sh` **nije opcionalan**: živ čvor iz prethodne sesije ostane `active`, novi
   `lifecycle_manager` ga ne može konfigurirati i **prekine cijeli bringup** — karta i costmap
   se onda ne pojave, a izgleda kao da ništa ne radi ([[P-39_nav2_enters_doorway_at_an_angle]] #8).
@@ -208,6 +217,8 @@ Upisati u [[runovi]] i u pripadnu P-karticu — **i kad ne uspije**.
 | `arms: … off ARM_CARRY_V2` | ruke su se raširile ([[P-37_arm_position_gain_sag]]) | ponovi `set_posture ARM_CARRY_V2` |
 | `alignment: … off the lane centreline` | AMCL netočan ili je prethodna dionica podbacila | pošalji robota malo unazad i ponovi |
 | `No valid trajectories out of N!` (DWB) | u costmapu **nema** prolaza dovoljno širokog za footprint — nije greška upravljača | izmjeri stvarnu širinu koju costmap vidi (dolje) |
+| `Control loop missed its desired rate` (×1000) | upravljač ne stigne u 10 Hz; Nav2 to čita kao zaglavljenog robota → `Failed to make progress` → recovery `Spin` | smanji trošak: `max_vertices` footprinta, rezoluciju lokalnog costmapa ili broj uzoraka DWB-a |
+| `Failed to make progress` | posljedica gornjeg, ne zaseban kvar | isto |
 
 Kad DWB javi da nema valjanih trajektorija, izmjeri koliko je slobodno **u costmapu**, ne u svijetu:
 
