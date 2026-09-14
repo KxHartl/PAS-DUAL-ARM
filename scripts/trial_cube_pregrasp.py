@@ -20,6 +20,23 @@ from pas_dual_arm_scripts.main_task import MainTask
 
 LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
+# How far ahead of base_link the cube centre should end up. Measured from the
+# URDF: the left shoulder sits at (0.000, 0.153, 0.386) with the carriages at
+# their lower limit, so a contact pose at (d, 0.265, 0.821) needs a reach of
+# 0.871 m at d = 0.746 and 0.750 m at d = 0.600. The Gen3 reaches 0.902 m to
+# the flange, but nothing like that with the wrist turned sideways - which is
+# why both arms failed IK at 0.746 m.
+TARGET_RANGE = 0.62
+
+# What stops the base. Everything on the robot below 0.23 m passes under the
+# tabletop and between the near table legs (they are 0.70 m apart, the base is
+# 0.497 m wide). The limit is the forwardmost structure ABOVE tabletop height:
+# the torso frame, at x = +0.283 m. The table's near edge is 0.25 m in front of
+# the cube centre.
+TORSO_FRONT = 0.283
+TABLE_EDGE_AHEAD_OF_CUBE = -0.25
+EDGE_CLEARANCE = 0.03
+
 
 def measure(node):
     marker = node.confirm_box(timeout=10.0, samples=5)
@@ -96,12 +113,23 @@ def main():
             raise RuntimeError('Camera pan/tilt command failed')
         center, axis = measure(node)
 
-        # Hard stop before the table. The cube starts about 0.85 m ahead at the
-        # dock pose; advancing only closes the gap down to the reachable band.
-        advance = min(0.12, max(0.0, center.x - 0.65))
+        # Close in far enough for the arms to reach, and no further than the
+        # torso can go without touching the tabletop.
+        wanted = center.x - TARGET_RANGE
+        table_edge = center.x + TABLE_EDGE_AHEAD_OF_CUBE
+        allowed = table_edge - TORSO_FRONT - EDGE_CLEARANCE
+        advance = max(0.0, min(wanted, allowed))
+        node.get_logger().info(
+            f'approach: cube at {center.x:.3f} m, want {TARGET_RANGE:.3f} m '
+            f'(advance {wanted:.3f}), table edge at {table_edge:.3f} m allows '
+            f'{allowed:.3f} -> advancing {advance:.3f} m')
+        if wanted > allowed + 1e-6:
+            node.get_logger().warn(
+                f'the table stops the base {wanted - allowed:.3f} m short of '
+                'the range the arms want; expect IK to be tight')
         if advance > 0.02:
             travelled = node.drive_distance(advance, speed=0.04)
-            if travelled is None or travelled > 0.14:
+            if travelled is None or travelled > advance + 0.03:
                 raise RuntimeError('Base advance did not track odometry')
             node.get_logger().info(f'Advanced {travelled:.3f} m; remeasuring')
             if not node.aim_camera(0.0, 0.65, 'close-range camera aim'):
