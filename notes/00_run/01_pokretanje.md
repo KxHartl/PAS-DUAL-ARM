@@ -128,7 +128,8 @@ Nakon što je `seminar_map.yaml` spremljena i instalirana, navigacija se pokreć
    ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py
    ```
 
-Argumenti: `gui:=false` (bez tipaka), `rviz:=false`, `zones:=false` (A/B bez zona).
+Argumenti: `gui:=false` (bez tipaka), `rviz:=false`, `zones:=false` (A/B bez zona),
+`safety:=false` (bez `collision_monitor`; tada sirovi `/cmd_vel` opet izravno vozi bazu).
 
 MoveIt i `set_posture` trebaju samo ako ruke treba **prepozirati** tijekom rada; za vožnju
 praznog robota ne trebaju, jer ih JTC drži u pozi u kojoj su spawnane (tako je radio i run 44):

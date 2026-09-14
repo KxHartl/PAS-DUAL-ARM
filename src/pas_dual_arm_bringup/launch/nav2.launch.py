@@ -102,6 +102,37 @@ def generate_launch_description():
         }],
     )
 
+    # Filters Nav2's velocity against the raw scan and the robot's *current*
+    # footprint, independently of the costmap. The costmap cannot help with what
+    # the laser never saw (a table top at 0.75 m) and the controller can only be
+    # as right as its model of the robot; this is the layer that does not depend
+    # on either being correct. cmd_vel_relay prefers its output, so it cannot be
+    # bypassed while it runs.
+    safety = LaunchConfiguration('safety')
+    safety_arg = DeclareLaunchArgument(
+        'safety', default_value='true',
+        description='Run the collision monitor between Nav2 and the base.')
+    collision_monitor = Node(
+        package='nav2_collision_monitor',
+        executable='collision_monitor',
+        name='collision_monitor',
+        output='screen',
+        parameters=[os.path.join(pkg_bringup, 'config', 'collision_monitor.yaml')],
+        condition=IfCondition(safety),
+    )
+    lifecycle_manager_safety = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_safety',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
+            'autostart': True,
+            'node_names': ['collision_monitor'],
+        }],
+        condition=IfCondition(safety),
+    )
+
     # Delay the Nav2 stack so the localizer has time to publish map->odom first.
     # Otherwise local_costmap activates while the TF tree is still split
     # (odom and base_link in unconnected trees) and logs a startup-race error.
@@ -160,11 +191,14 @@ def generate_launch_description():
         rviz_arg,
         zones_arg,
         gui_arg,
+        safety_arg,
         mapping,
         localization,
         nav_zones,
         costmap_filter_info_server,
         lifecycle_manager_costmap_filters,
+        collision_monitor,
+        lifecycle_manager_safety,
         features,
         room_navigator,
         nav_gui,

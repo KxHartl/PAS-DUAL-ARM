@@ -530,7 +530,8 @@ class RoomNavigator(Node):
             self._status('failed', f'{label}: Nav2 status {status}', destination=destination)
             return False
         if math.isfinite(tightest):
-            self.get_logger().info(f'{label}: tightest gap beside the robot {tightest * 100:.1f} cm')
+            self.get_logger().info(
+                f'{label}: tightest gap beside the robot {tightest * 100:.1f} cm')
         return True
 
     def _abort(self, handle, reason, destination, level='aborted'):

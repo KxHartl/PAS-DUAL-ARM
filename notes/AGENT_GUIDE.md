@@ -83,4 +83,5 @@ Detalji: `RUNNING.md`, [[S-10_build_run_environment]].
 [[D-10_headless_vs_gui]] · [[D-11_project_scoped_ros_env]] · [[D-12_honesty_abort_over_fake]] ·
 [[D-13_three_room_world]] · [[D-14_light_box_free_size]] ·
 [[D-15_door_transit_behaviour]] (zamijenjena) · [[D-16_zones_from_detected_features]] ·
-[[D-17_closed_loop_door_transit]] (povučena) · [[D-18_verified_baseline_first]]
+[[D-17_closed_loop_door_transit]] (povučena) · [[D-18_verified_baseline_first]] ·
+[[D-19_dynamic_footprint]]

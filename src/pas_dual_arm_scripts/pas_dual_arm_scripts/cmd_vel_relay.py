@@ -4,11 +4,17 @@
 Bridges:
 - Command inputs: /cmd_vel and /base_controller/cmd_vel_unstamped ->
   /base_controller/reference_unstamped (for mecanum_drive_controller)
+- Safety: while /cmd_vel_safe is being published, raw /cmd_vel is ignored, so
+  the collision monitor filtering Nav2's output cannot be routed around. With
+  no monitor running nothing arrives on that topic and /cmd_vel drives the base
+  exactly as before, which keeps teleop and the mapping tour working.
 - Odometry: /base_controller/odometry -> /base_controller/odom
   (for backward compatibility with Nav2, SLAM, and task scripts)
 - TF: /base_controller/tf_odometry -> /tf
   (for odom -> base_footprint transform)
 """
+import time
+
 import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -25,6 +31,11 @@ class CmdVelRelay(Node):
         self.create_subscription(Twist, '/cmd_vel', self._on_cmd_vel, 10)
         self.create_subscription(
             Twist, '/base_controller/cmd_vel_unstamped', self._on_cmd_vel, 10)
+        # The collision monitor's output. Longer than the monitor's own period
+        # so a late message does not briefly hand control back to raw /cmd_vel.
+        self.declare_parameter('safe_command_timeout', 1.0)
+        self._last_safe = None
+        self.create_subscription(Twist, '/cmd_vel_safe', self._on_safe_cmd, 10)
 
         # Odometry forwarding for backward compatibility
         self.odom_pub = self.create_publisher(
@@ -38,7 +49,21 @@ class CmdVelRelay(Node):
         self.create_subscription(
             TFMessage, '/base_controller/tf_odometry', self._on_tf, 10)
 
+    def _safety_live(self):
+        timeout = self.get_parameter('safe_command_timeout').value
+        return self._last_safe is not None and \
+            time.monotonic() - self._last_safe <= timeout
+
     def _on_cmd_vel(self, msg: Twist):
+        if self._safety_live():
+            return          # the monitor is filtering; its output is the truth
+        self.cmd_pub.publish(msg)
+
+    def _on_safe_cmd(self, msg: Twist):
+        if self._last_safe is None:
+            self.get_logger().info(
+                'collision monitor is live; raw /cmd_vel is now ignored')
+        self._last_safe = time.monotonic()
         self.cmd_pub.publish(msg)
 
     def _on_odom(self, msg: Odometry):

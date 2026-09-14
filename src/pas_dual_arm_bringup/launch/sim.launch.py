@@ -153,6 +153,17 @@ def generate_launch_description():
         output='screen',
         parameters=[{'use_sim_time': True}],
     )
+    # Publishes the robot's real outline to both costmaps' footprint topics.
+    # The YAML footprint is one arm posture frozen in a file; the arms move and
+    # sag (P-37), so without this every layer that reasons about space is
+    # reasoning about a robot that is not there. Describes only - gates nothing.
+    footprint_publisher = Node(
+        package='pas_dual_arm_scripts',
+        executable='footprint_publisher',
+        name='footprint_publisher',
+        output='screen',
+        parameters=[{'use_sim_time': True}],
+    )
 
     # 6. DetachableJoint initial release ("Normally Open" enforcement).
     # Fortress's DetachableJoint hardcodes attachRequested=true at startup,
@@ -212,6 +223,7 @@ def generate_launch_description():
         delayed_detach,
         cmd_vel_relay,
         scan_filter,
+        footprint_publisher,
         *controller_spawners,
         *extra_actions,
     ])

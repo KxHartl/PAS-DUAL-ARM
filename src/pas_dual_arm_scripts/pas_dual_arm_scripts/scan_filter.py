@@ -39,7 +39,6 @@ class ScanFilter(Node):
         q = transform.rotation
         yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
                          1 - 2 * (q.y * q.y + q.z * q.z))
-        cy, sy = math.cos(yaw), math.sin(yaw)
         ox, oy = transform.translation.x, transform.translation.y
         length = self.get_parameter('half_length').value
         width = self.get_parameter('half_width').value

@@ -1,0 +1,59 @@
+collision_monitor:
+  ros__parameters:
+    use_sim_time: True
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    # Sits between Nav2 and the base relay: it takes the velocity Nav2 asked for
+    # and publishes what is actually safe. cmd_vel_relay prefers this topic and
+    # ignores raw /cmd_vel while it is live, so nothing routes around it.
+    cmd_vel_in_topic: "cmd_vel"
+    cmd_vel_out_topic: "cmd_vel_safe"
+    transform_tolerance: 0.5
+    # The scan runs at 10 Hz; a source quiet for half a second is a fault, not a
+    # clear road.
+    source_timeout: 0.5
+    base_shift_correction: True
+    stop_pub_timeout: 2.0
+
+    polygons: ["FootprintApproach", "BaseStop"]
+
+    # The one that matters. "approach" projects the *current footprint* forward
+    # along the commanded velocity and scales the command down by the time left
+    # before it would touch something. Because the footprint comes from the
+    # topic footprint_publisher drives, this shrinks and grows with the arms -
+    # which is the whole point: how close the robot may pass, and at what angle,
+    # now depends on how wide it actually is rather than on a number in a file.
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 1.5
+      simulation_time_step: 0.1
+      max_points: 5
+      visualize: True
+      polygon_pub_topic: "collision_monitor/approach_footprint"
+      enabled: True
+
+    # Backstop, and deliberately the only fixed shape here: the *base* is
+    # 0.717 x 0.497 m in the URDF and does not change, so a small box around it
+    # is honest. Anything inside this is already a contact - it is the last
+    # line, not a working clearance.
+    BaseStop:
+      type: "polygon"
+      points: [0.40, 0.28, 0.40, -0.28, -0.40, -0.28, -0.40, 0.28]
+      action_type: "stop"
+      max_points: 3
+      visualize: True
+      polygon_pub_topic: "collision_monitor/stop_zone"
+      enabled: True
+
+    observation_sources: ["scan"]
+    scan:
+      # Filtered, not raw: the raw scan contains the robot's own chassis (the
+      # laser sits inside the 0.58 x 0.39 m mounting plate), which a monitor
+      # would read as a permanent obstacle in its own stop zone. scan_filter
+      # removes returns within 0.75 x 0.47 m, and a 0.95 m doorway puts its
+      # jambs at +-0.475 m, so the jambs still come through.
+      type: "scan"
+      topic: "/scan_filtered"
+      enabled: True
