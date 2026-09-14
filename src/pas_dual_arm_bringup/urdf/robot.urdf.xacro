@@ -243,13 +243,37 @@
        own pads will press. Near clip is 0.02 m because the hand ends up within
        a hand's breadth of the face. -->
   <xacro:macro name="wrist_camera" params="side">
-    <gazebo reference="${side}_camera_color_frame">
-      <sensor name="${side}_wrist_camera" type="camera">
+    <!-- Aim. kortex_description has two mountings for the vision module and
+         they do not agree: the real one looks along end_effector +Z, which is
+         the gripper's approach axis, while the sim branch looks along +Y - and
+         its own comment says the sim rotation "might not apply to built in
+         vision module". At a side-grasp pre-pose, +Y points straight at the
+         ceiling, so on the sim frame the camera could never see the face its
+         own pads press. Mount on a frame that follows the real module: optical
+         z along the approach axis, at the vision module's own origin. -->
+    <link name="${side}_wrist_cam_optical_frame"/>
+    <joint name="${side}_wrist_cam_optical_joint" type="fixed">
+      <origin rpy="0 0 0" xyz="0 0.05639 0.01305"/>
+      <parent link="${side}_end_effector_link"/>
+      <child link="${side}_wrist_cam_optical_frame"/>
+    </joint>
+    <!-- gz ships cloud data in the sensor BODY convention whatever frame it
+         stamps, so give the cloud somewhere correct to be drawn: x along the
+         view, z up in the image. Same role camera_link plays for the head. -->
+    <link name="${side}_wrist_cam_body_frame"/>
+    <joint name="${side}_wrist_cam_body_joint" type="fixed">
+      <origin rpy="1.5707963267948966 -1.5707963267948966 0"
+              xyz="0 0.05639 0.01305"/>
+      <parent link="${side}_end_effector_link"/>
+      <child link="${side}_wrist_cam_body_frame"/>
+    </joint>
+    <gazebo reference="${side}_wrist_cam_optical_frame">
+      <sensor name="${side}_wrist_camera" type="rgbd_camera">
         <topic>wrist_${side}</topic>
         <update_rate>15</update_rate>
         <always_on>1</always_on>
         <visualize>false</visualize>
-        <ignition_frame_id>${side}_camera_color_frame</ignition_frame_id>
+        <ignition_frame_id>${side}_wrist_cam_optical_frame</ignition_frame_id>
         <camera>
           <horizontal_fov>1.047</horizontal_fov>
           <image>
@@ -261,6 +285,12 @@
             <near>0.02</near>
             <far>5.0</far>
           </clip>
+          <depth_camera>
+            <clip>
+              <near>0.02</near>
+              <far>3.0</far>
+            </clip>
+          </depth_camera>
         </camera>
       </sensor>
     </gazebo>

@@ -55,6 +55,18 @@
   gz_type_name: "ignition.msgs.CameraInfo"
   direction: GZ_TO_ROS
 
+- ros_topic_name: "/wrist_left/depth_image"
+  gz_topic_name: "/wrist_left/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "ignition.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_left/points"
+  gz_topic_name: "/wrist_left/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "ignition.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
 - ros_topic_name: "/wrist_right/image"
   gz_topic_name: "/wrist_right/image"
   ros_type_name: "sensor_msgs/msg/Image"
@@ -65,6 +77,18 @@
   gz_topic_name: "/wrist_right/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
   gz_type_name: "ignition.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_right/depth_image"
+  gz_topic_name: "/wrist_right/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "ignition.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_right/points"
+  gz_topic_name: "/wrist_right/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "ignition.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
 
 # --- Fingertip contact sensors (defined in robot.urdf.xacro) ---

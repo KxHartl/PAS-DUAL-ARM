@@ -28,6 +28,14 @@ LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 # why both arms failed IK at 0.746 m.
 TARGET_RANGE = 0.62
 
+# Clear distance between the cube FACE and the fingertips at the pre-grasp
+# pose. squeeze_poses places the end-effector link at
+# 0.15 (half the cube) + tip_standoff (0.115) + PRE_STANDOFF from the centre,
+# so this is measured tip-to-face, not wrist-to-face. Doubled from 0.10 m: at
+# a hand's breadth the pads crowd the cube, and the wrist camera is too close
+# to hold the whole face marker in frame.
+PRE_STANDOFF = 0.20
+
 # What stops the base. Everything on the robot below 0.23 m passes under the
 # tabletop and between the near table legs (they are 0.70 m apart, the base is
 # 0.497 m wide). The limit is the forwardmost structure ABOVE tabletop height:
@@ -137,7 +145,8 @@ def main():
             center, axis = measure(node)
 
         node.measure_tip_standoff()
-        pre_left, pre_right = node.squeeze_poses(center, axis, pre=0.10)
+        pre_left, pre_right = node.squeeze_poses(
+            center, axis, pre=PRE_STANDOFF)
         contact_left, contact_right = node.squeeze_poses(center, axis)
         publish_view(node, poses_pub, markers_pub, center, {
             'lijeva pre': pre_left, 'desna pre': pre_right,

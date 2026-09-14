@@ -1,15 +1,16 @@
-"""Republish the depth cloud under the frame its data is actually in.
+"""Republish depth clouds under the frame their data is actually in.
 
-The Ignition rgbd sensor stamps `camera_color_optical_frame` (z forward, x
-right), which is what ArUco needs for the image, but the point cloud DATA comes
-out in the sensor BODY convention (x forward, z up). `measure_box` already
-works around this by transforming through `camera_link` and ignoring the stamp,
-but RViz has no such override: it trusts the stamp, rotates the cloud by the
-optical frame, and the whole thing lands about 90 degrees off to the side.
+Every Ignition rgbd sensor on this robot stamps an OPTICAL frame (z along the
+view), which is what the ArUco detectors need for the image, while the point
+cloud DATA comes out in the sensor BODY convention (x forward, z up).
+`measure_box` already works around this for the head camera by transforming
+through `camera_link` and ignoring the stamp, but RViz has no such override: it
+trusts the stamp, rotates the cloud, and the whole thing lands about 90 degrees
+off to the side.
 
-So this relay copies the cloud through with the frame corrected. Nothing
-subscribes to it except RViz - the control path still measures from the raw
-topic, so this node cannot change what the grasp is computed from.
+So this relay copies each cloud through with the frame corrected. Nothing
+subscribes to the corrected topics except RViz - the control path still measures
+from the raw ones, so this node cannot change what a grasp is computed from.
 """
 
 import rclpy
@@ -19,25 +20,45 @@ from sensor_msgs.msg import PointCloud2
 
 SENSOR_QOS = QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT)
 
+# input topic, output topic, the body-convention frame the data is really in.
+DEFAULT_INPUTS = ['/camera/points',
+                  '/wrist_left/points',
+                  '/wrist_right/points']
+DEFAULT_OUTPUTS = ['/camera/points_body',
+                   '/wrist_left/points_body',
+                   '/wrist_right/points_body']
+DEFAULT_FRAMES = ['camera_link',
+                  'left_wrist_cam_body_frame',
+                  'right_wrist_cam_body_frame']
+
 
 class CloudRestamp(Node):
     def __init__(self):
         super().__init__('cloud_restamp')
-        self.declare_parameter('input', '/camera/points')
-        self.declare_parameter('output', '/camera/points_body')
-        self.declare_parameter('frame_id', 'camera_link')
-        self.frame = self.get_parameter('frame_id').value
-        source = self.get_parameter('input').value
-        target = self.get_parameter('output').value
-        self.pub = self.create_publisher(PointCloud2, target, SENSOR_QOS)
-        self.create_subscription(PointCloud2, source, self.relay, SENSOR_QOS)
-        self.get_logger().info(
-            f'relaying {source} -> {target} as frame "{self.frame}" '
-            '(display only)')
+        self.declare_parameter('inputs', DEFAULT_INPUTS)
+        self.declare_parameter('outputs', DEFAULT_OUTPUTS)
+        self.declare_parameter('frames', DEFAULT_FRAMES)
+        inputs = list(self.get_parameter('inputs').value)
+        outputs = list(self.get_parameter('outputs').value)
+        frames = list(self.get_parameter('frames').value)
+        if not len(inputs) == len(outputs) == len(frames):
+            raise ValueError(
+                'inputs, outputs and frames must have the same length')
+        self._subs = []
+        for source, target, frame in zip(inputs, outputs, frames):
+            publisher = self.create_publisher(PointCloud2, target, SENSOR_QOS)
+            self._subs.append(self.create_subscription(
+                PointCloud2, source,
+                lambda msg, pub=publisher, f=frame: self.relay(msg, pub, f),
+                SENSOR_QOS))
+            self.get_logger().info(
+                f'relaying {source} -> {target} as frame "{frame}" '
+                '(display only)')
 
-    def relay(self, msg):
-        msg.header.frame_id = self.frame
-        self.pub.publish(msg)
+    @staticmethod
+    def relay(msg, publisher, frame):
+        msg.header.frame_id = frame
+        publisher.publish(msg)
 
 
 def main():
