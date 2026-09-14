@@ -109,6 +109,7 @@ Nakon što je `seminar_map.yaml` spremljena i instalirana, navigacija se pokreć
 (**bez** `mapping.launch.py`). Za vožnju praznog robota trebaju **dva terminala**:
 
 > [!warning] Prvo provjeri da nema zaostalih čvorova iz prethodne sesije
+> Najbrže: `bash scripts/clean_ros.sh`. Ručno:
 > Živ čvor istog imena iz starog runa ostane u stanju `active`; novi `lifecycle_manager` ga
 > pokuša konfigurirati, dobije `No transition matching 1 found for current state active` i
 > **prekine cijeli bringup** (karta i costmap se onda ne pojave). Provjera i čišćenje:
@@ -140,10 +141,10 @@ AMCL automatski inicijalizira početnu pozu na `(0, 0, yaw=0)` (gdje se robot sp
 
 ### Što provjeriti u RViz-u prije vožnje
 Dodaj `MarkerArray` na **`/nav_zones_markers`**. Mora se vidjeti:
-- **zelena traka** točno kroz oba prolaza, duga 1.2 m sa svake strane;
+- **zelena traka** točno kroz oba prolaza, duga **0.50 m** sa svake strane;
 - **crveni lijevci** lijevo i desno od svake trake;
 - **narančasti halo** oko oba stola, **otvoren prema vratima sobe** (U-oblik);
-- **plave strelice** = portalne poze (1.95 m ispred i iza svakih vrata), sve okomite na zid;
+- **plave strelice** = portalne poze (**1.45 m** ispred i iza svakih vrata), sve okomite na zid;
 - **žuta strelica** = prilazna poza ispred stola.
 
 Ako se to ne vidi, `nav_zones` nije našao vrata — ne voziti. Provjeri offline:
