@@ -124,17 +124,38 @@ def main():
 
         node.publish_collision_scene(center, table_top_z=center.z - 0.15)
 
-        # Both arms are planned before either one moves.
+        # Both arms are planned before either one moves. Solve every pose for
+        # BOTH hands before giving up on either, and solve each pre-pose twice:
+        # once ignoring collisions, once respecting them. Out of reach and
+        # blocked by the table are different problems with different fixes, and
+        # a single "IK unavailable" cannot tell them apart.
         targets = {}
+        failures = []
         for side, pre, contact in (('left', pre_left, contact_left),
                                    ('right', pre_right, contact_right)):
             group, ee = f'{side}_arm', f'{side}_end_effector_link'
             contact_ik = node._ik(group, ee, contact)
+            free_ik = node._ik(group, ee, pre, seed=contact_ik)
             pre_ik = node._ik(group, ee, pre, seed=contact_ik,
                               avoid_collisions=True)
-            if contact_ik is None or pre_ik is None:
-                raise RuntimeError(f'{side} pre/contact IK unavailable')
-            targets[side] = (group, ee, pre, pre_ik)
+            node.get_logger().info(
+                f'{side} IK: kontakt ({contact.position.x:.3f},'
+                f'{contact.position.y:+.3f},{contact.position.z:.3f})='
+                f'{"OK" if contact_ik else "NE"}  '
+                f'pre bez kolizija={"OK" if free_ik else "NE"}  '
+                f'pre s kolizijama={"OK" if pre_ik else "NE"}')
+            if contact_ik is None:
+                failures.append(f'{side}: kontaktna poza je izvan dosega')
+            elif free_ik is None:
+                failures.append(f'{side}: pred-poza je izvan dosega')
+            elif pre_ik is None:
+                failures.append(
+                    f'{side}: pred-poza je dohvatljiva, ali MoveIt u njoj vidi '
+                    'sudar (najvjerojatnije prsti u ploču stola)')
+            else:
+                targets[side] = (group, ee, pre, pre_ik)
+        if failures:
+            raise RuntimeError('; '.join(failures))
 
         trajs = {}
         for side, (group, _ee, _pre, joints) in targets.items():
