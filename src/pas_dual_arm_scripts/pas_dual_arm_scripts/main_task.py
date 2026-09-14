@@ -597,7 +597,14 @@ class MainTask(BaseDriver, Node):
             point.velocities = []
             point.accelerations = []
 
-    def approach_both_linear(self, targets, label, min_frac=0.85):
+    def tips_on_box(self, side, max_age=0.6):
+        """How many of this hand's two pads are freshly touching THE BOX."""
+        return sum(self._tip_in_contact(f'{side}_{finger}', max_age=max_age,
+                                        box_only=True)
+                   for finger in ('left', 'right'))
+
+    def approach_both_linear(self, targets, label, min_frac=0.85,
+                             min_duration=0.0):
         """Take BOTH hands along a straight line to their targets at once.
 
         `targets` is {side: (group, ee_link, pose)}. Straight matters here: the
@@ -626,13 +633,15 @@ class MainTask(BaseDriver, Node):
                                           f'{label} {side}'):
                 return None
             trajs[side] = solution.joint_trajectory
-        return self.move_arms_parallel(trajs, label)
+        return self.move_arms_parallel(trajs, label,
+                                       min_duration=min_duration)
 
-    def move_arms_parallel(self, trajs, label):
+    def move_arms_parallel(self, trajs, label, min_duration=0.0):
         """Run both arm trajectories at the same time, sent straight to the two
         JTCs. Both are stretched to the same duration first, so the hands
-        arrive together rather than one waiting on the other. Returns
-        {side: bool}."""
+        arrive together rather than one waiting on the other. `min_duration`
+        stretches them further: the planners time a short path in a fraction of
+        a second, which near the cube is a lunge. Returns {side: bool}."""
         clients = {'left': self.left_jtc, 'right': self.right_jtc}
         for side, traj in trajs.items():
             if not self._traj_starts_here(traj, f'{label} {side}'):
@@ -640,9 +649,9 @@ class MainTask(BaseDriver, Node):
             if not self._wait_server(clients[side], f'{side} JTC'):
                 return {side: False for side in trajs}
         longest = max(
-            (t.points[-1].time_from_start.sec
-             + t.points[-1].time_from_start.nanosec * 1e-9)
-            for t in trajs.values())
+            [t.points[-1].time_from_start.sec
+             + t.points[-1].time_from_start.nanosec * 1e-9
+             for t in trajs.values()] + [float(min_duration)])
         for traj in trajs.values():
             self._stretch_to(traj, longest)
         self.get_logger().info(

@@ -12,7 +12,7 @@ import argparse
 import math
 
 import rclpy
-from geometry_msgs.msg import Point, PoseArray
+from geometry_msgs.msg import Point, Pose, PoseArray
 from rclpy.duration import Duration
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from visualization_msgs.msg import Marker, MarkerArray
@@ -54,6 +54,14 @@ MARKER_RAISE = 0.056
 # as a width that is not 0.30.
 CUBE_WIDTH = 0.30
 WIDTH_TOLERANCE = 0.03
+
+# The last stretch is walked in short steps rather than taken in one move, and
+# the fingertip contact sensors are read between them. A single straight run to
+# the contact pose arrives at whatever speed the planner timed it at - 1.4 s
+# for 0.20 m in the first trial - and shoves the cube across the table before
+# anything has a chance to notice a pad has landed.
+CREEP_STEP = 0.02
+CREEP_SECONDS = 2.0
 
 # What stops the base. Everything on the robot below 0.23 m passes under the
 # tabletop and between the near table legs (they are 0.70 m apart, the base is
@@ -307,17 +315,75 @@ def main():
         publish_view(node, poses_pub, markers_pub, centre, {
             'lijeva kontakt': contact_left, 'desna kontakt': contact_right,
         })
-        results = node.approach_both_linear({
-            'left': ('left_arm', 'left_end_effector_link', contact_left),
-            'right': ('right_arm', 'right_end_effector_link', contact_right),
-        }, 'cube contact')
-        if results is None or not all(results.values()):
-            raise RuntimeError(f'closing on the faces failed: {results}')
 
-        for side, pose in (('left', contact_left), ('right', contact_right)):
+        # Walk in, a step at a time, reading the pads between steps.
+        goals = {'left': contact_left, 'right': contact_right}
+        starts = {}
+        for side in goals:
             ee = f'{side}_end_effector_link'
             node._wait_settle(ee)
-            node.verify_reached(ee, pose, tol=0.02, label=f'{side} cube contact')
+            here = node._ee_pose(ee)
+            if here is None:
+                raise RuntimeError(f'no TF for {ee}')
+            starts[side] = here.position
+        travel = max(
+            math.dist((starts[s].x, starts[s].y, starts[s].z),
+                      (goals[s].position.x, goals[s].position.y,
+                       goals[s].position.z))
+            for s in goals)
+        steps = max(1, int(math.ceil(travel / CREEP_STEP)))
+        node.get_logger().info(
+            f'closing {travel:.3f} m in {steps} steps of about '
+            f'{travel / steps * 100:.1f} cm, {CREEP_SECONDS:.0f} s each')
+
+        landed = False
+        for step in range(1, steps + 1):
+            fraction = step / steps
+            waypoints = {}
+            for side, goal in goals.items():
+                pose = Pose()
+                pose.orientation = goal.orientation
+                pose.position = Point(
+                    x=starts[side].x + fraction * (goal.position.x - starts[side].x),
+                    y=starts[side].y + fraction * (goal.position.y - starts[side].y),
+                    z=starts[side].z + fraction * (goal.position.z - starts[side].z))
+                waypoints[side] = (f'{side}_arm', f'{side}_end_effector_link',
+                                   pose)
+            results = node.approach_both_linear(
+                waypoints, f'cube contact step {step}/{steps}',
+                min_duration=CREEP_SECONDS)
+            if results is None or not all(results.values()):
+                raise RuntimeError(
+                    f'step {step}/{steps} did not execute: {results}')
+            pads = {side: node.tips_on_box(side) for side in goals}
+            node.get_logger().info(
+                f'step {step}/{steps}: pads on the box - '
+                f'left {pads["left"]}/2, right {pads["right"]}/2')
+            if pads['left'] and pads['right']:
+                node.get_logger().info(
+                    'both hands are touching the box; stopping here rather '
+                    'than driving on to the commanded pose')
+                landed = True
+                break
+
+        # Honest report. The first trial printed success while the hands were
+        # 0.115 and 0.150 m off, because nothing read verify_reached back.
+        ok = True
+        for side, goal in goals.items():
+            ee = f'{side}_end_effector_link'
+            node._wait_settle(ee)
+            if not node.verify_reached(ee, goal, tol=0.02,
+                                       label=f'{side} cube contact'):
+                ok = False
+        pads = {side: node.tips_on_box(side) for side in goals}
+        if not (landed or (pads['left'] and pads['right'])):
+            raise RuntimeError(
+                f'no box contact on both hands (left {pads["left"]}/2, '
+                f'right {pads["right"]}/2)')
+        if not ok:
+            node.get_logger().warn(
+                'pads report box contact but the wrists are off the commanded '
+                'pose - the cube is being touched somewhere other than planned')
         print('BOTH_HANDS_ON_THE_CUBE', flush=True)
     finally:
         node._send_vel(0.0, 0.0)
