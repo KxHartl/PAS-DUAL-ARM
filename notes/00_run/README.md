@@ -12,7 +12,7 @@ a pravila rada u [[AGENT_GUIDE]].
 - [[02_testiranje]] — što provjeriti i kako razlikovati prolaz od lažnog uspjeha.
 - [[03_izmjene]] — gdje mijenjati parametre/kod i kako zabilježiti pokus.
 - `00_testing/` — **postupci testiranja po podsustavu**: koje naredbe, u kojem terminalu,
-  što gledati i što zabilježiti. Prvi je [[navigacija]].
+  što gledati i što zabilježiti: [[navigacija]], [[hvat_kocke]].
 
 Projektni okoliš je `scripts/run_native.sh`, a brza dijagnostika
 `bash scripts/verify_environment.sh` (ili `--live` uz pokrenutu simulaciju).
