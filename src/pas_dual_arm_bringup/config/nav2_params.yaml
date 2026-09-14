@@ -191,7 +191,18 @@ local_costmap:
       rolling_window: true
       width: 3
       height: 3
-      resolution: 0.05
+      # 2.5 cm, not the usual 5 cm. A 1.0 m doorway leaves this robot about 4 cm
+      # a side, which is under one 5 cm cell: the jamb rounds up to a whole cell
+      # inwards and the gap the controller sees closes. Measured on 14 Sep: the
+      # local costmap showed 80 cm of free space in a 100 cm doorway, and DWB
+      # correctly reported "No valid trajectories out of 3711". The window is
+      # only 3 x 3 m, so the extra cells are cheap.
+      resolution: 0.025
+      # The footprint is no longer an estimate that needs a safety margin: it is
+      # the measured convex hull of the robot's own collision geometry,
+      # published live (D-19). Padding it again subtracts 2 cm of a 8 cm budget
+      # for a robot that is already drawn at its true size.
+      footprint_padding: 0.0
       # The measured robot: 1.04 m long, 0.854 m wide in ARM_CARRY_V2 (P-35,
       # agreed to 2 mm by the collision-corridor search and the mesh vertices).
       # Without artificial costmap inflation on local_costmap, ObstacleFootprint
@@ -235,7 +246,11 @@ global_costmap:
       robot_base_frame: base_link
       use_sim_time: True
       # Measured 1.04 x 0.854 m in ARM_CARRY_V2 (P-35); see local_costmap.
+      # Replaced at runtime by the measured outline (D-19); this is the fallback.
       footprint: "[[0.52, 0.427], [-0.52, 0.427], [-0.52, -0.427], [0.52, -0.427]]"
+      footprint_padding: 0.0
+      # Stays at 5 cm: the static layer comes from a 5 cm map, so a finer grid
+      # here would only upsample it.
       resolution: 0.05
       track_unknown_space: true
       rolling_window: false

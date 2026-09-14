@@ -207,4 +207,14 @@ Upisati u [[runovi]] i u pripadnu P-karticu — **i kad ne uspije**.
 |---|---|---|
 | `arms: … off ARM_CARRY_V2` | ruke su se raširile ([[P-37_arm_position_gain_sag]]) | ponovi `set_posture ARM_CARRY_V2` |
 | `alignment: … off the lane centreline` | AMCL netočan ili je prethodna dionica podbacila | pošalji robota malo unazad i ponovi |
+| `No valid trajectories out of N!` (DWB) | u costmapu **nema** prolaza dovoljno širokog za footprint — nije greška upravljača | izmjeri stvarnu širinu koju costmap vidi (dolje) |
+
+Kad DWB javi da nema valjanih trajektorija, izmjeri koliko je slobodno **u costmapu**, ne u svijetu:
+
+```bash
+./scripts/run_native.sh ros2 topic echo /local_costmap/published_footprint --once   # sirina robota
+./scripts/run_native.sh ros2 topic echo /local_costmap/costmap --once > /tmp/pas/cm.txt  # pa izmjeri prolaz
+```
+14. 9. je tako nađeno: otvor 100 cm, costmap pokazuje 80 cm, robot 86.2 cm → prolaz ne postoji.
+Uzrok su bili `footprint_padding` i rezolucija od 5 cm, oboje popravljeno.
 | `only X cm beside the robot` | prekid usred prolaza, razmak ispod praga | provjeri footprint i pozu ruku |

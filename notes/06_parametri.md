@@ -56,6 +56,8 @@ updated: 2026-09-14
 ## Navigacija (Nav2 + zone iz detektiranih značajki)
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|
+| `footprint_padding` | **0.0** (bilo 0.01 po defaultu) | `NAV` oba costmapa | footprint više nije procjena nego **izmjerena** ljuska stvarne geometrije ([[D-19_dynamic_footprint]]); padding je dvostruko brojanje i uzimao je 2 cm od ~8 cm budžeta |
+| `local_costmap.resolution` | **0.025 m** (bilo 0.05) | `NAV` `local_costmap` | rezerva u vratima je ~4 cm po strani, **manja od jedne ćelije od 5 cm**: dovratnik se zaokruži na cijelu ćeliju prema unutra i otvor se zatvori. Izmjereno 14. 9.: costmap je u otvoru od 100 cm pokazivao **80 cm**, DWB ispravno javio `No valid trajectories out of 3711`. Globalni ostaje 0.05 (statični sloj dolazi iz karte od 5 cm) |
 | footprint | **±0.52 × ±0.427 m** (1.04 × 0.854 m; bilo ±0.45) | `NAV` local/global costmap | izmjerena širina u `ARM_CARRY_V2` ([[P-35_arm_span_too_wide_for_door]]); 0.90 m je bila procjena zbog koje je `ObstacleFootprint` odbacivao sve trajektorije ([[P-39_nav2_enters_doorway_at_an_angle]]) |
 | `inflation_radius` | **0.45**, `cost_scaling_factor` 5.0 | `NAV` `global_costmap` | lokalni costmap nema inflaciju da ne zatvori uski prolaz |
 | `xy_goal_tolerance` / `yaw_goal_tolerance` | **0.10 m / 0.05 rad** (bilo 0.20 / 0.25) | `NAV` `general_goal_checker` | 0.25 rad traži 1.085 m otvora, a ima ga 0.95 m ([[P-39_nav2_enters_doorway_at_an_angle]]) |
