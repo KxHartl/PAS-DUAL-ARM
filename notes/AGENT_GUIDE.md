@@ -57,6 +57,9 @@ su zastarjeli). Kad nađeš kontradikciju, **ne biraj tiho**: zapiši je u karti
 | popuštanje `yaw_goal_tolerance` da cilj „prođe" | 0.25 rad traži 1.085 m otvora | [[P-39_nav2_enters_doorway_at_an_angle]] |
 | spuštanje `ObstacleFootprint.scale` da DWB nađe put | skriva da je footprint kriv | [[P-39_nav2_enters_doorway_at_an_angle]] |
 | keepout zone samo na globalnom costmapu | upravljač ih ne vidi | [[P-39_nav2_enters_doorway_at_an_angle]] |
+| **graditi novi sloj na stanju koje nije odvoženo** | dva sloja bez ijednog runa učinila su sustav gorim nego prije; 14. 9. | [[D-18_verified_baseline_first]] |
+| **zamijeniti gate koji je propustio stvarni prolaz strožim izračunom** | `doorway_margin` odbija prolaz od 4.2° koji je dokazano uspio | [[P-39_nav2_enters_doorway_at_an_angle]] |
+| `scan_filter` `half_width` 0.52 | briše dovratnike na ±0.475 m iz costmapa i AMCL-a | [[P-39_nav2_enters_doorway_at_an_angle]] |
 
 ## 6. Rad s korisnikom
 - Komunikacija na **hrvatskom**, a kod i commitovi na engleskom (Conventional Commits).
@@ -79,4 +82,5 @@ Detalji: `RUNNING.md`, [[S-10_build_run_environment]].
 [[D-07_carry_on_left_wrist]] · [[D-08_door_widened]] · [[D-09_lift_with_arms_not_torso]] ·
 [[D-10_headless_vs_gui]] · [[D-11_project_scoped_ros_env]] · [[D-12_honesty_abort_over_fake]] ·
 [[D-13_three_room_world]] · [[D-14_light_box_free_size]] ·
-[[D-15_door_transit_behaviour]] (zamijenjena) · [[D-16_zones_from_detected_features]]
+[[D-15_door_transit_behaviour]] (zamijenjena) · [[D-16_zones_from_detected_features]] ·
+[[D-17_closed_loop_door_transit]] (povučena) · [[D-18_verified_baseline_first]]

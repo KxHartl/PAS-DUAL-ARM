@@ -7,7 +7,7 @@ SLAM map contains, so nothing has to be re-measured when the world changes.
 A room-to-room trip is never one Nav2 goal.  A single goal across two rooms
 gives the planner every reason to enter the doorway on a diagonal, because the
 diagonal is shorter.  Instead each doorway becomes two goals on its centreline -
-a portal pose about 2 m out on this side, then the matching pose on the far side -
+a portal pose 1.45 m out on this side, then the matching pose on the far side -
 so the leg through the opening is a straight line the robot is already squared up
 to before it starts.
 
@@ -56,6 +56,11 @@ def yaw_to_quaternion(yaw):
     return Quaternion(x=0.0, y=0.0, z=math.sin(yaw * 0.5), w=math.cos(yaw * 0.5))
 
 
+def quat_to_yaw(q):
+    return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                      1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+
 def wrap(angle):
     return math.atan2(math.sin(angle), math.cos(angle))
 
@@ -77,11 +82,18 @@ class RoomNavigator(Node):
         super().__init__('room_navigator')
         self.declare_parameter('arm_tolerance', 0.15)
         self.declare_parameter('centreline_tolerance', 0.08)
-        self.declare_parameter('heading_tolerance', 0.07)
+        # 5.0 degrees. The crossing that was actually driven on 14 Sep went
+        # through door 0 at 4.2 degrees and 1.8 cm, so a 4.0 degree limit would
+        # have refused a passage that demonstrably worked.
+        self.declare_parameter('heading_tolerance', 0.087)
         self.declare_parameter('min_side_clearance', 0.03)
         # Below this a leg counts as axis aligned already; it also absorbs the
         # few centimetres between a detected door centre and a table centre.
         self.declare_parameter('corner_threshold', 0.30)
+        # The L-shaped detour through the middle of a room. Off: the verified
+        # run crossed the empty room on the direct diagonal and squared up at
+        # the next portal, which is both shorter and what was measured.
+        self.declare_parameter('square_corners', False)
         self.declare_parameter('leg_timeout', 240.0)
         self.declare_parameter('require_arms', True)
 
@@ -89,6 +101,7 @@ class RoomNavigator(Node):
         self._scan = None
         self._joints = None
         self._request = None
+        self._pending_request = None
         self._cancel = False
         self._busy = False
 
@@ -97,6 +110,11 @@ class RoomNavigator(Node):
         self._status_pub = self.create_publisher(String, '/room_navigator/status', latched)
         self.create_subscription(String, '/nav_graph', self._on_graph, latched)
         self.create_subscription(String, '/room_navigator/goto', self._on_goto, 10)
+        # nav2.launch.py remaps Nav2's own /goal_pose to /bt_goal_pose, so RViz
+        # "2D Goal Pose" lands here instead of going straight to bt_navigator.
+        # A goal in another room is then routed through the doorway portals
+        # rather than driven at on the diagonal.
+        self.create_subscription(PoseStamped, '/goal_pose', self._on_goal_pose, 10)
         self.create_subscription(LaserScan, '/scan_filtered', self._on_scan,
                                  qos_profile_sensor_data)
         self.create_subscription(JointState, '/joint_states', self._on_joints, 10)
@@ -126,12 +144,29 @@ class RoomNavigator(Node):
         request = msg.data.strip().lower()
         if request in ('stop', 'cancel', 'abort'):
             self._cancel = True
+            self._pending_request = None
             self.get_logger().warn('cancel requested')
             return
         if self._busy:
-            self.get_logger().warn(f'busy; ignoring "{request}"')
+            self.get_logger().info(f'cancelling active navigation to take "{request}"')
+            self._cancel = True
+            self._pending_request = request
             return
         self._request = request
+
+    def _on_goal_pose(self, msg):
+        x = float(msg.pose.position.x)
+        y = float(msg.pose.position.y)
+        yaw = quat_to_yaw(msg.pose.orientation)
+        target = (x, y, yaw)
+        self.get_logger().info(
+            f'goal received on /goal_pose: ({x:+.2f}, {y:+.2f}, {math.degrees(yaw):+.1f} deg)')
+        if self._busy:
+            self.get_logger().info('cancelling active navigation to take new RViz goal')
+            self._cancel = True
+            self._pending_request = target
+            return
+        self._request = target
 
     def _status(self, state, detail, **extra):
         msg = String()
@@ -257,23 +292,58 @@ class RoomNavigator(Node):
                 queue.append(path + [nxt])
         return None
 
+    def nearest_room(self, x, y):
+        """Closest detected room to a point, for a goal just outside one."""
+        if self._graph is None or not self._graph.get('rooms'):
+            return None
+        best_room, best_dist = None, float('inf')
+        for room in self._graph['rooms']:
+            x0, y0, x1, y1 = room['bbox']
+            dx = max(x0 - x, 0.0, x - x1)
+            dy = max(y0 - y, 0.0, y - y1)
+            dist = math.hypot(dx, dy)
+            if dist < best_dist:
+                best_dist, best_room = dist, room['name']
+        return best_room
+
     def plan(self, destination):
-        """Legs from where the robot is to `destination`, or (None, reason)."""
+        """Legs to `destination`, a room name or an (x, y, yaw), or (None, reason)."""
         if self._graph is None:
             return None, 'no zone graph yet - is nav_zones running and /map published?'
-        known = [room['name'] for room in self._graph['rooms']]
-        if destination not in known:
-            return None, f'unknown room "{destination}"; known rooms: {", ".join(known)}'
         pose = self.pose()
         if pose is None:
             return None, 'no map -> base_footprint transform; is AMCL localised?'
-        start = self.room_at(pose[0], pose[1])
+        start = self.room_at(pose[0], pose[1]) or self.nearest_room(pose[0], pose[1])
         if start is None:
             return None, (f'robot at ({pose[0]:.2f}, {pose[1]:.2f}) is not inside '
                           f'any detected room')
-        path = self._room_path(start, destination)
+
+        target_pose = None
+        if isinstance(destination, str):
+            known = [room['name'] for room in self._graph['rooms']]
+            if destination not in known:
+                return None, f'unknown room "{destination}"; known rooms: {", ".join(known)}'
+            target_room = destination
+        elif isinstance(destination, (tuple, list)) and len(destination) >= 3:
+            target_pose = (float(destination[0]), float(destination[1]),
+                           float(destination[2]))
+            target_room = self.room_at(target_pose[0], target_pose[1]) or \
+                self.nearest_room(target_pose[0], target_pose[1])
+            if target_room is None:
+                return None, (f'target ({target_pose[0]:.2f}, {target_pose[1]:.2f}) '
+                              f'is outside every known room')
+        else:
+            return None, f'unsupported destination format: {destination}'
+
+        # A goal in the room we are already in needs no doorway at all.
+        if target_pose is not None and start == target_room:
+            return [Leg(target_pose, f'{start}: direct to goal')], \
+                f'same room ({start}), 1 direct leg'
+
+        path = self._room_path(start, target_room)
         if path is None:
-            return None, f'no doorway chain from {start} to {destination}'
+            return None, f'no doorway chain from {start} to {target_room}'
+        destination = target_room
 
         legs = []
         for here, there in zip(path, path[1:]):
@@ -285,18 +355,24 @@ class RoomNavigator(Node):
             legs.append(Leg(portal['exit'], f'{here} -> {there}: straight through the doorway',
                             transit=True))
 
-        table = next((t for t in self._graph['tables'] if t['room'] == destination), None)
-        if table is not None:
-            legs.append(Leg(table['approach'], f'{destination}: square up in front of the table'))
-        elif not legs:
-            room = next(r for r in self._graph['rooms'] if r['name'] == destination)
-            legs.append(Leg((room['centre'][0], room['centre'][1], pose[2]),
-                            f'{destination}: room centre'))
+        if target_pose is not None:
+            legs.append(Leg(target_pose, f'{destination}: direct to goal'))
         else:
-            room = next(r for r in self._graph['rooms'] if r['name'] == destination)
-            legs.append(Leg((room['centre'][0], room['centre'][1], legs[-1].yaw),
-                            f'{destination}: room centre'))
-        legs = self._squared_off(legs, pose)
+            table = next((t for t in self._graph['tables']
+                          if t['room'] == destination), None)
+            if table is not None:
+                legs.append(Leg(table['approach'],
+                                f'{destination}: square up in front of the table'))
+            elif not legs:
+                room = next(r for r in self._graph['rooms'] if r['name'] == destination)
+                legs.append(Leg((room['centre'][0], room['centre'][1], pose[2]),
+                                f'{destination}: room centre'))
+            else:
+                room = next(r for r in self._graph['rooms'] if r['name'] == destination)
+                legs.append(Leg((room['centre'][0], room['centre'][1], legs[-1].yaw),
+                                f'{destination}: room centre'))
+        if self.get_parameter('square_corners').value:
+            legs = self._squared_off(legs, pose)
         return legs, f'{" -> ".join(path)}, {len(legs)} legs'
 
     def _squared_off(self, legs, pose):
@@ -341,6 +417,9 @@ class RoomNavigator(Node):
     def tick(self):
         request = self._request
         self._request = None
+        if request is None and self._pending_request is not None:
+            request = self._pending_request
+            self._pending_request = None
         if request is None:
             return
         self._cancel = False
@@ -351,34 +430,38 @@ class RoomNavigator(Node):
             self._busy = False
 
     def run(self, destination):
+        # A room name stays a name; an RViz pose becomes a short label, so the
+        # status topic and the GUI both stay readable.
+        dest = destination if isinstance(destination, str) else \
+            f'({destination[0]:+.2f}, {destination[1]:+.2f})'
         legs, detail = self.plan(destination)
         if legs is None:
-            self.get_logger().error(f'cannot go to "{destination}": {detail}')
-            self._status('failed', detail, destination=destination)
+            self.get_logger().error(f'cannot go to "{dest}": {detail}')
+            self._status('failed', detail, destination=dest)
             return
-        self.get_logger().info(f'going to {destination}: {detail}')
+        self.get_logger().info(f'going to {dest}: {detail}')
         if not self._nav.wait_for_server(timeout_sec=20.0):
-            self._status('failed', 'Nav2 /navigate_to_pose is not up', destination=destination)
+            self._status('failed', 'Nav2 /navigate_to_pose is not up', destination=dest)
             self.get_logger().error('Nav2 /navigate_to_pose is not up')
             return
 
         for index, leg in enumerate(legs, start=1):
             label = f'leg {index}/{len(legs)} - {leg.label}'
             if self._cancel:
-                self._status('cancelled', f'cancelled before {label}', destination=destination)
+                self._status('cancelled', f'cancelled before {label}', destination=dest)
                 return
-            if leg.transit and not self._gate(leg, label, destination):
+            if leg.transit and not self._gate(leg, label, dest):
                 return
-            self._status('driving', label, destination=destination,
+            self._status('driving', label, destination=dest,
                          goal=[leg.x, leg.y, leg.yaw])
             self.get_logger().info(
                 f'{label} -> ({leg.x:+.2f}, {leg.y:+.2f}, {math.degrees(leg.yaw):+.1f} deg)')
-            if not self._drive(leg, label, destination):
+            if not self._drive(leg, label, dest):
                 return
             self._report_arrival(leg, label)
 
-        self._status('arrived', f'reached {destination}', destination=destination)
-        self.get_logger().info(f'reached {destination}')
+        self._status('arrived', f'reached {dest}', destination=dest)
+        self.get_logger().info(f'reached {dest}')
 
     def _gate(self, leg, label, destination):
         """Preconditions for a doorway transit. Refusing here beats scraping."""

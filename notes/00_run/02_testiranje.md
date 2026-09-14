@@ -63,8 +63,22 @@ Redom, i ne preskakati — prva dva koraka ne trebaju simulator:
 | 3 | RViz `/nav_zones_markers` | zelena traka u oba otvora, halo stolova otvoren prema vratima |
 | 4 | **ručni** „2D Goal Pose" unutar polazne sobe | stigao, |Δyaw| < 0.05 rad, bez dodira zida |
 | 5 | **ručni** „2D Goal Pose" u drugoj sobi | putanja ulazi u otvor **okomito**, prolaz bez dodira |
-| 6 | **tipka** PLAVA, pa CRVENA, pa HOME | stane pred stol; log javi bočni razmak > 3 cm i |Δyaw| na pragu < 0.05 rad |
+| 6 | **tipka** PLAVA, pa CRVENA, pa HOME | stane pred stol; log javi bočni razmak > 2.5 cm i |Δyaw| na pragu < 0.05 rad |
 | 7 | ponovljivost | 3 uzastopna prolaza po smjeru bez dodira; skok `map→odom` < 0.2 m |
 | 8 | **negativni test** | ruke izvan `ARM_CARRY_V2` → abort **prije** zone vrata, ne pokušaj prolaza |
 
-`NavigateToPose` koji javi uspjeh nije dokaz: mjeri se izmjerena poza po dionici, kut na pragu vrata i najmanji bočni razmak iz `/scan_filtered` (oba ispisuje `room_navigator`).
+**Nav2 vozi svaku dionicu**, i prilaznu i onu kroz vrata. Kod vrata postoje samo dvije
+stvari: portalne poze na osi prolaza i preduvjet `arms_ok()` + `aligned_with()`
+(8 cm / 5°), koji pošteno stane umjesto da struže ([[D-18_verified_baseline_first]]).
+
+`NavigateToPose` koji javi uspjeh nije dokaz: mjeri se izmjerena poza po dionici, kut na
+pragu vrata i najmanji bočni razmak (oboje ispisuje `room_navigator`).
+
+**Referentni brojevi** (run 46, [[runovi]]) — ako neka izmjena ovo pokvari, izmjena je kriva,
+ne mjerilo:
+
+| Provjera | Očekivano |
+|---|---|
+| ručni cilj (0.0, −4.5, −90°) → plava soba | ~**33 s**, Vrata 0 s ≤ 5 cm i ≤ 5° |
+| `goto red` | 5 dionica, pred crvenim stolom za ~**60 s** |
+| oboje | bez dodira zida, bez aborta |

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    <profiles>
+        <data_writer profile_name="default_writer" is_default_profile="true">
+            <qos>
+                <reliability>
+                    <kind>RELIABLE</kind>
+                    <max_blocking_time>
+                        <sec>2</sec>
+                        <nanosec>0</nanosec>
+                    </max_blocking_time>
+                </reliability>
+            </qos>
+        </data_writer>
+    </profiles>
+</dds>

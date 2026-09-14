@@ -67,6 +67,9 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 export ROS_DOMAIN_ID=${PAS_DUAL_ARM_ROS_DOMAIN_ID:-5}
 export ROS_LOCALHOST_ONLY=${PAS_DUAL_ARM_ROS_LOCALHOST_ONLY:-1}
 export PAS_DUAL_ARM_ROOT=$project_root
+if [[ -r $project_root/src/pas_dual_arm_bringup/config/fastdds_profiles.xml ]]; then
+  export FASTRTPS_DEFAULT_PROFILES_FILE="$project_root/src/pas_dual_arm_bringup/config/fastdds_profiles.xml"
+fi
 
 IFS=: read -r -a prefixes <<< "${AMENT_PREFIX_PATH:-}"
 for prefix in "${prefixes[@]}"; do

@@ -2,12 +2,12 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
+from launch.actions import (DeclareLaunchArgument, GroupAction, IncludeLaunchDescription,
                             SetEnvironmentVariable, TimerAction)
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
-from launch_ros.actions import Node
+from launch_ros.actions import Node, SetRemap
 
 
 def generate_launch_description():
@@ -105,7 +105,14 @@ def generate_launch_description():
     # Delay the Nav2 stack so the localizer has time to publish map->odom first.
     # Otherwise local_costmap activates while the TF tree is still split
     # (odom and base_link in unconnected trees) and logs a startup-race error.
-    delayed_nav2 = TimerAction(period=5.0, actions=[nav2_launch])
+    # Remap goal_pose so bt_navigator's raw listener does not bypass room_navigator's
+    # perpendicular doorway routing. RViz '2D Goal Pose' goes to room_navigator.
+    nav2_group = GroupAction([
+        SetRemap(src='/goal_pose', dst='/bt_goal_pose'),
+        SetRemap(src='goal_pose', dst='/bt_goal_pose'),
+        nav2_launch,
+    ])
+    delayed_nav2 = TimerAction(period=7.0, actions=[nav2_group])
     features = Node(
         package='pas_dual_arm_scripts', executable='feature_registry',
         output='screen', parameters=[{'use_sim_time': True}],
@@ -133,11 +140,15 @@ def generate_launch_description():
 
     rviz = LaunchConfiguration('rviz')
     rviz_arg = DeclareLaunchArgument('rviz', default_value='true',
-                                     description='Open RViz with Nav2 default view')
+                                     description='Open RViz with Nav2 custom view')
+    custom_rviz = os.path.join(pkg_bringup, 'rviz', 'nav2.rviz')
     rviz_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(nav2_bringup_dir, 'launch', 'rviz_launch.py')),
-        launch_arguments={'use_sim_time': 'true'}.items(),
+        launch_arguments={
+            'use_sim_time': 'true',
+            'rviz_config': custom_rviz,
+        }.items(),
         condition=IfCondition(rviz),
     )
 

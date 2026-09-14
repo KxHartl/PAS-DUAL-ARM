@@ -1,7 +1,7 @@
 ---
 id: PARAMETRI
 type: registar
-updated: 2026-09-13
+updated: 2026-09-14
 ---
 # Registar parametara (jedini izvor istine za podesive vrijednosti)
 
@@ -57,22 +57,23 @@ updated: 2026-09-13
 | Parametar | Vrijednost | Gdje | Zašto / veza |
 |---|---|---|---|
 | footprint | **±0.52 × ±0.427 m** (1.04 × 0.854 m; bilo ±0.45) | `NAV` local/global costmap | izmjerena širina u `ARM_CARRY_V2` ([[P-35_arm_span_too_wide_for_door]]); 0.90 m je bila procjena zbog koje je `ObstacleFootprint` odbacivao sve trajektorije ([[P-39_nav2_enters_doorway_at_an_angle]]) |
-| `inflation_radius` | **0.45** (bilo 0.48), `cost_scaling_factor` 5.0 | `NAV` `local_costmap`, `global_costmap` | mora biti ≥ upisanog radijusa 0.427; veće samo zatvara traku |
+| `inflation_radius` | **0.45**, `cost_scaling_factor` 5.0 | `NAV` `global_costmap` | lokalni costmap nema inflaciju da ne zatvori uski prolaz |
 | `xy_goal_tolerance` / `yaw_goal_tolerance` | **0.10 m / 0.05 rad** (bilo 0.20 / 0.25) | `NAV` `general_goal_checker` | 0.25 rad traži 1.085 m otvora, a ima ga 0.95 m ([[P-39_nav2_enters_doorway_at_an_angle]]) |
-| `RotationShimController.angular_dist_threshold` | **0.06 rad** (bilo 0.12) | `NAV` `FollowPath` | ovo, a ne tolerancija cilja, odlučuje kako robot ulazi u vrata: 0.12 rad = 0.972 m |
-| `ObstacleFootprint.scale` | **1.0** (bilo 0.02) | `NAV` `FollowPath` | jedini kritičar koji gleda pravi pravokutnik |
-| `PathDist.scale` / `PathAlign.scale` | **64 / 48** (bilo 32 / 32) | `NAV` `FollowPath` | drži robota na osi lijevka = pravocrtnost |
+| DWB upravljač | `dwb_core::DWBLocalPlanner` bez RotationShimController | `NAV` `FollowPath` | **Nav2 vozi svaku dionicu**, i prilaznu i onu kroz vrata; kod vrata je samo preduvjet (`aligned_with`) i keepout traka |
+| `ObstacleFootprint.scale` / `PathDist.scale` / `GoalDist.scale` | **2 / 64 / 24** | `NAV` `FollowPath` | `PathAlign.scale` 48, `forward_point_distance` 0.10 m; DWB za prilazne i sobne dionice |
 | `local_costmap.filters` | **`["keepout_filter"]`** (prije ga nije bilo) | `NAV` `local_costmap` | bez toga DWB ne vidi zone i siječe kut ([[P-39_nav2_enters_doorway_at_an_angle]]) |
-| DWB `max_vel_x` / `max_vel_y` / `max_vel_theta` | **0.3 / 0.15 / 0.4** | `NAV` `FollowPath` | `vy` je bočna korekcija mecanum baze, ne krabiranje; [[P-11_nav2_slam_drift]] |
-| DWB `acc_lim_x` / `acc_lim_theta` | 1.0 / 1.0 | `NAV` `FollowPath` | [[P-11_nav2_slam_drift]] |
-| velocity smoother max v / vy / ω | **0.3 / 0.15 / 0.4** | `NAV` `velocity_smoother` | usklađeno s DWB |
-| zone: `chute_length` / `chute_thickness` | **0.85 m** (bilo 1.20) / 0.65 m | `nav_zones.py` `default_params` | lijevak samo mora obvezati robota na traku prije nego mu prednji kraj dođe do otvora; 0.85 m je 1.6× poluduljine (0.52). Duži nije sigurniji — na 1.20 m je bio 5 cm od opisane kružnice pri okretu ispred stola |
-| zone: `lane_margin` | **−0.05 m** (negativno = šire) | `nav_zones.py` | lijevak ne smije biti uži od stvarnih vrata; inače on, a ne prolaz, mjeri stane li robot |
-| zone: `portal_standoff` | **0.95 m** (bilo 0.75; portal je 1.80 m od vrata) | `nav_zones.py` | opisani radijus 0.673 + tolerancija cilja 0.10 + 0.15 za pomak pri okretu = 0.923 |
-| zone: `table_clearance` / `table_standoff` / `table_gate_margin` | 0.55 / 0.60 / **0.55 m** (gate bio 0.20) | `nav_zones.py` | prolaz kroz halo ide **punom širinom** halo-a: na 0.20 m robot je mogao doći pred stol, ali se nije mogao okrenuti natrag ([[P-39_nav2_enters_doorway_at_an_angle]], pokušaj 7) |
-| navigator: `centreline_tolerance` / `heading_tolerance` | 0.08 m / 0.07 rad | `room_navigator.py` | gate prije prolaza; 0.07 rad traži 0.926 m |
+| DWB `max_vel_x` / `max_vel_y` / `max_vel_theta` | **0.30 / 0.30 / 0.60** | `NAV` `FollowPath` | omni raspon s 15 uzoraka po osi; **puni bočni raspon** — tako je vožen provjereni run (sloj koji ga je spustio na 0.20 je povučen) |
+| DWB `acc_lim_x` / `acc_lim_y` / `acc_lim_theta` | **1.5 / 1.5 / 3.0** | `NAV` `FollowPath` | usklađeno s postojećim `velocity_smoother` |
+| velocity smoother max v / vy / ω | **0.30 / 0.30 / 0.60** | `NAV` `velocity_smoother` | usklađeno s DWB |
+| zone: `chute_length` / `chute_thickness` | **0.50 / 0.65 m** | `nav_zones.py` `default_params` | kraći lijevak ne blokira okret na portalu |
+| zone: `lane_margin` | **−0.20 m** (negativno = šire) | `nav_zones.py` | vodi globalnu putanju bez sužavanja stvarnog otvora |
+| zone: `portal_standoff` | **0.95 m** (portal je 1.45 m od vrata) | `nav_zones.py` | `check_zones.py` prolazi svih osam provjera prostora za okret |
+| zone: `table_clearance` / `table_standoff` / `table_gate_margin` | 0.55 / **0.80** / **0.55 m** (gate bio 0.20) | `nav_zones.py` | prolaz kroz halo ide **punom širinom** halo-a: na 0.20 m robot je mogao doći pred stol, ali se nije mogao okrenuti natrag ([[P-39_nav2_enters_doorway_at_an_angle]], pokušaj 7) |
+| navigator: gate pred vratima | `centreline_tolerance` **0.08 m**, `heading_tolerance` **0.087 rad (5°)** | `room_navigator.py` `aligned_with` | **vraćeno 14. 9.** na stanje provjerenog runa: prolaz koji je stvarno uspio bio je na **4.2°**, pa bi ga commitanih 0.07 rad (4.0°) odbilo ([[P-39_nav2_enters_doorway_at_an_angle]], pokušaj 10) |
+| navigator: `square_corners` | **False** | `room_navigator.py` | L-detour kroz sredinu sobe isključen; provjereni run je praznu sobu prešao izravnom dijagonalom i poravnao se na sljedećem portalu |
+| navigator: `min_side_clearance` / `arm_tolerance` | **0.03 m** / 0.15 rad | `room_navigator.py` | vrijednosti provjerenog runa; `/joint_states` se prati tijekom vožnje ([[P-37_arm_position_gain_sag]]) |
+| `scan_filter` | `half_length` 0.75, `half_width` **0.47** | `scan_filter.py` | **ne dizati na 0.52**: dovratnici stoje na ±0.475 m, pa ih 0.52 briše iz `/scan_filtered`, dakle i iz lokalnog costmapa i iz AMCL-a |
 | provjera zona: `TURN_MARGIN` | 0.15 m povrh opisanog radijusa, uz pomak od 0.10 m | `scripts/check_zones.py` | DWB pri „okretu u mjestu" i translatira; golo nepreklapanje nije kriterij |
-| navigator: `min_side_clearance` / `arm_tolerance` | 0.03 m / 0.15 rad | `room_navigator.py` | prekid vožnje ako razmak padne; ruke moraju držati `ARM_CARRY_V2` ([[P-37_arm_position_gain_sag]]) |
 | **izmjereno** (detekcija iz `maps/seminar_map`) | vrata (0.00, −3.00) i (3.00, −0.01), širina **0.95 m** (stvarna 1.0 m); stolovi (−0.04, −6.53) i (6.54, −0.01) | `scripts/check_doors.py`, `scripts/check_zones.py` | SLAM zadeblja zid ~2.5 cm po strani; zone se grade na izmjerenom, ne na nazivnom |
 | slam_toolbox | async, pomak 0.2 m / 0.2 rad, `base_footprint`, `/scan_filtered`, rezolucija 0.05 m | `config/slam_params.yaml`, `mapping.launch.py` | [[R-14_slam_mapping]]; karta prihvaćena u runu 44 |
 

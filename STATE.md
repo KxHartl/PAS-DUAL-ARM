@@ -18,10 +18,59 @@
 > zadnjeg dana: `notes/07_predaja/danas.md`. Sadržaj ispod je povijesni zapis sesija; kod
 > kontradikcije vrijede bilješke.
 
-**Trenutna faza**: NOVI SVIJET + IZMJERENE POZE. Sesija 13. 9. bila je organizacija i
-mjerenje, ne rješavanje. Hvat (dvoručni squeeze) je i dalje zadnje što je GUI-provjereno
-radilo (16. 7.), ali sada u **novom svijetu s tri sobe**, pa ga treba ponovno pokrenuti.
-**Datum zadnje izmjene**: 2026-09-13
+**Trenutna faza**: NAVIGACIJA RIJEŠENA (RViz + Autonomna) + Dvoručni hvat u novom svijetu.
+**Datum zadnje izmjene**: 2026-09-14
+
+## Dodatak 2026-09-14 (kasnije): povratak na provjerenu navigaciju
+
+Nakon runa opisanog niže naslagana su **dva sloja, nijedan odvožen**: (1) ekskluzivno
+poravnanje na portalu, zatvoreni tranzit od 2.9 m s isključenim Nav2, `doorway_margin`
+umjesto `aligned_with`, prekid kod ploče stola; (2) `envelope_monitor` s `require_envelope`
+koji po defaultu odbija vožnju, mjerenje iz dovratnika, ponavljanja poravnanja, kutni
+`scan_filter`. Sustav je time prestao voziti.
+
+Mjerljivo: novi gate za prolaz od **4.2°** (točno onaj iz uspješnog runa) daje
+`0.95 − 0.925 − 0.05 = −2.5 cm` → abort. `aligned_with()`, gate koji je taj prolaz
+propustio, ostao je u kodu neprozvan.
+
+**Stanje sada:** `main` je vraćen na konfiguraciju provjerenog runa — Nav2 vozi svaku
+dionicu, kod vrata su samo portalne poze i preduvjet `arms_ok` + `aligned_with` (8 cm / 5°),
+`square_corners` False, bočno ±0.30, bez inflacije na lokalnom costmapu, `scan_filter`
+`half_width` 0.47. Povučeni kod je sačuvan na grani **`wip/door-transit-closed-loop`**
+(commit 813cffe) i ne briše se.
+
+Pravilo od sada ([[D-18_verified_baseline_first]]): **ništa što može odbiti vožnju ne ulazi
+bez runa koji dokazuje da je odbijanje potrebno**; jedan inkrement = jedna izmjena + jedan
+run + jedan red u `runovi.md`.
+
+**Sljedeće:** ponoviti run niže (33 s / 60 s) i commitati ga. Tek onda jedan inkrement —
+obilazak stola (put s jedne strane stola na drugu ne smije ići uz stol).
+
+## Sesija 2026-09-14 (Omnidirekcijski DWB & Prolaz kroz vrata & Prijelaz soba)
+**Riješeno i verificirano (End-to-End):**
+- **Omnidirekcijski lokalni planer (DWB za mecanum bazu)**:
+  - Uklonjen diferencijalni pure-pursuit efekt koji je sprječavao bočno gibanje i izazivao trzanje/rotaciju pri malim pomacima.
+  - Aktivirani omni rasponi: `min_vel_x: -0.30`, `max_vel_x: 0.30`, `min_vel_y: -0.30`, `max_vel_y: 0.30`, `max_vel_theta: 0.60`.
+  - Povećana rezolucija uzorkovanja brzina na `vx_samples: 15`, `vy_samples: 15`, `vtheta_samples: 15` (finoća 0.043 m/s), čime je uklonjen overshoot/undershoot na granici tolerancije cilja.
+  - Usklađen `velocity_smoother` s punom podrškom za reverzno i lateralno gibanje (`min_velocity: [-0.30, -0.30, -0.60]`, `acc_lim: 1.5 m/s²`, `acc_lim_theta: 3.0 rad/s²`).
+  - U `local_costmap` uklonjen nepotrebni `inflation_layer` koji je u vratima širine 1.0 m umjetno zatvarao prolaz (inscribed radius 0.427 m generirao je cost 253 po cijeloj širini). `ObstacleFootprintCritic` direktno rasterizira stvarni pravokutni otisak robota (1.04 × 0.854 m) nad laserskim točkama bez lažnih kolizija.
+  - Verificiran čisti holonomski bočni pomak ($v_y = 0.17\text{ m/s}$, $\omega_z = 0.000\text{ rad/s}$) i vožnja unatrag bez rotacije.
+- **Geometrija kretanja između soba (uklonjen Manhattan L-detour)**:
+  - Isključen `square_corners` (postavljen na `False`) u `room_navigator.py`.
+  - Robot pri prelasku iz Plave u Crvenu sobu prolazi Vrata 0 okomito u Home sobu, preseca Home sobu izravnom dijagonalom prema prilazu Vratima 1, poravnava se okomito na normalu Vrata 1 ($\le 5.0^\circ$), prolazi ravno kroz Vrata 1 i parkira se ispred stola u Crvenoj sobi.
+- **Grafički prikaz za lokalizaciju**:
+  - Konfiguracija vraćena točno na stanje prije posljednje dvije izmjene kada je vožnja radila pouzdano.
+  - U stock Nav2 RViz dodan **isključivo prikaz elipse sigurnosti lokalizacije**: `AMCL Pose (Kovarijanca)` (`rviz_default_plugins/PoseWithCovariance` na `/amcl_pose` s prikazom elipse kovarijance). Svi ostali elementi RViz-a i GUI-ja su u svom originalnom obliku.
+- **Dvoetapna End-to-End verifikacija**:
+  1. **Ručni RViz 2D Goal Pose** (`/goal_pose` -> `/bt_goal_pose` via `room_navigator`):
+     - Polazak iz Home `(0.0, 0.0, 0.0°)`, zadani cilj u Plavoj sobi `(0.0, -4.5, -90.0°)`.
+     - Vrata 0 prijeđena s odstupanjem centra od samo 1.8 cm i greškom kuta 4.2° ($\le 5.0^\circ$).
+     - Uspješan dolazak u Plavu sobu za **33.1 s** (`x = -0.018 m, y = -4.361 m, yaw = -85.8°`).
+  2. **Autonomna tranzicija (`/room_navigator/goto "red"`)**:
+     - 5 dionica (Blue -> Vrata 0 -> dijagonala preko Home -> Vrata 1 -> Crvena soba -> stol).
+     - Uspješan dolazak pred crveni stol za **60.6 s**!
+     - Konačna poza pred stolom: `x = 4.693 m, y = -0.016 m, yaw = 3.5°`.
+
 
 ## Sesija 2026-09-13 (primopredaja)
 **Napravljeno:**

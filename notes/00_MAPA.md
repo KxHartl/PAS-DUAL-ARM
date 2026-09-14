@@ -23,9 +23,14 @@ updated: 2026-09-14
   vlastite SICK kućice; mapiranje ima vlastiti launch, konfiguraciju i autonomnu turu.
   **Nije potvrđeno:** tijekom vožnje ruke se rašire na 1.109 m, a SLAM korekcija skoči
   1.04 m ([[P-37_arm_position_gain_sag]], [[P-11_nav2_slam_drift]]). Karta još nije prihvaćena.
-- **Novo 14. 9.:** karta iz runa 44 je prihvaćena; navigacija je prebačena na **zone izvedene iz
-  detektiranih vrata i stolova** ([[D-16_zones_from_detected_features]], [[P-39_nav2_enters_doorway_at_an_angle]]).
-  Planirane putanje sad sijeku prag vrata pod < 1.1°. **Nijedan metar još nije odvožen.**
+- **Novo 14. 9.:** karta iz runa 44 je prihvaćena; navigacija radi na **zonama izvedenim iz
+  detektiranih vrata i stolova** ([[D-16_zones_from_detected_features]]). **Vožnja potvrđena**
+  (run 46): ručni cilj → plava soba 33.1 s, `goto red` → pred crvenim stolom 60.6 s; Nav2 vozi
+  svaku dionicu, kod vrata su portalne poze i preduvjet.
+- **Povučeno 14. 9.:** dva sloja naslagana na run 46 bez ijedne vožnje (zatvoreni tranzit i
+  širinski gate) zaustavila su sustav; `main` je vraćen na run 46, kod je na grani
+  `wip/door-transit-closed-loop` ([[D-18_verified_baseline_first]], [[P-39_nav2_enters_doorway_at_an_angle]]).
+- **Otvoreno:** obilazak stola — put s jedne strane stola na drugu vodi uz sam brid ploče.
 - **Otvoreno (obavezno iz maila):** vožnja kroz vrata uživo, nošenje kroz vrata, odlaganje
   u crvenoj sobi.
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
@@ -103,5 +108,5 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 - Povijest: [[timeline]], [[runovi]]
 - Svi podesivi brojevi: [[06_parametri]]
 - Izmjerene poze ruku i njihove dimenzije: [[08_poze]]
-- Odluke (ADR): [[D-01_aruco_dict_4x4_50]] … [[D-16_zones_from_detected_features]]. Popis je u [[AGENT_GUIDE]].
+- Odluke (ADR): [[D-01_aruco_dict_4x4_50]] … [[D-18_verified_baseline_first]]. Popis je u [[AGENT_GUIDE]].
 - Vizualno stablo: `00_mapa.canvas`

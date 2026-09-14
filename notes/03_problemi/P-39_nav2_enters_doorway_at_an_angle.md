@@ -1,10 +1,10 @@
 ---
 id: P-39
 type: problem
-status: neprovjereno
+status: djelomicno_potvrdeno
 requirements: ["[[R-15_region_goal_nav2]]", "[[R-18_door_pass_empty]]", "[[R-19_door_pass_with_box]]"]
 solutions: ["[[S-06_navigation]]"]
-decisions: ["[[D-16_zones_from_detected_features]]"]
+decisions: ["[[D-16_zones_from_detected_features]]", "[[D-17_closed_loop_door_transit]]"]
 updated: 2026-09-14
 ---
 # P-39 — Nav2 ulazi u prolaz pod kutem i struže uz stol
@@ -53,23 +53,40 @@ Uz to su zone i waypointi bili magični brojevi na dva mjesta (`generate_keepout
 
 | 7 | 14. 9. (GUI, korisnik) | prva vožnja sa zonama | ❌ **robot se ne može okrenuti u mjestu kad stoji ispred stola — zapne za zonu.** Izmjereno: prolaz kroz halo stola bio je širok samo stol + 0.20 m, pa je pri okretu kut robota ulazio u halo pokraj prolaza. Usput otkriveno da je i `portal_standoff` 0.75 < potrebnih 0.923 m. | prolaz kroz halo → **puna širina halo-a**; `portal_standoff` 0.75 → 0.95; `chute_length` 1.20 → 0.85. `check_zones.py` sada provjerava okret u mjestu na **svakoj** pozi gdje navigator stane (i portali i prilaz stolu), iz poze pomaknute za toleranciju cilja i uz rezervu 0.15 m |
 | 8 | 14. 9. | zaostali `velocity_smoother` iz ranijeg headless testa | ❌ novi `lifecycle_manager` ga našao u stanju `active` → `No transition matching 1 found` → **prekinut cijeli bringup**, karta se ne učita | uvijek provjeriti zaostale čvorove prije starta; upisano u [[01_pokretanje]] |
+| 9 | 14. 9. | ekskluzivno poravnanje, lokalni keepout, sirovi sken i zatvorena petlja za uski tranzit | ✅ headless prolaz home→blue: poravnanje uspjelo, tranzit dovršen s minimalnim bočnim razmakom **4.7 cm**, na izlazu +0.2°; ❌ Nav2 prilaz stolu zapeo uz cilj na rubu halo zone | tranzit izdvojen iz DWB-a; `table_standoff` 0.60→0.80 m, potreban retest dolaska stolu i povratka |
+| **A** | 14. 9. (GUI, korisnik) | **referentni run, Nav2 vozi sve dionice**, gate = `arms_ok` + `aligned_with` (8 cm / 5°), `square_corners` False, bočno ±0.30, bez lokalne inflacije | ✅ ručni RViz cilj → plava soba za **33.1 s**, Vrata 0 prijeđena s **1.8 cm i 4.2°**; ✅ `goto red` → 5 dionica, pred crvenim stolom za **60.6 s** | **ovo je stanje na koje se vraćamo.** Nije bilo commitano — postojalo je samo kao zapis u `STATE.md` |
+| 10 | 14. 9. | na run A naslagan sloj: `realign_to_portal`, `_transit_doorway` (2.9 m s isključenim Nav2), `doorway_margin` umjesto `aligned_with`, prekid kod stola na 25 cm | ❌ **nikad odvoženo**; `aligned_with` ostao u datoteci, ali ga nitko ne zove | novi gate odbija **upravo prolaz iz runa A**: `0.95 − swept(4.2°) − 0.05 = −2.5 cm` → ABORT. Zamijenjen je kriterij koji je propustio stvarni prolaz, bez runa koji bi to opravdao |
+| 11 | 14. 9. | na to naslagano još: `envelope_monitor` s `require_envelope` (po defaultu **odbija voziti**), mjerenje iz dovratnika, 3 pokušaja poravnanja, kutni `scan_filter` | ❌ **nikad odvoženo**; korisnik: „trenutačno sustav radi najgore ikad" | dodan još jedan razlog za abort na stanje koje već nije vozilo. Kod je sačuvan na grani `wip/door-transit-closed-loop`; `main` vraćen na run A |
+
+## Nalazi koji vrijede neovisno o tome koji je sloj u kodu
+Izračunati 14. 9. pri analizi pokušaja 10 i 11. Vrijede i za referentni run A, pa ih
+treba imati na umu pri svakoj sljedećoj izmjeni:
+
+1. **`scan_filter.half_width` se ne smije dizati na 0.52.** Dovratnici stoje na ±0.475 m,
+   pa ih maska od 0.52 briše iz `/scan_filtered` — dakle iz `local_costmap.voxel_layer`
+   **i** iz AMCL-a, i to baš dok robot prolazi kroz vrata. Vrijednost je 0.47.
+2. **Keepout traka usmjerava, ali ne centrira.** Uz `lane_margin −0.20` guide walls stoje na
+   ±0.675 m, pa robot (±0.427) ima 24.8 cm bočne slobode unutar trake, a fizička vrata
+   dopuštaju 4.8 cm. Zonu drži prolaznom fizički dovratnik, ne maska.
+3. **Ploča stola prepušta noge 5 cm po strani** (ploča 0.80, noge 0.70), a lidar na 0.209 m
+   vidi samo noge. Ono u što robot udara nije ni u jednom senzorskom sloju.
+4. **Kod stola je problem obilazak, ne prilaz** (korisnik, 14. 9.): gate pun 1.80 m nije
+   čeoni ulaz nego slobodan koridor uz sam prednji brid ploče, pa je put s jedne strane
+   stola na drugu najkraći baš uz stol. Uz to postoji samo **jedno** prilazno lice, pa cilj
+   na suprotnoj strani leži u keepoutu i NavFn ga s `tolerance: 0.5` privuče na rub halo-a.
+5. `_front_clear()` iz pokušaja 10 nije mogao opaliti: tražio je povrat u koridoru koji je
+   maska iz točke 1 već obrisala.
 
 ## Trenutno rješenje
-[[D-16_zones_from_detected_features]]. Zone se generiraju iz karte
-(`nav_zones.py`), Nav2 i dalje vozi, a `room_navigator.py` vodi po grafu soba s poštenim
-gateom prije svakog prolaza. Parametri: `nav2_params.yaml` (goal checker, shim, footprint,
-kritičari, `filters` na `local_costmap`). Offline provjere: `scripts/check_doors.py`,
-`scripts/check_zones.py`.
+[[D-16_zones_from_detected_features]] i [[D-18_verified_baseline_first]]. Zone i graf dolaze
+iz karte, a **Nav2 vozi svaku dionicu** — i prilaznu, i onu kroz vrata. Kod vrata postoje
+samo dvije stvari: portalne poze na osi prolaza (dva cilja po vratima) i preduvjet
+`arms_ok()` + `aligned_with()` (8 cm / 5°) koji pošteno stane umjesto da struže.
+To je stanje runa A. [[D-17_closed_loop_door_transit]] je **povučena**.
 
 ## Sljedeći korak
-Vožnja u GUI-ju (runovi 45+). Kriterij: tri uzastopna prolaza po smjeru bez dodira,
-|Δyaw| na pragu < 0.05 rad, minimalni bočni razmak > 3 cm, skok `map→odom` < 0.2 m.
-**Sve dosad je mjereno na planeru i costmapu — nijedan metar nije odvožen.**
+1. Ponoviti run A i zabilježiti ga u [[runovi]] — dok se ne ponovi, ne dodaje se ništa.
+2. Zatim **jedan** inkrement: obilazak stola (točka 4 gore), pa run, pa sljedeći.
 
-## Ne ponavljati
-- Popuštanje `yaw_goal_tolerance` da bi cilj „prošao": za ovaj robot i ova vrata 0.25 rad je
-  geometrijski nemoguć.
-- Spuštanje `ObstacleFootprint.scale` da DWB nađe trajektoriju: to skriva da je footprint kriv.
-- Keepout zone samo na globalnom costmapu.
-- Zone upisivati ručno na dva mjesta ([[D-16_zones_from_detected_features]]).
-- Širenje vrata radi Nav2 ([[P-12_door_too_narrow]]).
+Pravilo iz [[D-18_verified_baseline_first]]: ništa što može **odbiti vožnju** ne ulazi u kod
+bez runa koji dokazuje da je to odbijanje potrebno.
