@@ -76,6 +76,12 @@ treba imati na umu pri svakoj sljedećoj izmjeni:
    na suprotnoj strani leži u keepoutu i NavFn ga s `tolerance: 0.5` privuče na rub halo-a.
 5. `_front_clear()` iz pokušaja 10 nije mogao opaliti: tražio je povrat u koridoru koji je
    maska iz točke 1 već obrisala.
+6. **RViz „Nav2 Goal" zaobilazi `room_navigator`.** `nav2_rviz_plugins/GoalTool` šalje
+   izravno akciju `navigate_to_pose`, dakle nema portalnih poza ni okomitog ulaza — planer
+   vuče dijagonalu prema cilju. Alat `rviz_default_plugins/SetGoal` („2D Goal Pose"), koji
+   objavljuje na `/goal_pose` i ide kroz navigator, **u konfiguraciji dugo nije ni postojao**
+   (dodan 14. 9.). Provjera: ako `room_navigator` u logu nema ništa osim `zone graph:`, cilj
+   je otišao mimo njega.
 
 ## Trenutno rješenje
 [[D-16_zones_from_detected_features]] i [[D-18_verified_baseline_first]]. Zone i graf dolaze

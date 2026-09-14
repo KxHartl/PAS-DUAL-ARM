@@ -72,6 +72,18 @@ grep -hE "footprint now|alignment:|arms:|tightest|aborted|ABORT|Recover" ~/.ros/
 > `~/.ros/log` raste (već je ~120 MB). Povremeno počistiti stare mape:
 > `find ~/.ros/log -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +`
 
+**Ali to hvata samo *naše* čvorove.** `output='both'` vrijedi za čvorove koje dižemo mi
+(`footprint_publisher`, `cmd_vel_relay`, `room_navigator`, `nav_zones`, `collision_monitor`).
+Nav2-ovi vlastiti (`controller_server`, `planner_server`, `bt_navigator`…) dolaze iz
+`navigation_launch.py`, koji ima svoj `output='screen'`, pa u `launch.log` ostave samo
+`process started`. Za **potpun** zapis pusti T2 kroz `tee` — vanjsko preusmjeravanje hvata
+svu djecu:
+
+```bash
+mkdir -p /tmp/pas
+./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py 2>&1 | tee /tmp/pas/t2.log
+```
+
 Ako ti zatreba da agent gleda **bilo koji** terminal, a ne samo ROS: `sudo apt install tmux`,
 pokreni poslove unutar `tmux`, pa agent čita živi sadržaj s
 `tmux capture-pane -p -t <sesija>`. Za ROS to nije potrebno.
@@ -152,7 +164,7 @@ referentnu rutu (dolje) da se potvrdi da monitor ne koči normalnu vožnju.
 
 Ovo je run 46 iz [[runovi]] — stanje koje je dokazano radilo.
 
-1. **Ručni cilj:** RViz „2D Goal Pose" iz Home `(0, 0, 0°)` na **`(0.0, −4.5, −90°)`**.
+1. **Ručni cilj:** RViz **„2D Goal Pose"** iz Home `(0, 0, 0°)` na **`(0.0, −4.5, −90°)`**.
    Očekivano: plava soba za **~33 s**.
 2. **Autonomno:** tipka **CRVENA soba** u panelu, ili
    ```bash
@@ -161,6 +173,16 @@ Ovo je run 46 iz [[runovi]] — stanje koje je dokazano radilo.
    Očekivano: **5 dionica**, pred crvenim stolom za **~60 s**.
 
 Ostale tipke: **PLAVA soba**, **HOME**, **STOP**.
+
+> [!warning] U RViz-u postoje **dva** alata za cilj i ne rade isto
+> - **„2D Goal Pose"** (`rviz_default_plugins/SetGoal`) objavi pozu na `/goal_pose`, odakle
+>   je preuzme `room_navigator` i razloži je na portalne poze — **ovo je normalan način**.
+> - **„Nav2 Goal"** (`nav2_rviz_plugins/GoalTool`) šalje **izravno akciju** `navigate_to_pose`
+>   `bt_navigator`-u i **zaobilazi `room_navigator`**: nema portalnih poza, nema okomitog
+>   ulaza, planer vuče dijagonalu i robot uđe u vrata ukoso.
+>
+> Ako `room_navigator` u logu nema ništa osim `zone graph:`, cilj je otišao mimo njega.
+> „Nav2 Goal" je koristan samo za namjernu usporedbu (A/B), ne za normalan test.
 
 ## 7. Što zabilježiti nakon svakog runa
 
