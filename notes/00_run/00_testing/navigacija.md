@@ -52,6 +52,30 @@ krive i vožnja nema smisla.
 
 Pričekaj u T1 da svi kontroleri jave `Configured and activated` prije nego pokreneš T2.
 
+### Log u datoteku (da se ispis ne mora prepisivati)
+
+Agent **ne vidi** tvoje terminale. Terminatorov broadcast šalje *unos* u više terminala i tu
+ne pomaže. Najjednostavnije je pustiti izlaz kroz `tee`, pa ga onda može pročitati bilo tko,
+i ti i agent, bez kopiranja u chat:
+
+```bash
+mkdir -p /tmp/pas
+# T1
+PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py 2>&1 | tee /tmp/pas/t1.log
+# T2
+./scripts/run_native.sh ros2 launch pas_dual_arm_bringup nav2.launch.py 2>&1 | tee /tmp/pas/t2.log
+```
+
+Izlaz i dalje ide na ekran, a usput se sprema. Korisni izvadci:
+
+```bash
+grep -E "footprint now|alignment:|arms:|tightest|aborted|ABORT" /tmp/pas/*.log
+tail -f /tmp/pas/t2.log
+```
+
+Alternativa u Terminatoru: Preferences → Plugins → uključi **Logger**, pa desni klik u
+terminalu → **Log to File**. Isti učinak, bez mijenjanja naredbe.
+
 **Argumenti za T2:** `gui:=false` (bez panela), `rviz:=false`, `zones:=false` (A/B bez zona),
 `safety:=false` (bez `collision_monitor`; tada sirovi `/cmd_vel` opet izravno vozi bazu).
 
