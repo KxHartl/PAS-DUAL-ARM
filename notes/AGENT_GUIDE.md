@@ -59,7 +59,7 @@ su zastarjeli). Kad nađeš kontradikciju, **ne biraj tiho**: zapiši je u karti
 | keepout zone samo na globalnom costmapu | upravljač ih ne vidi | [[P-39_nav2_enters_doorway_at_an_angle]] |
 | **graditi novi sloj na stanju koje nije odvoženo** | dva sloja bez ijednog runa učinila su sustav gorim nego prije; 14. 9. | [[D-18_verified_baseline_first]] |
 | **zamijeniti gate koji je propustio stvarni prolaz strožim izračunom** | `doorway_margin` odbija prolaz od 4.2° koji je dokazano uspio | [[P-39_nav2_enters_doorway_at_an_angle]] |
-| `scan_filter` `half_width` 0.52 | briše dovratnike na ±0.475 m iz costmapa i AMCL-a | [[P-39_nav2_enters_doorway_at_an_angle]] |
+| `scan_filter` `half_width` ≥ 0.35 | briše dovratnike (±0.50) i noge stolova; bez povrata voxel sloj ih ne može ni označiti ni očistiti, pa stare oznake zamrznu prolaz | [[P-39_nav2_enters_doorway_at_an_angle]] |
 
 ## 6. Rad s korisnikom
 - Komunikacija na **hrvatskom**, a kod i commitovi na engleskom (Conventional Commits).

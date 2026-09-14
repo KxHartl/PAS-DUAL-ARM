@@ -19,8 +19,21 @@ from tf2_ros import Buffer, TransformListener
 class ScanFilter(Node):
     def __init__(self):
         super().__init__('scan_filter')
-        self.declare_parameter('half_length', 0.75)
-        self.declare_parameter('half_width', 0.47)
+        # Sized to what is actually AT the laser plane (0.2086 m), not to the
+        # robot's widest point. The laser sits inside a 0.58 x 0.39 m mounting
+        # plate, so 0.195 m of half width; the bigger 0.717 x 0.497 m box starts
+        # at z = 0.2232, above it, and the arms in ARM_CARRY_V2 are at z >= 0.40.
+        #
+        # This was 0.47, and that is why the robot stalled in every doorway. A
+        # 1.0 m doorway puts its jambs at +-0.50 m, so any lateral offset over
+        # 3 cm pulled the near jamb inside the mask. Once its returns are gone
+        # the voxel layer can neither mark nor raytrace-clear those cells, so the
+        # marks made on the way in freeze exactly where the robot has to go. The
+        # robot then sat for the 30 s the progress checker allows, Nav2 cleared
+        # the costmap as a recovery, and it drove through - which is what "stops,
+        # waits, then passes normally" looked like from outside.
+        self.declare_parameter('half_length', 0.45)
+        self.declare_parameter('half_width', 0.30)
         self._tf = Buffer()
         self._listener = TransformListener(self._tf, self)
         # Reliable output also serves Nav2 subscriptions using the default QoS;

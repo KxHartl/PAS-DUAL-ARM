@@ -218,7 +218,7 @@ Upisati u [[runovi]] i u pripadnu P-karticu — **i kad ne uspije**.
 | `alignment: … off the lane centreline` | AMCL netočan ili je prethodna dionica podbacila | pošalji robota malo unazad i ponovi |
 | `No valid trajectories out of N!` (DWB) | u costmapu **nema** prolaza dovoljno širokog za footprint — nije greška upravljača | izmjeri stvarnu širinu koju costmap vidi (dolje) |
 | `Control loop missed its desired rate` (×1000) | upravljač ne stigne u 10 Hz; Nav2 to čita kao zaglavljenog robota → `Failed to make progress` → recovery `Spin` | smanji trošak: `max_vertices` footprinta, rezoluciju lokalnog costmapa ili broj uzoraka DWB-a |
-| `Failed to make progress` | posljedica gornjeg, ne zaseban kvar | isto |
+| `Failed to make progress` | robot se nije pomaknuo 10 cm u 30 s; Nav2 pokrene recovery koji **očisti costmap**, pa nastavi | ako staje baš na ulazu u vrata pa nakon ~30 s prođe: zastarjele ćelije koje laser više ne vidi (provjeri `scan_filter` masku) |
 
 Kad DWB javi da nema valjanih trajektorija, izmjeri koliko je slobodno **u costmapu**, ne u svijetu:
 

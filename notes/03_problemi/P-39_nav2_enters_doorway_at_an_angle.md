@@ -60,11 +60,15 @@ Uz to su zone i waypointi bili magični brojevi na dva mjesta (`generate_keepout
 
 | 12 | 14. 9. `b5ee64e` | prvi run s ispravnim usmjeravanjem (alat 2D Goal Pose): portal pogoden 9.8 cm / +2.7 stupnjeva, gate prosao | **`No valid trajectories out of 3711`**, status 6, pa Nav2 recovery zavrtio robota u mjestu (to je bio neobjasnjivi yaw) | izmjereno u lokalnom costmapu: u otvoru od **100 cm** slobodno je samo **80 cm**, a robot s paddingom 86.2 cm. DWB je bio u pravu; greska je u tome **sto costmap crta** |
 
+| 13 | 14. 9. `a3cc8da` | run s 8 vrhova i rezolucijom 0.025 | ⚠ prolaz **uspio**, ali robot stane tocno kad ude u vrata, stoji **~30 s**, pa prode uredno. `Control loop missed` pao s 1184 na 3; nova greska je `Failed to make progress` (×3) | `scan_filter` s `half_width` 0.47 brise bliži dovratnik cim je bocni otklon > 3 cm (dovratnik je na 0.50). Bez povrata voxel sloj te celije **ne moze ni oznaciti ni raytraceom ocistiti**, pa oznake s prilaza ostanu zamrznute u prolazu. 30 s je `movement_time_allowance`; oslobodi ga recovery koji ocisti costmap. Maska suzena na **0.30 × 0.45**, prema stvarnoj sirini sasije na visini lasera |
+
 ## Nalazi koji vrijede neovisno o tome koji je sloj u kodu
 Izračunati 14. 9. pri analizi pokušaja 10 i 11. Vrijede i za referentni run A, pa ih
 treba imati na umu pri svakoj sljedećoj izmjeni:
 
-1. **`scan_filter.half_width` se ne smije dizati na 0.52.** Dovratnici stoje na ±0.475 m,
+1. **`scan_filter` mora biti uzak koliko i robot NA VISINI LASERA, ne koliko je najširi.**
+   Na 0.2086 m to je 0.195 m polu-širine (ploča u koju je laser ugrađen); ruke su 19 cm iznad.
+   Sve šire briše dovratnike i noge stolova. Vrijednost je **0.30 × 0.45**. Staro (0.47):
    pa ih maska od 0.52 briše iz `/scan_filtered` — dakle iz `local_costmap.voxel_layer`
    **i** iz AMCL-a, i to baš dok robot prolazi kroz vrata. Vrijednost je 0.47.
 2. **Keepout traka usmjerava, ali ne centrira.** Uz `lane_margin −0.20` guide walls stoje na
