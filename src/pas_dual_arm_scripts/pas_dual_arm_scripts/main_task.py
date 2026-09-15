@@ -136,10 +136,16 @@ def quat_mul(a, b):
 # (the bar runs along Y, so the fingers close on its 0.06 m width).
 GRASP_DOWN = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
+# The fingertip link frame is near the back of its collision mesh. Both Robotiq
+# tip collision STLs extend 0.051019 m farther along local +Z, which is also the
+# horizontal approach axis in the squeeze pose. Standoff distances must be
+# measured from this leading collision surface, not from the link origin.
+TIP_COLLISION_FORWARD = 0.051019
+
 
 class MainTask(BaseDriver, Node):
-    def __init__(self):
-        super().__init__('main_task_node')
+    def __init__(self, node_name='main_task_node'):
+        super().__init__(node_name)
 
         # --- tunable geometry (map frame unless noted) -----------------------
         # Pre-grasp: stop short of the pick table (table front edge at X~0.85, the
@@ -241,7 +247,7 @@ class MainTask(BaseDriver, Node):
         # Wrist->fingertip stand-off along the gripper approach axis, measured once
         # from TF after the arms reach a known posture (so end_effector goals place
         # the FINGER TIPS - not the wrist - on the bar). Nominal until measured.
-        self.tip_standoff = 0.145
+        self.tip_standoff = 0.150
 
         # --- contact / force feedback ---------------------------------------
         # The arm joints expose an 'effort' state interface (Gen3 joint-torque
@@ -374,16 +380,18 @@ class MainTask(BaseDriver, Node):
                     # same to within a millimetre, but open pads sit well off
                     # the axis, and their distance would then read as reach the
                     # hand does not have - stopping it short of the face.
-                    vals.append(t.z)
+                    vals.append(t.z + TIP_COLLISION_FORWARD)
                     spread.append(math.hypot(t.x, t.y))
                 except Exception:
                     continue
         if vals:
             self.tip_standoff = sum(vals) / len(vals)
             self.get_logger().info(
-                f'Measured wrist->fingertip stand-off = {self.tip_standoff:.3f} m '
-                f'along the approach axis, pads {sum(spread) / len(spread):.3f} m '
-                f'off it ({len(vals)} tips).')
+                f'Measured wrist->leading fingertip collision = '
+                f'{self.tip_standoff:.3f} m along the approach axis '
+                f'(includes {TIP_COLLISION_FORWARD * 1000:.1f} mm mesh extent), '
+                f'pads {sum(spread) / len(spread):.3f} m off it '
+                f'({len(vals)} tips).')
         else:
             self.get_logger().warn(
                 f'Could not measure fingertip stand-off; using nominal '
@@ -532,7 +540,8 @@ class MainTask(BaseDriver, Node):
         self.get_logger().info(f'{label}: planning {group} (joint-space)')
         return self._send_and_wait(self.move, goal, label)
 
-    def plan_arm_joints(self, group, joints, label):
+    def plan_arm_joints(self, group, joints, label, velocity_scale=0.2,
+                        acceleration_scale=0.2):
         """Plan ONE arm to explicit joint targets WITHOUT executing it, and
         return the trajectory. Needed because move_group executes one
         trajectory at a time: a two-arm move driven through it is necessarily
@@ -547,8 +556,8 @@ class MainTask(BaseDriver, Node):
         req.group_name = group
         req.num_planning_attempts = 10
         req.allowed_planning_time = 5.0
-        req.max_velocity_scaling_factor = 0.2
-        req.max_acceleration_scaling_factor = 0.2
+        req.max_velocity_scaling_factor = float(velocity_scale)
+        req.max_acceleration_scaling_factor = float(acceleration_scale)
         c = Constraints(name=label)
         for name, val in joints.items():
             jc = JointConstraint()
@@ -602,6 +611,19 @@ class MainTask(BaseDriver, Node):
         return sum(self._tip_in_contact(f'{side}_{finger}', max_age=max_age,
                                         box_only=True)
                    for finger in ('left', 'right'))
+
+    def box_contact_snapshot(self, max_age=0.12):
+        """Return the fresh box-only state of every fingertip sensor.
+
+        The contact sensors publish at 50 Hz.  A short freshness window filters
+        old contacts without treating one delayed bridge sample as a new grasp.
+        """
+        return {
+            f'{side}_{finger}': self._tip_in_contact(
+                f'{side}_{finger}', max_age=max_age, box_only=True)
+            for side in ('left', 'right')
+            for finger in ('left', 'right')
+        }
 
     def approach_both_linear(self, targets, label, min_frac=0.85,
                              min_duration=0.0):
@@ -682,6 +704,82 @@ class MainTask(BaseDriver, Node):
             self.get_logger().info(
                 f'{label} {side}: {"OK" if outs[side] else "FAILED"}')
         return outs
+
+    def approach_both_until_contact(self, targets, label, duration,
+                                    contact_max_age=0.4):
+        """Approach with both arms and independently stop each on first contact.
+
+        MoveIt computes the straight Cartesian paths, but the two trajectories
+        are sent directly to their JTCs.  Cancelling a JTC goal installs its
+        hold-position trajectory, so one hand can stop while the other keeps
+        approaching.  Returns the final fresh pad count for each hand.
+        """
+        trajs = {}
+        for side, (group, ee, pose) in targets.items():
+            self._wait_settle(ee)
+            got = self._linear_traj(group, ee, pose, f'{label} {side}')
+            if got is None:
+                raise RuntimeError(f'{label} {side}: no straight path')
+            solution, fraction = got
+            if fraction < 0.85:
+                raise RuntimeError(
+                    f'{label} {side}: path only {fraction:.2f} complete')
+            traj = solution.joint_trajectory
+            if not self._traj_starts_here(traj, f'{label} {side}'):
+                raise RuntimeError(f'{label} {side}: stale trajectory start')
+            self._stretch_to(traj, duration)
+            trajs[side] = traj
+
+        clients = {'left': self.left_jtc, 'right': self.right_jtc}
+        for side in ('left', 'right'):
+            if not self._wait_server(clients[side], f'{side} JTC'):
+                raise RuntimeError(f'{side} JTC unavailable')
+        send_futures = {}
+        for side in ('left', 'right'):
+            goal = FollowJointTrajectory.Goal()
+            goal.trajectory = trajs[side]
+            send_futures[side] = clients[side].send_goal_async(goal)
+
+        handles = {}
+        for side, future in send_futures.items():
+            handle = self._spin_until_done(future)
+            if handle is None or not handle.accepted:
+                for accepted in handles.values():
+                    accepted.cancel_goal_async()
+                raise RuntimeError(f'{label} {side}: goal rejected')
+            handles[side] = handle
+
+        results = {side: handle.get_result_async()
+                   for side, handle in handles.items()}
+        cancel_futures = {}
+        active = set(handles)
+        while active:
+            rclpy.spin_once(self, timeout_sec=0.01)
+            for side in tuple(active):
+                if results[side].done():
+                    active.remove(side)
+                elif self.tips_on_box(side, max_age=contact_max_age) >= 1:
+                    if side not in cancel_futures:
+                        self.get_logger().info(
+                            f'{label}: {side} first pad contact; stopping arm')
+                        cancel_futures[side] = handles[side].cancel_goal_async()
+            for side, future in tuple(cancel_futures.items()):
+                if future.done() and side in active:
+                    response = future.result()
+                    if response is None or not response.goals_canceling:
+                        raise RuntimeError(
+                            f'{label} {side}: controller did not accept stop')
+                    active.remove(side)
+
+        # Let accepted cancels reach the controller and verify both mechanisms
+        # have stopped before any fine correction is issued.
+        for side, future in cancel_futures.items():
+            self._spin_until_done(future)
+            self.get_logger().info(f'{label}: {side} arm is holding')
+        for side in ('left', 'right'):
+            self._wait_settle(f'{side}_end_effector_link')
+        return {side: self.tips_on_box(side, max_age=contact_max_age)
+                for side in ('left', 'right')}
 
     @staticmethod
     def _roll180(pose):
@@ -1035,6 +1133,34 @@ class MainTask(BaseDriver, Node):
         goal.command.max_effort = float(max_effort)
         return self._send_and_wait(client, goal, label)
 
+    def set_both_grippers(self, position, label, max_effort=50.0):
+        """Command both grippers at the same instant and wait for both."""
+        clients = {'left': self.left_grip, 'right': self.right_grip}
+        for side, client in clients.items():
+            if not self._wait_server(client, f'{label} {side}'):
+                return False
+        futures = {}
+        for side, client in clients.items():
+            goal = GripperCommand.Goal()
+            goal.command.position = float(position)
+            goal.command.max_effort = float(max_effort)
+            futures[side] = client.send_goal_async(goal)
+        handles = {}
+        for side, future in futures.items():
+            handle = self._spin_until_done(future)
+            if handle is None or not handle.accepted:
+                return False
+            handles[side] = handle
+        ok = True
+        for side, handle in handles.items():
+            result = self._spin_until_done(handle.get_result_async())
+            succeeded = (result is not None
+                         and result.status == GoalStatus.STATUS_SUCCEEDED)
+            self.get_logger().info(
+                f'{label} {side}: {"OK" if succeeded else "FAILED"}')
+            ok = ok and succeeded
+        return ok
+
     # ------------------------------------------------------------------ torso
     def move_torso(self, height, label, secs=4):
         if not self._wait_server(self.torso, 'torso_controller'):
@@ -1043,13 +1169,130 @@ class MainTask(BaseDriver, Node):
         traj = JointTrajectory()
         traj.joint_names = ['torso_left_carriage_joint',
                             'torso_right_carriage_joint']
+
+        # Single endpoint with explicit zero velocities. The JTC assumes the
+        # robot starts from rest (current state) and generates a smooth cubic
+        # profile to reach this point. An explicit t=0 anchor was tried but
+        # caused a jerk: the JTC activates the trajectory with a small delay
+        # after send_goal_async, so by the time it processes t=0 the clock has
+        # already passed it — the controller sees a nonzero position error at
+        # t=0 and issues a large corrective velocity spike.
+        left_now = self._joint.get('torso_left_carriage_joint', (0.0, 0.0))[0]
+        right_now = self._joint.get('torso_right_carriage_joint', (0.0, 0.0))[0]
         pt = JointTrajectoryPoint()
         pt.positions = [float(height), float(height)]
+        pt.velocities = [0.0, 0.0]
         pt.time_from_start.sec = int(secs)
         traj.points.append(pt)
+
         goal.trajectory = traj
-        self.get_logger().info(f'{label}: torso -> {height} m over {secs}s')
+        self.get_logger().info(f'{label}: torso {left_now:.4f}/{right_now:.4f}'
+                               f' -> {height:.4f} m over {secs}s')
         return self._send_and_wait(self.torso, goal, label)
+
+    def move_torso_guarded(self, targets, label, speed, guard):
+        """Move both carriages while polling a safety predicate.
+
+        ``targets`` contains the independent left/right absolute heights.  If
+        ``guard`` becomes false, cancel the trajectory immediately and leave
+        the controller holding the measured position.  The return value is
+        ``'reached'``, ``'guard_failed'`` or ``'failed'``.
+        """
+        if not self._wait_server(self.torso, 'torso_controller'):
+            return 'failed'
+        names = ['torso_left_carriage_joint',
+                 'torso_right_carriage_joint']
+        current = [self._joint.get(name, (0.0, 0.0))[0] for name in names]
+        duration = max(abs(float(target) - now)
+                       for target, now in zip(targets, current)) / float(speed)
+        duration = max(duration, 0.1)
+
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory.joint_names = names
+        point = JointTrajectoryPoint()
+        point.positions = [float(v) for v in targets]
+        point.velocities = [0.0, 0.0]
+        point.time_from_start.sec = int(duration)
+        point.time_from_start.nanosec = int(
+            (duration - int(duration)) * 1e9)
+        goal.trajectory.points = [point]
+        self.get_logger().info(
+            f'{label}: torso {current[0]:.4f}/{current[1]:.4f} -> '
+            f'{targets[0]:.4f}/{targets[1]:.4f} m over {duration:.1f}s')
+
+        send_future = self.torso.send_goal_async(goal)
+        handle = self._spin_until_done(send_future)
+        if handle is None or not handle.accepted:
+            self.get_logger().error(f'{label}: torso goal rejected')
+            return 'failed'
+        result_future = handle.get_result_async()
+        while not result_future.done():
+            rclpy.spin_once(self, timeout_sec=0.01)
+            if not guard():
+                self.get_logger().warn(
+                    f'{label}: contact guard lost; stopping carriages')
+                cancel_future = handle.cancel_goal_async()
+                self._spin_until_done(cancel_future)
+                response = cancel_future.result()
+                if response is None or not response.goals_canceling:
+                    self.get_logger().error(
+                        f'{label}: torso controller rejected stop')
+                    return 'failed'
+                self._wait_settle('left_end_effector_link')
+                return 'guard_failed'
+
+        result = result_future.result()
+        ok = result is not None and result.status == GoalStatus.STATUS_SUCCEEDED
+        self.get_logger().info(f'{label}: {"OK" if ok else "FAILED"}')
+        return 'reached' if ok else 'failed'
+
+    def hold_current_mechanisms(self, reason='safety hold'):
+        """Replace residual arm/torso commands with measured joint positions."""
+        if not rclpy.ok():
+            return False
+        specs = (
+            ('left', self.left_jtc,
+             [f'left_joint_{index}' for index in range(1, 8)]),
+            ('right', self.right_jtc,
+             [f'right_joint_{index}' for index in range(1, 8)]),
+            ('torso', self.torso,
+             ['torso_left_carriage_joint',
+              'torso_right_carriage_joint']),
+        )
+        sends = {}
+        for label, client, names in specs:
+            if not all(name in self._joint for name in names):
+                self.get_logger().warn(
+                    f'{reason} {label}: joint state unavailable')
+                continue
+            if not client.wait_for_server(timeout_sec=1.0):
+                self.get_logger().warn(
+                    f'{reason} {label}: controller unavailable')
+                continue
+            goal = FollowJointTrajectory.Goal()
+            goal.trajectory.joint_names = names
+            point = JointTrajectoryPoint()
+            point.positions = [float(self._joint[name][0]) for name in names]
+            point.velocities = [0.0] * len(names)
+            point.time_from_start.nanosec = 300000000
+            goal.trajectory.points = [point]
+            sends[label] = client.send_goal_async(goal)
+
+        accepted = {}
+        for label, future in sends.items():
+            self._spin_until_done(future)
+            handle = future.result()
+            if handle is not None and handle.accepted:
+                accepted[label] = handle
+            else:
+                self.get_logger().error(
+                    f'{reason} {label}: goal rejected')
+        for label, handle in accepted.items():
+            result = handle.get_result_async()
+            self._spin_until_done(result)
+            self.get_logger().info(
+                f'{reason} {label}: current position latched')
+        return len(accepted) == len(specs)
 
     # ------------------------------------------------ grasp-geometry telemetry
     def _log_grasp_geometry(self, box, when):

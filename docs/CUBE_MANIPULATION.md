@@ -51,10 +51,18 @@ this worktree only; never source the main worktree's `install/` overlay.
    `bash scripts/run_cube_isolated.sh python3 scripts/probe_cube_perception.py --ros-args -p use_sim_time:=true`
    while the isolated sim and ArUco launches run.
 3. **Contact pick:** derive both pad targets from the measured cube pose and
-   width. Move to collision-checked pregrasp poses, press simultaneously with
-   small bounded steps, and require fresh box-only contacts on both sides.
-   With Gazebo's rigid joint disabled, lift 0.15 m using the measured carriage
-   motion while maintaining the two contacts. Repeat before trying transit.
+   width. Move to collision-checked pregrasp poses, then to a measured 2 cm
+   standoff at no more than 25 mm/s. Approach both faces at 2 mm/s and
+   independently stop each arm on
+   its first box-only pad contact. Close both grippers together for the fine
+   grasp. Keep the marker-derived wrist orientation
+   and advance only an incomplete hand in 2 mm corrections, bounded to 10 mm
+   past its measured face, until all four pads touch. A hand already at 2/2
+   holds position. If a commanded 2 mm move repeatedly yields less than
+   0.2 mm of actual wrist travel, back that hand off 3 mm and realign.
+   With Gazebo's rigid joint disabled, hold four contacts for 1 s
+   and lift 0.20 m at 10 mm/s. Stop, restore the bounded contact and resume if
+   any pad loses contact. Repeat before trying transit.
    Current read-only pose probe in the GUI sim (base at `(0,-5.5,-pi/2)`):
    the fused centre is `(0.849,0.000,0.821)` in `base_link`, marker tangent
    nearly `+Y`, and measured wrist-to-tip stand-off 0.115 m. Left/right

@@ -31,8 +31,10 @@ def generate_launch_description():
 
     auto_start = LaunchConfiguration('auto_start')
     auto_start_arg = DeclareLaunchArgument(
-        'auto_start', default_value='true',
-        description='Run the main_task orchestration node automatically.')
+        'auto_start', default_value='false',
+        description=(
+            'Run the legacy main_task orchestration node. Disabled by default '
+            'so grasp_cube.py is the only motion owner.'))
     navigate_region = LaunchConfiguration('navigate_region')
     region_x = LaunchConfiguration('region_x')
     region_y = LaunchConfiguration('region_y')

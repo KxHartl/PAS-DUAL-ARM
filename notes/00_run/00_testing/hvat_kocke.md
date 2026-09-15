@@ -75,10 +75,10 @@ bash scripts/run_cube_isolated.sh ros2 launch pas_dual_arm_bringup task.launch.p
 > ```
 > `run_cube_isolated.sh` to od 15. 9. i sam odbija — javi `GRESKA: simulacija vec radi`.
 
-> [!danger] Bez `auto_start:=false` robot krene sam
-> `task.launch.py` ima `auto_start` zadano na `true` i **12 s nakon pokretanja sam digne
-> `main_task`** — cijeli stari slijed hvata, s vožnjom i pritiskom. Tako se 15. 9. robot
-> krenuo gibati iako je bio pokrenut samo terminal 2, bez ijedne naredbe iz koraka 3 i 4.
+> [!important] `grasp_cube.py` je jedini vlasnik gibanja
+> `task.launch.py` sada ima `auto_start:=false` kao zadanu vrijednost. Stari `main_task`
+> orkestrator pokreće se samo eksplicitnim `auto_start:=true`. Pričekati da T1 ispiše završetak
+> `table_ready` čvora prije pokretanja T3.
 
 **Terminal 3** ostaje slobodan za korake 2–4. Do tada se robot ne smije micati sam od sebe —
 jedino što se pomakne bez tvoje naredbe su vodilice i ruke u `ARM_HOME`, iz čvora `table_ready`.
@@ -141,9 +141,10 @@ Slijed:
 | 2   | baza se primakne na doseg ruku, uz granicu stola                           |
 | 3   | hvataljke se otvore, obje ruke **paralelno** na pred-poze (20 cm od ploha) |
 | 4   | svaka ruka očita **svoj** marker na plohi koju će pritisnuti               |
-| 5   | obje ruke, **jednim potezom**, na 2 cm od ploha i na **istu visinu**       |
-| 6   | obje ruke **zajedno** stežu dok **sva četiri** jastučića ne jave kocku, pa **stanu** |
-| 7   | vodilice dignu 10 cm, pa se izmjeri koliko su se stvarno pomaknule         |
+| 5   | obje ruke brzinom najviše 25 mm/s na 2 cm od ploha i na **istu visinu**   |
+| 6   | obje ruke prilaze 2 mm/s; svaka staje na svom prvom kontaktu              |
+| 7   | obje hvataljke se zatvore; nepotpuna ruka radi korake 2 mm do 4/4         |
+| 8   | nakon stabilne 1 s vodilice dignu 20 cm brzinom 10 mm/s                   |
 
 > [!important] Visina se poravnava prije dodira, i poslije se ne dira
 > Korak 5 obje ruke dovede na **istu visinu** dok još ništa ne dodiruju. U koraku 6 svaka ruka
@@ -153,12 +154,19 @@ Slijed:
 > po z uz plohu koju već dodiruje, kocka se nagne, desna popusti, lijeva učini isto, i obje je
 > onda drže ukoso.
 
-> [!important] Četiri jastučića zaustavljaju ruke
-> Provjera ide **prije svakog koraka**. Kad sva četiri jave svjež kontakt s `aruco_box`, rukama
-> se ne šalje više nijedna naredba.
+> [!important] Svaka ruka staje zasebno
+> Od standoffa od 2 cm obje ruke krenu zajedno, ali cilj pojedine ruke otkazuje se na njezinu prvom
+> kontaktu. Zatim se samo ruka koja još nema 2/2 kontakta primiče u koracima od 2 mm;
+> dovršena ruka miruje. Z ostaje trenutačni, a orijentacija se vraća na onu izvedenu iz
+> markera, najviše 10 mm preko izmjerene plohe. Ako sva četiri kontakta nisu stabilna 1 s,
+> dizanje ne počinje.
 
-Korak 4 mm, 1.5 s, najviše 2.5 cm stezanja preko zadane poze — kocka (ne poza) zaustavlja
-jastučić. Ako sva četiri ne jave kontakt, run **padne**.
+Ako naredba od 2 mm tri puta zaredom daje manje od 0,2 mm stvarnog pomaka,
+nepotpuna ruka se odmakne 3 mm radi rasterećenja i poravnanja prije nastavka.
+
+Tijekom friction-only dizanja nema `DetachableJoint` attacha. Gubitak kontakta zaustavlja
+vodilice, vraća postupak na ograničenu finu korekciju i zatim nastavlja prema istom cilju
+`početna visina + 20 cm`. Iscrpljen hod ili nemoguć povrat kontakta prekidaju run.
 
 ---
 
