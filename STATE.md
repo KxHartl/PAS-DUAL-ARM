@@ -18,8 +18,151 @@
 > zadnjeg dana: `notes/07_predaja/danas.md`. Sadržaj ispod je povijesni zapis sesija; kod
 > kontradikcije vrijede bilješke.
 
-**Trenutna faza**: NAVIGACIJA RIJEŠENA I POTVRĐENA U GUI-ju — jedinstveno potencijalno polje (D-20), brazde nulte cijene, dock/undock geometrija; omni pogon, SLAM i lokalizacija potvrđeni.
-**Datum zadnje izmjene**: 2026-09-14 (noć)
+**Trenutna faza**: HVAT PREKO V4 POZA — headless prolazi do kraja (run V2: kocka podignuta 15 cm i odnesena 0.40 m, provjereno u Gazebu); čeka korisnikovu GUI potvrdu. Navigacija s `DRIVE_V4` nije ponovno provjerena.
+**Datum zadnje izmjene**: 2026-09-15
+
+## Dodatak 2026-09-16: hvat preko korisnikovih V4 poza
+
+Korisnik je u `pose_studio` (jedna naredba: Gazebo, RViz, prozor zglobova, prozor spremljenih
+poza; ništa se ne miče samo) snimio `DRIVE_V4`, `DETECTION_V4`, `GRASP_V4` (vodilice 200/400/400 mm,
+hvataljke 0.791). Slijed u `main_task`: DRIVE_V4 → lociranje na docku → vodilice 400 → DETECTION_V4 →
+primicanje na 0.63 m → kamere na zapešću → ciljevi = središta markera → GRASP_V4 → vrhovi u ciljeve
+(2 mm dodira, bez stiska — stisak izbacuje kocku) → attach → +0.15 m → unatrag 0.40 m i stop.
+Run V2 (headless): `TASK COMPLETE`, `tool_tip` 1.1/2.6 mm od cilja, Gazebo: kocka +15.2 cm.
+
+- `ARM_DRIVE = 'DRIVE_V4'` (spawn, `sim.launch`, navigacija). `GRASP_V3` napušten (samosudar u MoveIt-u).
+- URDF `{side}_tool_tip`: 0.127 m od `end_effector_link` (koji je u bazi hvataljke) = središte
+  zatvorenih jastučića.
+- `capture_posture` sprema i vodilice i hvataljke; `joint_gui` ih učitava.
+- Poboljšanja nakon korisnikovog GUI runa (U2, „mislim da je dobro"): vodilice i ruke se dižu **istodobno**
+  (ruke kroz točku 12 cm iznad DETECTION, offline ≥ 10 cm od stola), DETECTION 5 cm šira, odmak 0.50 m pa
+  vodilice na 200 mm s kockom u rukama (run V3 headless: kocka u Gazebu na z 0.707), RViz oblak glave RGB8.
+- Nakon dizanja kocka se **privuče 15 cm** prema robotu (obje šake zajedno, laktovi 20° od torza,
+  MoveIt provjera prije pokreta), odmak 0.50 m, vodilice na **100 mm** (run V5: Gazebo z 0.605, širina 0.821 m).
+- [[P-44_grasp_from_reference_pose]]. Ništa nije commitano.
+
+## Dodatak 2026-09-15 (večer): širina hvata i postav za ručne poze
+
+**Pet GUI prigovora korisnika** (spawn raširenih ruku, okretanje robota, nesimetrične ruke, desna
+ruka se odmakne nakon hvata, hvat širi od vrata): spawn u `ARM_CARRY_V2`, centriranje **strafeom**,
+pred-hvat obje ruke zajedno, desna nakon attacha popušta 5 mm. Širina: [[P-43_grasp_pose_wider_than_door]].
+
+**Vodoravni hvat ne može kroz vrata, nikako.** Offline preko cijelog nul-prostora
+(`scripts/grasp_width.py`): sferno zapešće leži na osi prilaza, pa je svako od 1620 IK rješenja
+**1.003 m** široko. Nagib prilaza 50° prema dolje → **0.823 m** (uže od `ARM_CARRY_V2`, 0.840 m).
+`press_tilt` u `main_task`. Misija s tim je stala prije pokreta (F12): MoveIt vidi startnu
+`ARM_CARRY_V2` u sudaru sa stolom (model stola 10 cm, stvarni 4 cm). Nijedna visina vodilica ne
+drži `ARM_CARRY_V2` iznad stola **i** uz kocku; korisnik je odabrao pred-pozu prije primicanja,
+a zatim preusmjerio na **ručno definiranje poza**. Ta izmjena misije **nije napravljena**.
+
+**Postav za ručne poze** — `notes/00_run/00_testing/definiranje_poza_hvata.md`:
+- `grasp_stage.launch.py`: robot 0.62 m od kocke, `ARM_HOME` na spawnu, `table_ready`, MoveIt + ArUco,
+  pa `grasp_stage` — kocka iz glavne kamere, otvorene šake 0.20 m od ploha, **ruke simetrične**
+  (desna = zrcalo lijeve + 180° oko osi prilaza), **obje kamere na zapešću vide marker** (S4).
+- `scripts/joint_gui.py --sim`: šalje vodilice → hvataljke → ruke, MoveIt ili direktno; „Provjeri"
+  (jastučići, širina, šake); „Zrcali" točno (0.000 mm). Logika isprobana bez prozora (G1);
+  **sam Tk prozor nije isproban**.
+- Popravljeno usput: `table_arms:=true` je bacao `ValueError` otkad je `carry_arms` zadano `true`;
+  `joint_gui` je kontinuirane zglobove rezao na ±180° (294° bi okrenuo ruku za 114°); zrcaljenje je
+  kopiralo iste kutove; `measure_width()` je tiho preskakao linkove bez TF-a.
+- Moja greška, nađena i ispravljena: pri uvođenju nagiba okrenuta je os x alata (šaka 180°), pa je
+  kamera na zapešću gledala pokraj markera (S1). F12 je imao isto.
+
+**Nastavak iste večeri (korisnik: upravljanje šakom po osima, zamrznuta šaka, start u poziciji vožnje):**
+- `grasp_stage.launch.py` sada kreće s **dock poze u `ARM_CARRY_V2`**, ruke idu u skeniranje na docku,
+  pa primicanje 0.25 m — S6 prolazi, centar kocke iz kamera na zapešću 1–3 mm od odometrije.
+- MoveIt scena ima **stvarni stol** (ploča 0.80 × 0.80 × 0.04 m + noge). Stari model bez nogu pustio je
+  planer da šaku vodi kroz nogu, a kontroler je javio uspjeh (S5). Utječe i na misiju (`main_task`).
+- `joint_gui` panel „Šaka po osima": ±X/±Y/±Z, zakretanja, lijeva/desna/obje simetrično, osi baze ili
+  alata, i **lakat uz zamrznutu šaku** (jedini slobodni pomak 7-DOF ruke). Koraci po Jacobianu
+  (`kinematics.ArmJog`), zglobovi 2/4/6 4° od graničnika kroz nul-prostor. Isprobano bez prozora (G2).
+- `pas_dual_arm_scripts/kinematics.py`: FK cijelog robota, zrcaljenje ruku, upravljanje šakom.
+
+**Otvoreno:** korisnik definira poze u GUI-ju (sam Tk prozor još nije isproban); nakon toga misija
+(pred-poza prije primicanja, [[P-43_grasp_pose_wider_than_door]]) i negativan test. Ništa nije commitano.
+
+## Dodatak 2026-09-15 (kasno): povratak na jednostavan put
+
+**Odluka korisnika:** MoveIt i pozicijske naredbe **posvuda**, nijedan regulator, hvat po
+[[D-05_contact_verified_attach]]. Dizanje trenjem **nije zahtjev zadatka** — `R-17` doslovno traži
+„obostrani kontakt dokazan senzorima **prije attacha**". Rad na sili odložen, ostaje u repozitoriju.
+
+**`P-13` riješen, otvoren od 30. 6.** Vodilice se nisu dizale jer im je `initial_value` bio **0.05**,
+jednak donjem graničniku, a Ignition poziciju izvodi kao brzinu zgloba i na graničniku je poništava
+**u oba smjera**. Robot je startao zaglavljen. Jedina izmjena: `initial_value` → **0.06**. Devet
+ranijih pokušaja tražilo je krivca u gravitaciji, efortu i gainu.
+
+**Zbog toga otpada i `effort` profil** za misiju: vodilice drže 0.2000 m i dižu 0.20 → 0.35 → 0.20 m
+s greškom 0.0000 mm na običnom `position` sučelju. [[D-09_lift_with_arms_not_torso]] zamijenjena,
+[[R-03_linear_rails_torso]] ispunjen.
+
+**Tri izmjene tražene 13. 9., sve u `main_task`:** vodilice postavljaju visinu hvata iz izmjerene
+kocke (1:1, jer je vodilica vertikalna); širina hvata iz **izmjerene** duljine umjesto pretpostavljenih
+0.15 m; pritisak 30 → 10 mm, i to kao ROS parametar `squeeze_interference`. Dizanje i spuštanje
+prebačeni s ruke na vodilice.
+
+**Stanje:** run F9 prošao **headless** do `TASK COMPLETE`. **Nije GUI i nije dokaz.** Prije nego se
+`R-17` uopće dira treba korisnikova GUI potvrda **i** negativan test (kocka izvan dohvata → pošten
+abort). Upute: `notes/00_run/00_testing/hvat_kocke.md`, odjeljak „Test dizanja kutije".
+
+## Dodatak 2026-09-15: pokus hvata silom (Codexov plan, nastavak)
+
+Radi se u **izoliranoj domeni 76** (`scripts/run_force_isolated.sh`), zasebno od GUI pokusa u domeni 75.
+Upute za pokretanje: `notes/00_run/00_testing/hvat_kocke.md`, odjeljak „Pokus hvata silom“.
+Ništa nije commitano.
+
+**Što sada radi (izmjereno, headless):**
+- Aktuatorski profil `force_grasp:=true`: nema titranja ni na jednom od 14 zglobova, svi zglobovi točno na naredbi, vodilice **0.2000 / 0.2000 m (greška 0.0000 mm)** u četiri uzastopna diza.
+- Puni lanac hvata prolazi do kraja: `characterization_complete`. Kocka izmjerena 0.300 m, pred-hvat pogođen u 8 mm, standoff 20.3–20.9 mm, stisak 21.4 s, procjena **lijevo 3.58 N / desno 3.85 N**.
+- Procjena sile u slobodnom gibanju 0.02–0.26 N (cilj 5 N), uvjetovanost poze 7.12, rezidual ~0.001 Nm.
+
+**Ključni nalazi (detalji u karticama):**
+- [[P-41]] Pojačanja se **ne smiju** računati iz KDL matrice mase: za zakretne zglobove DART se ponaša kao da je ruka ~30× lakša. Inercija je izmjerena preko granice prigušenja (`d < 2I/dt`).
+- [[P-42]] Fortress kontaktni senzor daje **samo točke dodira, bez sila** (49 035 zapisa, 0 sa silom). Zato su dodani FT senzori na zapešća — isključivo kao dokaz za ocjenu.
+- `/clock` i podatkovne teme nemaju zajamčen redoslijed: 3.6 % poruka stigne s oznakom do 19 ms „u budućnosti“. Pragovi svježine sada to podnose na obje strane.
+- `grasp_cube.py` se **mora** pokretati s `--ros-args -p use_sim_time:=true`.
+- Tvrdnja „samo 2 od 4 jastučića dodiruju“ bila je pogrešna: sva četiri su na plohi unutar 0.3 mm.
+
+**Gdje je stalo:** FT senzori rade i snimaju se, kvalifikacija je prepisana na dvije reference
+(FT kao apsolutna, slaganje ruku kao dosljednost) i ima 12 testova, **ali kvalifikacijski zapis
+još nije dobiven** — tri pokusa s FT-om pala su prije stiska.
+
+**Otvoreno, i to je sada glavna prepreka: lijeva ruka.** Izmjereno preko svih runova —
+pred-hvat median 15.0 mm naspram 10.0 mm desne, **4 od 17** preko praga 20 mm naspram **0 od 13**;
+standoff 20.0–56.9 mm naspram 20.2–**20.9** mm. Desna drži standoff u rasponu od 0.7 mm kroz devet
+runova, dakle cjevovod može biti tijesan. Lijeva povremeno grubo promaši, titra 53.7 N naspram
+21.8 N, preskakala je IK granu i nije bila smirena pri nuliranju. Hipoteza: `left_joint_3` i
+`left_joint_5` stoje oko ±3.14 rad, tj. na točki 2π omota. Vidi [[P-25_asymmetric_arm_reach]].
+**Ne popuštati prag pred-hvata** dok se ovo ne razjasni — sakrilo bi kvar.
+
+**Riješeno 15. 9. poslijepodne: vid više ne ide kroz `/tf`.** `robot_state_publisher` republicira
+`/tf` na 1000 Hz (takt kontrolera), a Python konzument to ne stigne isprazniti dok petlja drži GIL,
+pa je očitanje markera zaostajalo do koje god granice se postavi (median 0.32 s uz prag 0.4;
+0.73 s uz prag 0.8), dok je u mirnom čvoru isti TF star 0.060 s. `spin_thread=True` nije pomogao.
+`force_grasp` sada čita `/wrist_*/marker_pose` izravno, a kamera→alat je fiksna pa se čita jednom.
+Smanjenje takta kontrolera je odbačeno: srušilo bi izmjerena pojačanja (`d < 2I/dt`).
+
+**Riješeno 15. 9. poslijepodne: nuliranje čeka da se ruke smire.** Tražilo se prerano — lijeva je
+imala rasap momenta 0.069–0.258 Nm uz prag 0.05, a smiri se na 0.004 Nm tek ~8 s nakon standoffa.
+Sada ponavlja pokušaj dok procjenitelj sam ne potvrdi mir.
+
+**Riješeno 15. 9. poslijepodne: korak stiska više ne zove IK.** Za pomak od 0.5 mm koristi se
+diferencijalni korak preko Jacobiana (`force_model.resolved_rate`), koji je lokalan po
+konstrukciji pa promjena grane nije moguća. Prigušenje 0.005 odabrano mjerenjem (gubi 5.6 %
+traženog pomaka u najgorem slučaju, naspram 54 % pri 0.05). Provjera sudara ostaje.
+
+**Bilo je (povijesno): izbor IK grane na lijevoj ruci.** Izmjereno 15. 9.: MoveIt-ov IK je
+točan (pogreška poze **0.00 mm**, obje ruke), ali za pomak od **0.5 mm** lijeva ruka vrati rješenje
+**3.04 rad** od trenutne konfiguracije, dok desna vrati 0.0036 rad. Zbog toga stisak pukne na
+`left IK branch/tracking jump` — zaštita ispravno odbija izvesti zamah od 3 rad za pola milimetra.
+Sjeme iz trenutnog stanja to ne spriječi. Vidi [[P-25_asymmetric_arm_reach]].
+
+Drugi, manji: `verify_reached` za pred-hvat pao je s Δ=0.021 m uz prag 0.020 — promašaj za 1 mm,
+dok zglobovi prate na < 1 mrad. Uzrok nije IK (točan je); treba provjeriti pomiče li se `base_link`
+između planiranja i dolaska.
+
+Dizanje ostaje zaključano dok kvalifikacija ne prođe i dok ne postoji nezavisan dokaz trenja.
+
 
 ## Dodatak 2026-09-14 (noć): Run 70 — korisnik potvrdio u GUI-ju
 

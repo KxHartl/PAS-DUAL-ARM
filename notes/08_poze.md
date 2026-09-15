@@ -39,6 +39,13 @@ updated: 2026-09-13
 | Poza | Širina | Vrata | Naprijed | Visina | Najširi link | Simetrična | Svrha | Snimljeno |
 |---|---|---|---|---|---|---|---|---|
 <!-- POSTURE ROWS -->
+| `DRIVE_V4` | 0.83 m | 0.93 m | 0.31 m | 0.65–1.18 m | left_half_arm_1 | ne | spremljeno iz joint_gui | 2026-09-15 23:49 |
+| `GRASP_V4` | 0.84 m | 0.94 m | 0.72 m | 0.84–1.27 m | left_spherical_wrist_2 | ne | spremljeno iz joint_gui | 2026-09-15 23:35 |
+| `DETECTION_V4` | 1.38 m | 1.48 m | 0.72 m | 0.78–1.09 m | left_spherical_wrist_2 | ne | spremljeno iz joint_gui | 2026-09-15 23:32 |
+| `GRASP_V3` | 0.84 m | 0.94 m | 0.71 m | 0.76–1.22 m | left_spherical_wrist_2 | ne | spremljeno iz joint_gui | 2026-09-15 22:45 |
+| `GRASP_V2` | 0.92 m | 1.02 m | 0.66 m | 0.69–1.26 m | right_forearm | ne | spremljeno iz joint_gui | 2026-09-15 22:18 |
+| `PREP_GRASP_V2` | 0.97 m | 1.07 m | 0.67 m | 0.71–1.26 m | right_spherical_wrist_2 | ne | spremljeno iz joint_gui | 2026-09-15 22:12 |
+| `PREP_GRASP_V1` | 0.97 m | 1.07 m | 0.70 m | 0.83–1.26 m | right_spherical_wrist_2 | ne | spremljeno iz joint_gui | 2026-09-15 22:08 |
 | `ARM_CARRY_V2` | 0.87 m | 0.97 m | 0.70 m | 0.26–0.72 m | right_spherical_wrist_2 | ne | priprema za hvatanje kutije i nošenje | 2026-09-13 16:28 |
 | `ARM_ZERO` | 2.28 m | 2.38 m | 0.13 m | 0.87–1.81 m | robotiq_85_left_finger_tip | da | referenca: svi zglobovi 0 | 2026-09-13 |
 
@@ -98,3 +105,86 @@ ne i širinu.
 | `ARM_CARRY_V2` (gore) | 0.87 m | 0.97 m | još nije u kodu |
 
 Donja granica širine je **~0.64 m** (sama ramena na y = ±0.26 + polumjer linka), bez obzira na pozu.
+
+### PREP_GRASP_V1
+spremljeno iz joint_gui
+
+```python
+# lijeva ruka
+PREP_GRASP_V1_LEFT = {1: -0.073, 2: 1.504, 3: 2.285, 4: -1.552, 5: -0.882, 6: 1.619, 7: 1.630}
+# desna ruka
+PREP_GRASP_V1_RIGHT = {1: 0.052, 2: 1.463, 3: -2.272, 4: -1.596, 5: 0.899, 6: 1.628, 7: 1.506}
+```
+Širina 0.97 m → vrata 1.07 m; doseg naprijed 0.70 m; visina 0.83–1.26 m; najširi link `right_spherical_wrist_2_link`. Snimljeno 2026-09-15 22:08.
+
+### PREP_GRASP_V2
+spremljeno iz joint_gui
+
+```python
+# lijeva ruka
+PREP_GRASP_V2_LEFT = {1: -0.239, 2: 1.768, 3: 2.153, 4: -1.212, 5: -0.743, 6: 2.020, 7: 1.732}
+# desna ruka
+PREP_GRASP_V2_RIGHT = {1: 0.209, 2: 1.726, 3: -2.147, 4: -1.260, 5: 0.752, 6: 2.033, 7: 1.398}
+```
+Širina 0.97 m → vrata 1.07 m; doseg naprijed 0.67 m; visina 0.71–1.26 m; najširi link `right_spherical_wrist_2_link`. Snimljeno 2026-09-15 22:12.
+
+### GRASP_V2
+spremljeno iz joint_gui
+
+```python
+# lijeva ruka
+GRASP_V2_LEFT = {1: -0.318, 2: 1.751, 3: 2.373, 4: -1.208, 5: -0.855, 6: 2.020, 7: 1.744}
+# desna ruka
+GRASP_V2_RIGHT = {1: 0.301, 2: 1.714, 3: -2.368, 4: -1.249, 5: 0.862, 6: 2.030, 7: 1.390}
+```
+Širina 0.92 m → vrata 1.02 m; doseg naprijed 0.66 m; visina 0.69–1.26 m; najširi link `right_forearm_link`. Snimljeno 2026-09-15 22:18.
+
+### GRASP_V3
+spremljeno iz joint_gui
+
+```python
+# lijeva ruka
+GRASP_V3_LEFT = {1: 0.243, 2: 2.088, 3: 0.909, 4: -1.314, 5: -0.946, 6: 1.824, 7: 2.367}
+# desna ruka
+GRASP_V3_RIGHT = {1: -0.320, 2: 2.076, 3: -0.897, 4: -1.361, 5: 0.974, 6: 1.874, 7: 0.740}
+```
+Širina 0.84 m → vrata 0.94 m; doseg naprijed 0.71 m; visina 0.76–1.22 m; najširi link `left_spherical_wrist_2_link`. Snimljeno 2026-09-15 22:45.
+
+### DETECTION_V4
+spremljeno iz joint_gui
+
+```python
+# lijeva ruka
+DETECTION_V4_LEFT = {1: -0.191, 2: 1.317, 3: 2.008, 4: -0.667, 5: 4.763, 6: 1.964, 7: 2.463}
+# desna ruka
+DETECTION_V4_RIGHT = {1: 0.151, 2: 1.273, 3: -1.996, 4: -0.723, 5: 1.535, 6: 1.983, 7: 0.681}
+DETECTION_V4_TORSO = {'torso_left_carriage_joint': 0.4, 'torso_right_carriage_joint': 0.4}
+DETECTION_V4_GRIPPER = {'left_robotiq_85_left_knuckle_joint': 0.791, 'right_robotiq_85_left_knuckle_joint': 0.7918}
+```
+Širina 1.38 m → vrata 1.48 m; doseg naprijed 0.72 m; visina 0.78–1.09 m; najširi link `left_spherical_wrist_2_link`. Snimljeno 2026-09-15 23:32.
+
+### GRASP_V4
+spremljeno iz joint_gui
+
+```python
+# lijeva ruka
+GRASP_V4_LEFT = {1: 0.574, 2: 1.429, 3: 1.549, 4: -1.045, 5: 4.464, 6: 1.544, 7: 2.652}
+# desna ruka
+GRASP_V4_RIGHT = {1: -0.634, 2: 1.391, 3: -1.525, 4: -1.104, 5: 1.847, 6: 1.574, 7: 0.498}
+GRASP_V4_TORSO = {'torso_left_carriage_joint': 0.4, 'torso_right_carriage_joint': 0.4}
+GRASP_V4_GRIPPER = {'left_robotiq_85_left_knuckle_joint': 0.791, 'right_robotiq_85_left_knuckle_joint': 0.7918}
+```
+Širina 0.84 m → vrata 0.94 m; doseg naprijed 0.72 m; visina 0.84–1.27 m; najširi link `left_spherical_wrist_2_link`. Snimljeno 2026-09-15 23:35.
+
+### DRIVE_V4
+spremljeno iz joint_gui
+
+```python
+# lijeva ruka
+DRIVE_V4_LEFT = {1: 2.182, 2: 1.244, 3: 1.396, 4: -2.339, 5: 0.589, 6: -0.755, 7: 2.635}
+# desna ruka
+DRIVE_V4_RIGHT = {1: -2.255, 2: 1.203, 3: -1.278, 4: -2.395, 5: -0.504, 6: -0.769, 7: 0.536}
+DRIVE_V4_TORSO = {'torso_left_carriage_joint': 0.2, 'torso_right_carriage_joint': 0.2}
+DRIVE_V4_GRIPPER = {'left_robotiq_85_left_knuckle_joint': 0.791, 'right_robotiq_85_left_knuckle_joint': 0.7918}
+```
+Širina 0.83 m → vrata 0.93 m; doseg naprijed 0.31 m; visina 0.65–1.18 m; najširi link `left_half_arm_1_link`. Snimljeno 2026-09-15 23:49.

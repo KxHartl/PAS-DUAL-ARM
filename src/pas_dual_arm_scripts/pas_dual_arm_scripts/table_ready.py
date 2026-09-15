@@ -1,13 +1,16 @@
 """Stage the robot at the cube table: carriages up, wrists above the tabletop.
 
-Both moves are plain position-interface trajectories on their own
-JointTrajectoryController - the carriages are driven exactly like the arms, with
-no regulator anywhere. The point of this node is that it does not trust the
+Both moves are ordinary trajectories on their own JointTrajectoryController -
+the carriages are driven exactly like the arms. Which actuator profile is behind
+them is a launch choice: the default position interface, or the effort interface
+with a PID under `force_grasp:=true`. The point of this node is that it does not
+trust the
 action status: it reads `/joint_states` afterwards and reports the height the
 carriages actually reached. That measurement is the open question in P-13.
 """
 
 import time
+from collections import deque
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -88,10 +91,30 @@ class TableReady(Node):
         reported = self.command('torso_controller', CARRIAGES,
                                 [height, height], seconds)
         # The carriages keep creeping after the trajectory time runs out, so
-        # settle before measuring. The status above is not the measurement.
-        settle = time.monotonic() + 3.0
-        while time.monotonic() < settle:
-            rclpy.spin_once(self, timeout_sec=0.1)
+        # wait until they actually stop before measuring. A fixed pause reported
+        # the creep instead of the result: 3 s after the move the error still
+        # reads ~3 mm, while the settled error is below 0.1 mm. The status above
+        # is not the measurement, and neither is a reading taken too early.
+        # Creep is slow, so compare across a window rather than between two
+        # neighbouring samples: 1 mm over 10 s moves less than 0.02 mm between
+        # consecutive reads and would pass a per-sample test while still moving.
+        window = deque(maxlen=12)          # 3 s at 0.25 s per sample
+        deadline = time.monotonic() + 40.0
+        while time.monotonic() < deadline:
+            settle = time.monotonic() + 0.25
+            while time.monotonic() < settle:
+                rclpy.spin_once(self, timeout_sec=0.05)
+            current = self.read(CARRIAGES, timeout=1.0)
+            if current is None:
+                continue
+            window.append(current)
+            if len(window) == window.maxlen and all(
+                    max(sample[i] for sample in window)
+                    - min(sample[i] for sample in window) < 2e-5
+                    for i in range(len(current))):
+                break
+        else:
+            self.get_logger().warn('carriages never stopped creeping in 40 s')
         after = self.read(CARRIAGES, timeout=3.0) or [float('nan')] * 2
         errors = [height - value for value in after]
         self.get_logger().info(

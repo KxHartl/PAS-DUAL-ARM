@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -46,8 +47,13 @@ def generate_launch_description():
     # automated runs.
     headless = LaunchConfiguration('headless', default='false')
     headless_arg = DeclareLaunchArgument('headless', default_value='false')
+    # Default TRUE: the robot spawns with every arm joint at zero, which is
+    # 2.28 m wide - the arms stick straight out from the side-mounted carriages,
+    # nothing can drive anywhere, and it looks wrong in the GUI. Folding into
+    # the 0.854 m carry posture right after the controllers come up is the only
+    # state the robot is ever actually useful in.
     carry_arms_arg = DeclareLaunchArgument(
-        'carry_arms', default_value='false',
+        'carry_arms', default_value='true',
         description='Spawn robot with arms folded in carry posture.')
     # Ground truth is a simulator privilege. It is bridged only on request, so a
     # run that has to behave like the physical robot simply does not ask for it.
@@ -91,20 +97,25 @@ def generate_launch_description():
     # scales (e.g. scale="1 -1 1"); DART asserts (scale > 0) on collision meshes and
     # aborts the whole Gazebo server. Strip the minus signs from every scale attribute
     # (visually negligible) so physics can build the collision shapes.
-    carry_arms = os.environ.get('PAS_SIM_CARRY_ARMS', '').strip().lower()
-    for arg in sys.argv:
-        if arg.startswith('carry_arms:='):
-            carry_arms = arg.split(':=', 1)[1].strip().lower()
-    if not carry_arms:
-        carry_arms = 'false'
-    if carry_arms not in ('true', 'false'):
-        raise ValueError('carry_arms must be true or false')
-    table_arms = 'false'
+    # The arm spawn profile is read from the command line and, for a launch
+    # file that includes this one (and so cannot put it on sys.argv), from
+    # PAS_SIM_TABLE_ARMS / PAS_SIM_CARRY_ARMS. Table staging is decided first
+    # because it changes the carry default: with carry_arms defaulting to true,
+    # a plain `table_arms:=true` used to raise "cannot both be true".
+    table_arms = os.environ.get('PAS_SIM_TABLE_ARMS', '').strip().lower() or 'false'
     for arg in sys.argv:
         if arg.startswith('table_arms:='):
             table_arms = arg.split(':=', 1)[1].strip().lower()
     if table_arms not in ('true', 'false'):
         raise ValueError('table_arms must be true or false')
+    carry_arms = os.environ.get('PAS_SIM_CARRY_ARMS', '').strip().lower()
+    for arg in sys.argv:
+        if arg.startswith('carry_arms:='):
+            carry_arms = arg.split(':=', 1)[1].strip().lower()
+    if not carry_arms:
+        carry_arms = 'false' if table_arms == 'true' else 'true'
+    if carry_arms not in ('true', 'false'):
+        raise ValueError('carry_arms must be true or false')
     if table_arms == 'true' and carry_arms == 'true':
         raise ValueError('table_arms and carry_arms cannot both be true')
     robot_xml = subprocess.check_output(
@@ -115,6 +126,31 @@ def generate_launch_description():
 
     # Do not inject position_proportional_gain into joint interfaces here:
     # the installed Humble plugin ignores that tag and retains its 0.1 default.
+    # Explicit experimental profile: preserve the default model/controllers.
+    force_grasp = any(arg == 'force_grasp:=true' for arg in sys.argv)
+    if force_grasp:
+        model = ET.fromstring(robot_xml)
+        limits = {j.get('name'): j.find('limit') for j in model.findall('joint')}
+        for control in model.findall('ros2_control'):
+            for joint in control.findall('joint'):
+                name = joint.get('name')
+                if re.fullmatch(r'(left|right)_joint_[1-7]|torso_(left|right)_carriage_joint', name):
+                    command = joint.find('command_interface')
+                    command.clear()
+                    command.set('name', 'effort')
+                    effort = float(limits[name].get('effort'))
+                    ET.SubElement(command, 'param', name='min').text = str(-effort)
+                    ET.SubElement(command, 'param', name='max').text = str(effort)
+                    if not any(i.get('name') == 'effort' for i in joint.findall('state_interface')):
+                        ET.SubElement(joint, 'state_interface', name='effort')
+        for gazebo in model.findall('gazebo'):
+            for plugin in list(gazebo.findall('plugin')):
+                if 'DetachableJoint' in plugin.get('name', ''):
+                    gazebo.remove(plugin)
+                for parameters in plugin.findall('parameters'):
+                    if parameters.text.endswith('/controllers.yaml'):
+                        parameters.text = os.path.join(pkg_bringup, 'config', 'force_controllers.yaml')
+        robot_xml = ET.tostring(model, encoding='unicode')
     robot_description = {'robot_description': robot_xml}
     node_robot_state_publisher = Node(
         package='robot_state_publisher',
@@ -246,11 +282,15 @@ def generate_launch_description():
 
     # 7. Auto-fold arms into carry posture if carry_arms is true.
     extra_actions = []
-    if carry_arms == 'true':
+    # PAS_SIM_AUTO_POSTURE=false leaves the arms alone after spawn: they already
+    # spawn in ARM_CARRY_V2 (xacro initial values), and a launch meant for moving
+    # the robot by hand must not start any node that commands it.
+    auto_posture = os.environ.get('PAS_SIM_AUTO_POSTURE', 'true').strip().lower() != 'false'
+    if carry_arms == 'true' and auto_posture:
         auto_carry = Node(
             package='pas_dual_arm_scripts',
             executable='set_posture',
-            arguments=['ARM_CARRY_V2'],
+            arguments=['DRIVE_V4'],   # postures.ARM_DRIVE
             output='both',
             parameters=[{'use_sim_time': True}],
         )
@@ -306,6 +346,7 @@ def generate_launch_description():
         headless_arg,
         carry_arms_arg,
         table_arms_arg,
+        DeclareLaunchArgument('force_grasp', default_value='false'),
         rviz_arg,
         debug_truth_arg,
         *spawn_args,
