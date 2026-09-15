@@ -1,7 +1,7 @@
 ---
 id: PARAMETRI
 type: registar
-updated: 2026-09-14
+updated: 2026-09-15
 ---
 # Registar parametara (jedini izvor istine za podesive vrijednosti)
 
@@ -37,6 +37,13 @@ updated: 2026-09-14
 | masa vodilice / klizača | 12 kg / 2 kg | `dual_arm_torso.urdf.xacro` l. 24, 55, 92 | procjena ([[R-06_realistic_parameters]]) |
 | klizač limit | **0.05–0.65 m** (13. 9.; bilo 0.05–0.8), 1000 N, 0.5 m/s | `dual_arm_torso.urdf.xacro` l. 71, 105 | hod stvarne vodilice (odluka korisnika); [[P-13_torso_prismatic_no_lift]] |
 | torzo command interface / PID | `effort`; p=1500, i=500, d=100, i_clamp=300; goal tolerancija 0.01 m, goal_time 3 s | `URDF` + `CTRL` `torso_controller` | izolirani headless pokus C2: 0.05→0.20→0.05 m, stvarna greška nakon 10 s <1 mm ([[P-13_torso_prismatic_no_lift]]) |
+| vodilice `initial_value` | 0.05 → **0.06 m** (15. 9.) | `URDF` `torso_system` | 0.05 je bio jednak donjem graničniku, pa je robot startao zaglavljen: Ignition poziciju izvodi kao brzinu zgloba, a na graničniku je ponišava **u oba smjera**. Jedina izmjena koja je riješila [[P-13_torso_prismatic_no_lift]] |
+| vodilice command interface | **`position`** (zadani profil), bez regulatora | `URDF` + `CTRL` | `effort` + PID više **nije potreban**: 0.06 → 0.20 → 0.35 m pod teretom ruku, greška 0.0000 mm |
+| torzo trajna greška | **0.0000 mm** obje vodilice, razmak lijevo-desno 0.0000 mm (15. 9.) | mjereno na `/joint_states` | pojačanja iznad nisu mijenjana; onih „3 mm“ iz `table_ready` bilo je mjereno 3 s nakon putanje, dok vodilice još pužu ([[P-13_torso_prismatic_no_lift]]) |
+| pojačanja ruku, `force_grasp` profil | iz **izmjerene** efektivne inercije: ω=150 rad/s, ζ=1, i=p/2, i_clamp=granica momenta (39/9 Nm). p = 387 / 10181 / 266 / 4525 / 178 / 398 / 34.9; d = 5.16 / 135.8 / 3.54 / 60.3 / 2.37 / 5.31 / 0.465 (15. 9.) | `scripts/apply_measured_arm_gains.py` → `force_controllers.yaml` | KDL matrica mase precjenjuje inerciju zakretnih zglobova ~30× i vodi u bang-bang titranje ([[P-41_effort_pid_arm_actuator_profile]]) |
+| `force_vision_age` (svježina TF-a markera) | 0.4 → **0.8 s** (15. 9.) | `force_grasp.py` `defaults` | Izmjereno tijekom stiska, 400 očitanja: marker TF kako ga **čvor čita** je median **0.32 s**, p95 0.388, max 0.407 — stara granica je bila **ispod tipične starosti**. Senzor nije kriv: detektor objavljuje svakih 0.066 s bez ijedne rupe, kašnjenje do pretplatnika 22–43 ms ([[P-19_aruco_foreshortening_close]]) |
+| `force_status_age` / `force_future` (svježina procjene sile) | 0.15 s / **0.05 s** | `force_grasp.py`, `wrench_estimator.py` | Izmjereno: sila je median 0.008 s, p95 0.023 s. `force_future` pokriva oznake **u budućnosti** — 3.6 % poruka do 19 ms, jer `/clock` i podatkovne teme nemaju zajamčen redoslijed |
+| prigušenje diferencijalnog koraka stiska | **0.005** (15. 9.) | `force_model.resolved_rate` | Preko 200 slučajnih Jacobiana: 0.002 gubi 1.0 % traženog pomaka, **0.005 → 5.6 %**, 0.01 → 16.7 %, 0.05 → 54 %. Zamjenjuje MoveIt IK u koraku stiska ([[P-25_asymmetric_arm_reach]]) |
 | lidar | 360 zraka, 10 Hz | `URDF` l. 192–201 | [[P-06_classic_only_sensors]] |
 | RGBD kamera | 640×480, 15 Hz, HFOV 1.211 | `URDF` l. 226–236 | [[S-05_perception]] |
 | pan-tilt početni pitch | **0.45 rad** (~25.8° dolje prema stolu) | `URDF` l. 355 | usmjerenje prema stolu 75 cm |
@@ -132,7 +139,10 @@ Izmjerene dimenzije svake poze su u [[08_poze]] (snima ih `scripts/capture_postu
 | `ARM_CARRY` | {0, 0.7, 3.14, -2.5, 0, 1.2, 1.57} | `MT` l. 131 | ⚠ izmjereno 13. 9.: laktovi na y = ±0.58, pa je robot ~1.2 m širok i **ne prolazi vrata od 0.9 m** ([[P-12_door_too_narrow]]) |
 | `tip_standoff` | 0.145 m (mjeri se iz TF-a) | `MT` l. 238 | zapešće → vrh |
 | hvataljka kao jastučić | 0.7 (zatvoreno) | `MT` l. 1561–1562 | [[D-06_cube_squeeze_grasp]] |
-| pre-squeeze / press | +0.10 m / **-0.030 m** (3 cm u kocki) | `MT` l. 1569–1570 | [[P-24_press_path_chain]] |
+| pre-squeeze / press | +0.10 m / **−`squeeze_interference`** | `MT` `squeeze_poses` | [[P-24_press_path_chain]] |
+| `squeeze_interference` | **0.010 m** (bilo 0.030) | `MT` parametar | 30 mm je gurao kocku po stolu, a komentar je tvrdio 5 mm; run F9 |
+| `press_tilt` | **0.873 rad (50°)** prema dolje | `MT` parametar | vodoravno = 1.003 m širine, 50° = **0.823 m**, uže od `ARM_CARRY_V2`; mjeri `scripts/grasp_width.py`, [[P-43_grasp_pose_wider_than_door]] |
+| ready poza prije pred-hvata | **uklonjena** (bila `ARM_HOME`) | `MT` STEP5 | `ARM_HOME` je 1.409 m širok, ruke su se vidno raširile; iz uske spawn poze plan do nje pada (run F10) |
 | skaliranje brzine/akceleracije | 0.2 / 0.2 | `MT` l. 573, 856, 879, 909 | — |
 | cartesian `max_step` / min frac | 0.01 / 0.7 (retreat 0.5) | `MT` l. 449, 462, 792 | — |
 | re-roll prag | fraction ≥ 0.9, do 4× | `MT` l. 652 | [[P-24_press_path_chain]] |
@@ -143,10 +153,52 @@ Izmjerene dimenzije svake poze su u [[08_poze]] (snima ih `scripts/capture_postu
 | geometrija vrhova | `half_thick` 0.15, `half_h` 0.16 (+0.04) | `MT` l. 1660, 1369 | [[P-28_gate_too_strict]] |
 | kontakt `max_age` / prozor | 0.4 s (pad 1.0 s) / 3.0 s | `MT` l. 327, 1605, 1681 | [[P-27_contact_sensor_topic_ignored]] |
 | `ee_near` | 0.12 m | `MT` l. 1700 | [[P-28_gate_too_strict]] |
-| desna povlačenje | 0.10 m po −v | `MT` l. 1748 | [[D-07_carry_on_left_wrist]] |
-| lift | +0.15 m | `MT` l. 1754 | — |
+| desna nakon attacha | **`release_backoff` 0.005 m** (bilo povlačenje 0.10 m) | `MT` parametar | korisnik 15. 9.: obje ruke moraju ostati na kocki |
+| lift | +0.15 m **na vodilicama** (bilo rukom) | `MT` STEP6 | [[P-13_torso_prismatic_no_lift]] riješen |
+| `carriage_reference_height` / `_cube_z` | 0.20 m / 0.82 m | `MT` parametar | visina hvata 1:1 iz izmjerene visine kocke |
+| `door_width` | 1.0 m | `MT` parametar | usporedba u `measure_width()` |
 | place | pick z −0.02 m, tol 0.04, 3 pokušaja | `MT` l. 1788–1795 | [[P-29_place_drop_tips_cube]] |
 | odmak nakon placea | 0.10 m | `MT` l. 1800 | — |
+
+## Hvat preko V4 poza (`main_task`, [[P-44_grasp_from_reference_pose]])
+| Parametar | Vrijednost | Gdje | Zašto / veza |
+|---|---|---|---|
+| poza vožnje `ARM_DRIVE` | **`DRIVE_V4`** (bila `ARM_CARRY_V2`), 0.821 m | `postures.py`, xacro spawn, `sim.launch` | korisnik 16. 9. |
+| `DRIVE_CARRIAGE` / `DETECTION_CARRIAGE` / `GRASP_CARRIAGE` | 0.20 / 0.40 / 0.40 m | `postures.py` | spremljeno s V4 pozama |
+| `GRIPPER_CLOSED` | 0.791 | `postures.py` | hvataljke u V4 pozama |
+| `{side}_tool_tip` | 0.127 m duž osi alata od `end_effector_link` | `robot.urdf.xacro` | središte zatvorenih jastučića (prednji rub 0.163 m) |
+| `detect_stand_range` | 0.87 m (dock) | `main_task` | lociranje kocke; DRIVE_V4 36 cm od stola |
+| `detection_carriage_height` | 0.40 m | `main_task` | DRIVE_V4 na 400 mm: 46.6 cm od stola |
+| `detection_cube_range` | 0.63 m | `main_task` | gdje V4 poze očekuju kocku |
+| `touch_depth` | **0.002 m** | `main_task` | samo dodir za senzore; stisak izbacuje kocku (korisnik) |
+| `grasp_approach_speed` | 0.01 m/s | `main_task` | zadnjih ~2 cm |
+| `back_off_after_lift` | **0.50 m** (bilo 0.40) | `main_task` | nakon dizanja unatrag; na 0.40 m prednja ploha kocke je točno na rubu stola i spuštanje ga struže (0.0 cm), na 0.50 m 10 cm |
+| `final_carriage_height` | **0.10 m** (bilo 0.20) | `main_task` STEP7 | korisnik: na kraju vodilice na 100 mm; MoveIt: stanje bez samosudara |
+| `pull_cube_in` | **0.15 m** | `main_task` STEP6b | korisnik: privući kocku robotu nakon dizanja; širina ostaje 0.822 m. Stražnja ploha kocke 4.7 cm ispred torza (20 cm bi presjekao torzo) |
+| `pull_elbow_out_deg` | **20°** (šake stoje) | `main_task` STEP6b | bez zakreta: 6 cm je granica, od 7 cm laktovi diraju stup torza kad se vodilice spuste; 15/20/25° sve valjano u MoveIt-u na 0.55/0.20/0.10 |
+| `pull_torso_clearance` / `pull_speed` | 0.03 m / 0.02 m/s | `main_task` STEP6b | povlačenje se skraćuje ako bi kocka prišla torzu bliže od 3 cm; prije pokreta MoveIt provjera konačnog stanja, inače se preskače |
+| `detection_widen` | 0.05 m (šake van po y) | `main_task` | korisnik: malo šire; kamere 0.35 m od markera, 20 cm od kocke pri primicanju |
+| vodilice + ruke istodobno | ruke kreću na **30 %** hoda vodilica (`arm_start_delay`), kroz točku **12 cm** iznad DETECTION (`detection_via_rise`), pa ravno dolje | `main_task._torso_and_arms_together` | korisnik; offline ≥ 10.3 cm od stola (izravna interpolacija bez međutočke: 1.8 cm) |
+| `together_min_range` | 0.85 m | `main_task` | put provjeren s kockom na docku; bliže → vodilice pa MoveIt |
+| RViz „Oblak - glava" | `Color Transformer: RGB8` (bio FlatColor) | `rviz/cube.rviz` | korisnik |
+| dizanje | +0.15 m (0.40 → 0.55), najviše 0.64 m | `main_task` STEP6 | 0.65 m je graničnik (P-13) |
+
+## Postav za ručno definiranje poza (`grasp_stage`)
+Upute: `notes/00_run/00_testing/definiranje_poza_hvata.md`. Runovi S1–S4, G1.
+
+| Parametar | Vrijednost | Gdje | Zašto / veza |
+|---|---|---|---|
+| spawn | dock `(0, −5.479, −90°)`, kocka 0.87 m ispred | `grasp_stage.launch.py` `DOCK_Y` | ista poza kao misija i mapiranje (korisnik, 15. 9.); do 0.62 m se primiče `grasp_stage` |
+| profil ruku na spawnu | `ARM_CARRY_V2` (poza vožnje), `table_arms` false | env `PAS_SIM_CARRY_ARMS` / `PAS_SIM_TABLE_ARMS` | na docku 10.5 cm od stola; na 0.62 m bi bila u ploči (0.0 cm) |
+| redoslijed | ruke u skeniranje **na docku**, pa primicanje | `grasp_stage` | skenirajuća poza u vožnji: ≥ 6.0 cm od stola, ≥ 20.5 cm od kocke (offline) |
+| MoveIt stol | ploča **0.80 × 0.80 × 0.04 m** + **četiri noge** 0.05 m na ±0.35 m, rub 0.25 m ispred kocke (bila ploča 0.55 × 0.65 × 0.10 m bez nogu) | `main_task.publish_collision_scene`, `TABLE_*` | 10 cm debljine je doticalo `ARM_CARRY_V2` ispod stola (F12); bez nogu je planer vodio šaku kroz nogu (S5) |
+| `carriage_height` | 0.20 m | `grasp_stage` | ista kao `table_ready` |
+| `target_range` | 0.62 m | `grasp_stage` | primiče bazu samo ako je kocka dalje |
+| `pre_standoff` | 0.20 m (vrh prsta → ploha) | `grasp_stage` | run 72: obje kamere na zapešću vide marker |
+| `scan_tilt` | 0.0 (vodoravno) | `grasp_stage` | skeniranje je potvrđeno vodoravno; hvat ide pod `press_tilt` |
+| desna ruka | zrcalo lijeve + **180° oko osi prilaza** (j7 + π) | `kinematics.mirror_right` | čisto zrcalo stavlja desnu kameru ispod osi (run S3) |
+| upravljanje šakom | korak 5 mm / 2°, Jacobian (resolved rate), bez globalnog IK-a | `kinematics.ArmJog`, `joint_gui` | globalni IK zna vratiti drugu granu za pomak od milimetra (P-25) |
+| odmak od graničnika | **4°** za zglobove 2, 4, 6, u nul-prostoru | `ArmJog.solve` | poza iz S4 imala j6 na −119.7° od ±120°; 20° je svaki korak od 5 mm pretvarao u ~30° pomaka zglobova |
 
 ## Ostaci M6 (deklarirani, a trenutni `run()` ih ne koristi)
 `pregrasp_xy` [0.35, 0], `preplace_xy` [3.0, 0], `door_xy` [1.5, 0], `box_grasp_z` 0.25,

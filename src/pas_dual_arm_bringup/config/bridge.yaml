@@ -121,6 +121,27 @@
   gz_type_name: "ignition.msgs.Contacts"
   direction: GZ_TO_ROS
 
+# --- Wrist force-torque sensors (robot.urdf.xacro) ---
+# EVALUATION ONLY: no control node may subscribe. They give the offline
+# qualification an independent reference for the joint-torque force estimate,
+# because the Fortress contact sensor publishes contact points with empty
+# wrenches (notes/03_problemi/P-42).
+# UNLIKE the Contact system above, the ForceTorque system DOES honour the
+# sensor's custom <topic> tag (verified live: /ft/left_wrist exists on the gz
+# side and carries the 13.9 N gripper weight, while the long default path does
+# not exist). So the gz names here are the short ones.
+- ros_topic_name: "/ft/left_wrist"
+  gz_topic_name: "/ft/left_wrist"
+  ros_type_name: "geometry_msgs/msg/Wrench"
+  gz_type_name: "ignition.msgs.Wrench"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/ft/right_wrist"
+  gz_topic_name: "/ft/right_wrist"
+  ros_type_name: "geometry_msgs/msg/Wrench"
+  gz_type_name: "ignition.msgs.Wrench"
+  direction: GZ_TO_ROS
+
 # --- DetachableJoint commands and state (Method 2) ---
 - ros_topic_name: "/aruco_box/attach"
   gz_topic_name: "/aruco_box/attach"

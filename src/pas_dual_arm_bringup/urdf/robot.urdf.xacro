@@ -50,8 +50,10 @@
   <xacro:property name="initial_left_arm" value="${dict(joint_1=0.0,joint_2=0.0,joint_3=0.0,joint_4=0.0,joint_5=0.0,joint_6=0.0,joint_7=0.0)}"/>
   <xacro:property name="initial_right_arm" value="${dict(joint_1=0.0,joint_2=0.0,joint_3=0.0,joint_4=0.0,joint_5=0.0,joint_6=0.0,joint_7=0.0)}"/>
   <xacro:if value="$(arg carry_arms)">
-    <xacro:property name="initial_left_arm" value="${dict(joint_1=0.0,joint_2=1.571,joint_3=2.356,joint_4=-1.571,joint_5=-0.785,joint_6=1.571,joint_7=1.571)}"/>
-    <xacro:property name="initial_right_arm" value="${dict(joint_1=0.0,joint_2=1.571,joint_3=0.785,joint_4=1.571,joint_5=0.785,joint_6=-1.571,joint_7=-1.571)}"/>
+    <!-- The drive posture: DRIVE_V4 since 16. 9. (user; postures.py), 0.821 m wide,
+         arms tucked. It was ARM_CARRY_V2 before. -->
+    <xacro:property name="initial_left_arm" value="${dict(joint_1=2.182,joint_2=1.244,joint_3=1.396,joint_4=-2.339,joint_5=0.589,joint_6=-0.755,joint_7=2.635)}"/>
+    <xacro:property name="initial_right_arm" value="${dict(joint_1=-2.255,joint_2=1.203,joint_3=-1.278,joint_4=-2.395,joint_5=-0.504,joint_6=-0.769,joint_7=0.536)}"/>
   </xacro:if>
   <!-- Cube-table staging: the wrists start above the 0.75 m tabletop, so the
        arms cannot catch the table edge on the way out (the carry posture holds
@@ -171,6 +173,50 @@
                      sensor="right_left_tip_contact" topic="/contact/right_left_tip"/>
   <xacro:tip_contact link="right_robotiq_85_right_finger_tip_link"
                      sensor="right_right_tip_contact" topic="/contact/right_right_tip"/>
+
+  <!-- Wrist force-torque sensors: EVALUATION ONLY.
+       The real Gen3 has joint torque sensors, not a wrist FT sensor, so no
+       control code may read these - they exist to give the offline
+       qualification an independent reference for the torque-based force
+       estimate. The Fortress contact sensor turned out to publish contact
+       POINTS only, with empty wrenches, so it cannot serve as that reference
+       (notes/03_problemi/P-42). Mounted on joint 7, the sensor sees everything
+       distal to the wrist; the qualifier compares the CHANGE from its zeroed
+       pre-contact value, so the gripper's own weight cancels. -->
+  <xacro:macro name="wrist_force_torque" params="joint sensor topic">
+    <gazebo reference="${joint}">
+      <sensor name="${sensor}" type="force_torque">
+        <always_on>1</always_on>
+        <update_rate>200</update_rate>
+        <topic>${topic}</topic>
+        <force_torque>
+          <frame>child</frame>
+          <measure_direction>parent_to_child</measure_direction>
+        </force_torque>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+  <xacro:wrist_force_torque joint="left_joint_7"
+                            sensor="left_wrist_ft" topic="/ft/left_wrist"/>
+  <xacro:wrist_force_torque joint="right_joint_7"
+                            sensor="right_wrist_ft" topic="/ft/right_wrist"/>
+
+  <!-- 4.5 TOOL TIP. end_effector_link sits at the gripper BASE (robotiq_85_base_link
+       is attached to it with no offset); the pads are further out. tool_tip is the
+       centre of the CLOSED pads (knuckle 0.791, as every V4 posture is saved):
+       0.127 m along the tool axis, measured from the collision meshes (the leading
+       pad edge is at 0.163 m). The grasp targets and reach checks are about this
+       point, not the gripper base. -->
+  <xacro:macro name="tool_tip" params="side">
+    <link name="${side}_tool_tip"/>
+    <joint name="${side}_tool_tip_joint" type="fixed">
+      <parent link="${side}_end_effector_link"/>
+      <child link="${side}_tool_tip"/>
+      <origin xyz="0 0 0.127" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:tool_tip side="left"/>
+  <xacro:tool_tip side="right"/>
 
   <!-- 4.6 CONTACT-VERIFIED GRASP ATTACH (DetachableJoint) -->
   <!-- DART will not hold a free object by gripper friction (tried mu up to 5,
@@ -361,18 +407,27 @@
       <plugin>ign_ros2_control/IgnitionSystem</plugin>
     </hardware>
     <joint name="torso_left_carriage_joint">
-      <!-- ign_ros2_control realises a position command as a velocity
-           (joint_velocity = position_proportional_gain * error). The default
-           gain (0.1) drives light joints (arms, pan-tilt) but leaves the heavy
-           vertical carriage pinned at its lower limit under gravity, so raise
-           the gain for the carriages. -->
+      <!-- ign_ros2_control realises a position command as a joint velocity
+           (joint_velocity = position_proportional_gain * error). The gain is a
+           parameter of the PLUGIN'S OWN node, not of a joint: this tag never
+           reached it, every run logged the 0.1 default, and setting it at
+           runtime changed nothing because the plugin reads it once at init.
+           It is not the reason the carriage used to sit still - see the
+           initial_value note below - so the gain is left at the default. -->
       <command_interface name="position">
         <param name="min">0.05</param>
         <param name="max">0.8</param>
-        <param name="position_proportional_gain">20.0</param>
       </command_interface>
+      <!-- Start just ABOVE the lower limit, never on it. Measured 15. 9.: the
+           carriage drives onto the 0.05 hard stop from above without trouble
+           (150 mm in one move), but once it rests exactly there the position
+           interface cannot move it again in EITHER direction - 0.00 mm against
+           a 0.20 m command, while the action still reports success. Ignition
+           realises a position command as a joint velocity, and at the limit
+           that velocity is zeroed. Spawning at 0.05 therefore started the robot
+           already locked, which is what P-13 has been chasing since 30. 6. -->
       <state_interface name="position">
-        <param name="initial_value">0.05</param>
+        <param name="initial_value">0.06</param>
       </state_interface>
       <state_interface name="velocity"/>
     </joint>
@@ -380,10 +435,17 @@
       <command_interface name="position">
         <param name="min">0.05</param>
         <param name="max">0.8</param>
-        <param name="position_proportional_gain">20.0</param>
       </command_interface>
+      <!-- Start just ABOVE the lower limit, never on it. Measured 15. 9.: the
+           carriage drives onto the 0.05 hard stop from above without trouble
+           (150 mm in one move), but once it rests exactly there the position
+           interface cannot move it again in EITHER direction - 0.00 mm against
+           a 0.20 m command, while the action still reports success. Ignition
+           realises a position command as a joint velocity, and at the limit
+           that velocity is zeroed. Spawning at 0.05 therefore started the robot
+           already locked, which is what P-13 has been chasing since 30. 6. -->
       <state_interface name="position">
-        <param name="initial_value">0.05</param>
+        <param name="initial_value">0.06</param>
       </state_interface>
       <state_interface name="velocity"/>
     </joint>

@@ -1,7 +1,7 @@
 ---
 id: RUN_START
 type: upute
-updated: 2026-09-13
+updated: 2026-09-15
 ---
 # Pokretanje i rad na projektu
 
@@ -12,7 +12,9 @@ a pravila rada u [[AGENT_GUIDE]].
 - [[02_testiranje]] — što provjeriti i kako razlikovati prolaz od lažnog uspjeha.
 - [[03_izmjene]] — gdje mijenjati parametre/kod i kako zabilježiti pokus.
 - `00_testing/` — **postupci testiranja po podsustavu**: koje naredbe, u kojem terminalu,
-  što gledati i što zabilježiti: [[navigacija]], [[hvat_kocke]].
+  što gledati i što zabilježiti: [[navigacija]], [[hvat_kocke]],
+  [[definiranje_poza_hvata]] (robot pred stolom, ruke u skenirajućoj pozi, poze se
+  zadaju u `joint_gui.py --sim` i šalju simulaciji).
 
 Projektni okoliš je `scripts/run_native.sh`, a brza dijagnostika
 `bash scripts/verify_environment.sh` (ili `--live` uz pokrenutu simulaciju).

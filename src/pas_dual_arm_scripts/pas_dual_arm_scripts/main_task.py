@@ -35,7 +35,7 @@ from control_msgs.action import FollowJointTrajectory, GripperCommand
 from geometry_msgs.msg import Pose, Point, Quaternion
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from nav2_msgs.action import NavigateToPose
-from moveit_msgs.srv import GetCartesianPath, GetPositionIK
+from moveit_msgs.srv import GetStateValidity, GetCartesianPath, GetPositionIK
 from moveit_msgs.msg import (
     CollisionObject,
     Constraints,
@@ -47,13 +47,21 @@ from moveit_msgs.msg import (
 )
 from rclpy.action import ActionClient
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import String
 from sensor_msgs.msg import JointState, PointCloud2
 from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformListener
+
+from pas_dual_arm_scripts.robot_extent import ExtentMeasurer
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from pas_dual_arm_scripts.base_drive import BaseDriver
-from pas_dual_arm_scripts.postures import (ARM_DRIVE, POSTURES, joint_constraints,
+from pas_dual_arm_scripts.kinematics import ArmJog, Kinematics, pad_contact_pose
+from pas_dual_arm_scripts.robot_extent import link_points
+from pas_dual_arm_scripts.postures import (ARM_DRIVE, DETECTION_CARRIAGE, DRIVE_CARRIAGE,
+                                           GRIPPER_CLOSED,
+                                           POSTURES, joint_constraints,
                                            move_to_posture, switch_arm_hold)
 
 # Optional Ignition contact-sensor feedback. Bridged via ros_gz_interfaces; if the
@@ -143,8 +151,20 @@ GRASP_DOWN = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 TIP_COLLISION_FORWARD = 0.051019
 
 
+
+# Front face of the torso's collision box, in base_link (dual_arm_torso xacro:
+# box 0.566 m deep centred on the column). A cube pulled in must stay ahead of it.
+TORSO_FRONT_X = 0.283
+
+# The pick table (seminar_world.sdf), placed relative to the measured cube: the
+# near edge 0.25 m in front of the cube centre, as grasp_cube.py assumes too.
+TABLE_SIZE = 0.80
+TABLE_EDGE_AHEAD_OF_CUBE = -0.25
+TABLE_LEG = 0.05
+TABLE_LEG_OFFSET = 0.35
+
 class MainTask(BaseDriver, Node):
-    def __init__(self, node_name='main_task_node'):
+    def __init__(self, node_name='main_task_node', simulated_contacts=True):
         super().__init__(node_name)
 
         # --- tunable geometry (map frame unless noted) -----------------------
@@ -155,6 +175,83 @@ class MainTask(BaseDriver, Node):
         # skip the place and instead drive the base (straight + in-place turn)
         # to test whether the DART DetachableJoint survives base motion.
         self.declare_parameter('probe_transport', False)
+        # How far PAST the measured face the press goal is placed. The pads need
+        # some interference to register on the fingertip contact sensors, but
+        # the old 30 mm shoved the cube across the table - and the comment next
+        # to it claimed 5 mm, so the value had drifted unnoticed. A parameter so
+        # a run can find the smallest value that still registers, without an
+        # edit-rebuild cycle.
+        self.declare_parameter('squeeze_interference', 0.010)
+        # Carriage height that puts the arms at a good working height for this
+        # table, and the cube centre measured from there. The grasp height is
+        # carried 1:1 from the measurement, so only these two move if the table
+        # or the cube changes.
+        self.declare_parameter('carriage_reference_height', 0.20)
+        self.declare_parameter('carriage_reference_cube_z', 0.82)
+        # How far the right pad eases off the face once the cube is attached.
+        # Not a retreat - both hands are meant to stay on the cube.
+        self.declare_parameter('release_backoff', 0.005)
+        # The narrowest doorway on the mission route (notes/06_parametri).
+        self.declare_parameter('door_width', 1.0)
+        # How far the press approach tilts DOWN from horizontal, in radians.
+        # This is what makes the grasp fit through a doorway. Measured offline
+        # over the full IK null space (scripts/grasp_width.py), cube at 0.62 m:
+        #   tilt   0 deg -> 1.003 m    45 deg -> 0.846 m
+        #         30 deg -> 0.937 m    50 deg -> 0.823 m
+        #         40 deg -> 0.881 m    60 deg -> 0.823 m
+        # At 0 deg the spherical wrist lies on the approach axis and sets the
+        # width on its own, identically in all 1620 IK solutions - no choice of
+        # elbow helps. Past ~50 deg the hands are tucked inside the SHOULDER
+        # mounts (0.412 m per side), which is this robot's hard floor, so there
+        # is nothing to gain by tilting further. 50 deg is that floor, and it
+        # is narrower than ARM_CARRY_V2 (0.840 m), the posture that was
+        # validated through the 1.0 m doorways. See notes/03_problemi/P-43.
+        self.declare_parameter('press_tilt', 0.873)
+        # The V4 sequence (user, 16. 9.; notes/03_problemi/P-44): drive in
+        # DRIVE_V4, stand at the dock, DETECTION_V4 reads the side markers,
+        # GRASP_V4 then the tool tips go to the marker centres.
+        # Cube distance to stand at while locating it: the dock. DRIVE_V4 reaches
+        # only 0.27 m ahead, 36 cm clear of the table there.
+        self.declare_parameter('detect_stand_range', 0.87)
+        self.declare_parameter('detection_carriage_height', DETECTION_CARRIAGE)
+        # Where the cube has to be for DETECTION_V4 and GRASP_V4 (their pads
+        # and wrist cameras are set for a cube this far ahead of base_link).
+        self.declare_parameter('detection_cube_range', 0.63)
+        # How far the pads go INTO the face: just enough for the contact sensors
+        # to register. Squeezing was tried by hand and the cube slips out (16. 9.).
+        self.declare_parameter('touch_depth', 0.002)
+        self.declare_parameter('grasp_approach_speed', 0.01)
+        # After the lift: back away from the table this far, then lower the
+        # carriages to the drive height (user, 16. 9.). At 0.40 m the cube's
+        # front face is exactly at the table edge and lowering it scrapes the
+        # table (0.0 cm, offline); 0.50 m leaves 10 cm.
+        self.declare_parameter('back_off_after_lift', 0.50)
+        # Where the carriages end, with the cube in the hands (user, 16. 9.: 100 mm).
+        # Checked by MoveIt: the held grasp is free of self-collision there.
+        self.declare_parameter('final_carriage_height', 0.10)
+        # After the lift, pull the cube towards the robot (user, 16. 9.): both
+        # hands straight back together, orientation held. Width does not grow
+        # (0.82 m). Lowered to 0.10 the elbows then sit beside the torso column,
+        # so they swivel away from it with the hands held: 15 cm with 15 deg is
+        # free of self-collision in MoveIt both lifted and lowered. The cube's
+        # back face stays >= `pull_torso_clearance` in front of the torso box.
+        self.declare_parameter('pull_cube_in', 0.15)
+        self.declare_parameter('pull_elbow_out_deg', 20.0)
+        self.declare_parameter('pull_torso_clearance', 0.03)
+        self.declare_parameter('pull_speed', 0.02)
+        # DETECTION_V4 with the hands this much further out (user: a little
+        # wider): wrist cameras 0.35 m from the markers (S6 read them at 0.34),
+        # 20 cm off the cube while driving in.
+        self.declare_parameter('detection_widen', 0.05)
+        # Carriages and arms together (user). The arms go through a point this
+        # far ABOVE the detection pose and start after this share of the
+        # carriage stroke, then drop straight down: 10.3 cm off the table all the
+        # way (offline); straight joint interpolation alone passed 1.8 cm over it.
+        self.declare_parameter('detection_via_rise', 0.12)
+        self.declare_parameter('arm_start_delay', 0.3)
+        # That path was checked with the cube at the dock (0.87 m); nearer than
+        # this the carriages go first and MoveIt plans the arms.
+        self.declare_parameter('together_min_range', 0.85)
         self.declare_parameter('pregrasp_xy', [0.35, 0.0])
         self.declare_parameter('pregrasp_yaw', 0.0)
         # Pre-place: just in front of the table (table front face at X~3.5).
@@ -236,9 +333,29 @@ class MainTask(BaseDriver, Node):
         # beside the box).
         self.init_base_drive()
 
+        # Robot description, for measuring the robot's own width at the grasp
+        # pose. The press reaches around the cube from both sides, which puts
+        # the elbows outboard: measured 15. 9., the press pose is 1.531 m wide
+        # against 1.0 m doorways and a 0.854 m carry posture. A grasp that
+        # cannot fit through a door is not a grasp we can deliver with.
+        self._description = None
+        self._extent = None
+        self.create_subscription(
+            String, '/robot_description',
+            lambda msg: setattr(self, '_description', msg.data),
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+
         # --- perception ------------------------------------------------------
         self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
+        # /tf on its own thread. robot_state_publisher republishes at the joint
+        # rate - 1000 Hz under the force_grasp profile - while `spin_once` runs
+        # ONE callback per call, so on the shared executor the buffer falls
+        # further behind the longer a loop runs. Measured 15. 9. during the
+        # squeeze: the marker transform read back median 0.32 s old against a
+        # 0.4 s limit, and when that limit was raised to 0.8 s the median rose
+        # to 0.73 s - the lag tracked the limit, which is a backlog, not a
+        # stale sensor. The detector itself never missed a frame.
+        self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
         # The 640x480 point cloud is heavy; subscribing all the time starves the
         # /clock callback in the busy servo loops (sim time then never advances
         # and the loops hang). Subscribe only while measuring the box.
@@ -269,13 +386,13 @@ class MainTask(BaseDriver, Node):
             'right_left': '/contact/right_left_tip',
             'right_right': '/contact/right_right_tip',
         }
-        if _Contacts is not None:
+        if simulated_contacts and _Contacts is not None:
             for key, topic in self.tip_contact_topics.items():
                 self.create_subscription(
                     _Contacts, topic,
                     lambda msg, k=key: self._contact_cb(k, msg), 10)
             self.get_logger().info('Fingertip contact sensors subscribed.')
-        else:
+        elif simulated_contacts:
             self.get_logger().warn(
                 'ros_gz_interfaces/Contacts unavailable; contact-sensor signal '
                 'disabled (depth + stall + effort still used).')
@@ -899,13 +1016,22 @@ class MainTask(BaseDriver, Node):
                     f'{"OK" if outs[side] else "FAILED"}')
         return outs['left'], outs['right']
 
-    def publish_collision_scene(self, center, table_top_z):
+    def publish_collision_scene(self, center, table_top_z, yaw=0.0, settle=True):
         """Add the floor, the pick table and the target cube to the MoveIt
         planning scene (base_link frame). Without them RRT freely plans arm
         sweeps THROUGH the table - the physical snag then shoves the whole
         base. The deliberate press still touches the cube because it runs via
-        compute_cartesian_path with avoid_collisions=False."""
-        def box_object(name, cx, cy, cz, sx, sy, sz):
+        compute_cartesian_path with avoid_collisions=False.
+
+        MoveIt has no virtual joint to the world here, so it plans in the
+        robot's own frame and these objects ride along with the base. `yaw` is
+        the table's heading relative to base_link, for re-publishing them where
+        they really are after the base has moved (grasp_stage follows teleop
+        this way); `settle=False` skips the one-second wait for move_group."""
+        c, s_ = math.cos(yaw), math.sin(yaw)
+
+        def box_object(name, dx, dy, cz, sx, sy, sz):
+            """A box at (dx, dy) from the cube centre in the TABLE's axes."""
             co = CollisionObject()
             co.header.frame_id = 'base_link'
             co.id = name
@@ -913,8 +1039,10 @@ class MainTask(BaseDriver, Node):
             prim.type = SolidPrimitive.BOX
             prim.dimensions = [float(sx), float(sy), float(sz)]
             pose = Pose()
-            pose.position = Point(x=float(cx), y=float(cy), z=float(cz))
-            pose.orientation.w = 1.0
+            pose.position = Point(x=float(center.x + c * dx - s_ * dy),
+                                  y=float(center.y + s_ * dx + c * dy), z=float(cz))
+            pose.orientation.z = math.sin(yaw / 2.0)
+            pose.orientation.w = math.cos(yaw / 2.0)
             co.primitives = [prim]
             co.primitive_poses = [pose]
             co.operation = CollisionObject.ADD
@@ -922,14 +1050,33 @@ class MainTask(BaseDriver, Node):
 
         scene = PlanningScene()
         scene.is_diff = True
+        # The table as it is (seminar_world.sdf): a 0.80 m square top, 4 cm
+        # thick, on four 5 cm legs 0.35 m from its centre, its near edge 0.25 m
+        # in front of the cube - the same offset grasp_cube.py and grasp_stage
+        # stop the base by. It used to be a 0.55 x 0.65 x 0.10 m slab centred
+        # on the cube: too thick (MoveIt saw the carry posture's hands, which sit
+        # under the top, as a collision - F12), too narrow (the real top reaches
+        # y = +/-0.40) and without legs, so the planner swung a hand straight
+        # into the near leg and the controller still reported success (S5).
+        top_dx = TABLE_EDGE_AHEAD_OF_CUBE + TABLE_SIZE / 2.0
+        legs = [box_object(f'pick_table_leg_{i}',
+                           top_dx + sx * TABLE_LEG_OFFSET, sy * TABLE_LEG_OFFSET,
+                           (table_top_z - 0.04) / 2.0,
+                           TABLE_LEG, TABLE_LEG, table_top_z - 0.04)
+                for i, (sx, sy) in enumerate(((-1, -1), (-1, 1), (1, -1), (1, 1)))]
+        floor = box_object('floor', 0.0, 0.0, -0.10, 4.0, 4.0, 0.02)
+        floor.primitive_poses[0].position = Point(x=0.7, y=0.0, z=-0.10)
         scene.world.collision_objects = [
-            box_object('floor', 0.7, 0.0, -0.10, 4.0, 4.0, 0.02),
-            box_object('pick_table', center.x, center.y,
-                       table_top_z - 0.05, 0.55, 0.65, 0.10),
-            box_object('target_cube', center.x, center.y,
+            floor,
+            box_object('pick_table', top_dx, 0.0,
+                       table_top_z - 0.02, TABLE_SIZE, TABLE_SIZE, 0.04),
+            *legs,
+            box_object('target_cube', 0.0, 0.0,
                        table_top_z + 0.15, 0.30, 0.30, 0.30),
         ]
         self.scene_pub.publish(scene)
+        if not settle:
+            return
         # Give the move_group monitor a moment to apply the diff.
         end = time.monotonic() + 1.0
         while time.monotonic() < end:
@@ -1160,6 +1307,55 @@ class MainTask(BaseDriver, Node):
                 f'{label} {side}: {"OK" if succeeded else "FAILED"}')
             ok = ok and succeeded
         return ok
+
+    def measure_width(self, label):
+        """Robot's lateral extent right now, in metres, or None.
+
+        Same geometry the navigator gates on (`robot_extent`), so the number
+        here and the number that decides a doorway cannot drift apart.
+        """
+        if self._description is None:
+            deadline = time.monotonic() + 5.0
+            while self._description is None and time.monotonic() < deadline:
+                rclpy.spin_once(self, timeout_sec=0.05)
+        if self._description is None:
+            self.get_logger().warn(f'{label}: no /robot_description, width unknown')
+            return None
+        if self._extent is None:
+            try:
+                self._extent = ExtentMeasurer(self._description)
+            except Exception as exc:
+                self.get_logger().warn(f'{label}: cannot build extent model: {exc}')
+                return None
+        # ExtentMeasurer.points() SKIPS any link TF cannot place, so a width
+        # built from a subset of the robot reads narrower than the robot is.
+        # Count what was actually placed and refuse to answer on a partial
+        # sample - a width nobody can trust is worse than no width (D-12).
+        placed = []
+        for name in self._extent.links:
+            try:
+                self.tf_buffer.lookup_transform(
+                    self._extent.frame, name, rclpy.time.Time())
+                placed.append(name)
+            except Exception:
+                pass
+        missing = [n for n in self._extent.links if n not in placed]
+        points = self._extent.points(self.tf_buffer, rclpy.time.Time())
+        if points is None:
+            self.get_logger().warn(f'{label}: TF placed no link, width unknown')
+            return None
+        if missing:
+            self.get_logger().warn(
+                f'{label}: width UNRELIABLE - TF placed {len(placed)}/'
+                f'{len(self._extent.links)} links, missing {sorted(missing)[:6]}')
+            return None
+        width = float(points[:, 1].max() - points[:, 1].min())
+        door = float(self.get_parameter('door_width').value)
+        verdict = 'fits' if width < door else 'TOO WIDE'
+        self.get_logger().info(
+            f'WIDTH MEASURED [{label}] {width:.3f} m vs doorway {door:.3f} m '
+            f'-> {verdict} ({len(placed)} links)')
+        return width
 
     # ------------------------------------------------------------------ torso
     def move_torso(self, height, label, secs=4):
@@ -1522,7 +1718,7 @@ class MainTask(BaseDriver, Node):
             v = -v
         return (float(v[0]), float(v[1]))
 
-    def squeeze_poses(self, center, v, pre=0.0):
+    def squeeze_poses(self, center, v, pre=0.0, half_width=None, tilt=None):
         """Left/right EE poses for the dual-arm SQUEEZE of the assignment cube:
         each CLOSED gripper (fingertip pads) approaches horizontally along -/+v
         and presses one of the two opposite side faces. pre>0 hovers off the
@@ -1530,20 +1726,51 @@ class MainTask(BaseDriver, Node):
         Approach axis is tool +Z (same convention as the top-down grasp, where
         the tips extend along +Z from the wrist); tool +X is kept horizontal so
         the two pads contact side by side (stable against yaw torque)."""
-        off = 0.15 + self.tip_standoff + pre
+        # half_width: half the cube's depth along the approach axis. It used to
+        # be hard-coded 0.15 (half the nominal 0.30 m cube) while the depth
+        # camera's MEASURED length was logged and thrown away, so a cube of any
+        # other size would have been pressed at the wrong distance. Callers pass
+        # the measurement; the nominal value stays as the fallback.
+        half = 0.15 if half_width is None else float(half_width)
+        # `tilt` overrides the press tilt, e.g. 0 for the horizontal side-scan
+        # pre-grasp in which the wrist cameras were validated (run 72).
+        tilt = float(self.get_parameter('press_tilt').value if tilt is None else tilt)
         vv = np.array([float(v[0]), float(v[1]), 0.0])
+        vv = vv / np.linalg.norm(vv)
+        up = np.array([0.0, 0.0, 1.0])
         poses = []
         for sgn in (+1.0, -1.0):        # left presses from +v, right from -v
-            z_ax = -sgn * vv                             # approach: into the box
-            x_ax = np.array([-z_ax[1], z_ax[0], 0.0])    # horizontal, ⟂ approach
-            x_ax = x_ax / np.linalg.norm(x_ax)
+            # Approach axis: into the box, tilted DOWN by `tilt`. Horizontal
+            # (tilt = 0) is the obvious choice and the one that cannot pass a
+            # doorway: the spherical wrist sits ON this axis, 0.2025 m outboard
+            # of the fingertip, so a horizontal press is 2*(0.15 + 0.149 +
+            # 0.2025) = 1.003 m wide whatever the elbows do - measured across
+            # 1620 IK solutions, every one of them exactly 0.502 m per side.
+            # Tilting the axis down swings the wrist UP instead of OUT, which
+            # is the only free direction left (P-43).
+            z_ax = -sgn * np.cos(tilt) * vv - np.sin(tilt) * up
+            z_ax = z_ax / np.linalg.norm(z_ax)
+            # Horizontal, across the face - the SAME roll as the flat version
+            # (-z_ax[1], z_ax[0]). Flipping it (tried 15. 9.) turns the hand 180 deg
+            # about the approach axis: the wrist camera then sits 5.6 cm BELOW the
+            # axis instead of above it, and the face marker, raised 5.6 cm for a
+            # camera above, falls out of frame (stage run S1: marker NOT seen).
+            x_ax = np.array([vv[1], -vv[0], 0.0]) * sgn
             y_ax = np.cross(z_ax, x_ax)
+            y_ax = y_ax / np.linalg.norm(y_ax)
+            x_ax = np.cross(y_ax, z_ax)
             R = np.column_stack([x_ax, y_ax, z_ax])
-            poses.append(Pose(
-                position=Point(x=center.x + sgn * off * vv[0],
-                               y=center.y + sgn * off * vv[1],
-                               z=center.z),
-                orientation=quat_from_matrix(R)))
+            # Aim the fingertip at the CENTRE of the side face, then back the
+            # wrist off ALONG the approach axis. Offsetting from the cube
+            # centre along a tilted axis instead (what the flat version did,
+            # correctly, because its axis was horizontal) lands the tip
+            # half*tan(tilt) too high - 0.15 m at 45 deg, the top edge of a
+            # 0.30 m cube rather than its face.
+            contact = np.array([center.x, center.y, center.z]) + sgn * half * vv
+            p = contact - (self.tip_standoff + pre) * z_ax
+            poses.append(Pose(position=Point(x=float(p[0]), y=float(p[1]),
+                                             z=float(p[2])),
+                              orientation=quat_from_matrix(R)))
         return poses[0], poses[1]
 
     # ------------------------------------------------ marker-relative servoing
@@ -1809,10 +2036,284 @@ class MainTask(BaseDriver, Node):
         return result is not None and result.status == GoalStatus.STATUS_SUCCEEDED
 
     # --------------------------------------------------------------------- run
+    # ------------------------------------------------------- grasp helpers
+    def _torso_to(self, height, label, secs=8):
+        """Carriages to `height`, then MEASURED - the action status is not trusted."""
+        if not self.move_torso(height, label, secs=secs):
+            return False
+        settle = time.monotonic() + 3.0
+        while time.monotonic() < settle:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        at = [self._joint.get(n, (float('nan'), 0.0))[0]
+              for n in ('torso_left_carriage_joint', 'torso_right_carriage_joint')]
+        self.get_logger().info(
+            f'{label}: CARRIAGE MEASURED left={at[0]:.4f} right={at[1]:.4f} m '
+            f'(commanded {height:.4f})')
+        return max(abs(a - height) for a in at) <= 0.01
+
+    def _grasp_tools(self):
+        """Whole-robot kinematics, collision hulls and per-arm jog, from the URDF."""
+        if getattr(self, '_kin_tools', None) is None:
+            deadline = time.monotonic() + 5.0
+            while self._description is None and time.monotonic() < deadline:
+                rclpy.spin_once(self, timeout_sec=0.05)
+            if self._description is None:
+                raise RuntimeError('no /robot_description for the grasp kinematics')
+            kin = Kinematics(self._description)
+            self._kin_tools = (kin, link_points(self._description, 'collision'),
+                               {side: ArmJog(self._description, side, kin)
+                                for side in ('left', 'right')})
+        return self._kin_tools
+
+    def _live_joints(self):
+        return {name: value[0] for name, value in self._joint.items()}
+
+    def wrist_face(self, side, timeout=5.0, below_marker=0.056):
+        """A point on this hand's cube face as its own wrist camera sees it (base_link).
+
+        `below_marker` 0.056 gives the face centre (the markers sit that far above
+        it, seminar_world.sdf); 0 gives the marker centre itself.
+        """
+        deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
+        while rclpy.ok() and self.get_clock().now().nanoseconds < deadline:
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    'base_link', f'{side}_grasp_marker_frame', rclpy.time.Time())
+            except Exception:
+                rclpy.spin_once(self, timeout_sec=0.1)
+                continue
+            stamp = tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9
+            if not 0 <= self.get_clock().now().nanoseconds * 1e-9 - stamp <= 0.4:
+                rclpy.spin_once(self, timeout_sec=0.02)
+                continue
+            t = tf.transform.translation
+            return np.array([t.x, t.y, t.z - below_marker])
+        return None
+
+    def _plan_both(self, goals, label, retries=3):
+        """Collision-checked joint plans for both arms, released together."""
+        trajs = {}
+        for side, joints in goals.items():
+            for attempt in range(1, retries + 1):
+                traj = self.plan_arm_joints(f'{side}_arm', joints,
+                                            f'{label} {side} (attempt {attempt})')
+                if traj is not None:
+                    trajs[side] = traj
+                    break
+            else:
+                return False
+        results = self.move_arms_parallel(trajs, label, min_duration=4.0)
+        return all(results.values())
+
+    def _torso_and_arms_together(self, height, via, detection, jog, rise, seconds=8.0):
+        """Carriages to `height` while both arms swing to `via`, then drop to
+        the detection pose. The arms start after `arm_start_delay` of the
+        carriage stroke and take as long as it does; the path was checked
+        offline against the table and the cube at the dock (P-44)."""
+        delay = float(self.get_parameter('arm_start_delay').value)
+        if not self._wait_server(self.torso, 'torso_controller'):
+            return False
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory.joint_names = ['torso_left_carriage_joint', 'torso_right_carriage_joint']
+        point = JointTrajectoryPoint()
+        point.positions = [float(height), float(height)]
+        point.velocities = [0.0, 0.0]
+        point.time_from_start.sec = int(seconds)
+        goal.trajectory.points = [point]
+        torso_future = self.torso.send_goal_async(goal)
+        # Arms: hold for delay*T, then a straight joint-space swing to `via`.
+        steps = 30
+        paths = {}
+        for side in ('left', 'right'):
+            names = jog[side].names
+            start = {n: self._joint[n][0] for n in names}
+            hold = max(1, int(round(steps * delay)))
+            path = [dict(start) for _ in range(hold + 1)]
+            path += [{n: start[n] + k / steps * (via[n] - start[n]) for n in names}
+                     for k in range(1, steps + 1)]
+            paths[side] = path
+        self.get_logger().info(
+            f'STEP3b carriages -> {height:.2f} m over {seconds:.0f} s, arms join after '
+            f'{delay * 100:.0f}% through a point {rise * 100:.0f} cm above DETECTION_V4')
+        arms_ok = self._straight_both(paths, 'STEP3b carriages and arms together', seconds / steps)
+        handle = self._spin_until_done(torso_future)
+        if handle is None or not handle.accepted:
+            self.get_logger().error('STEP3b torso goal rejected')
+            return False
+        self._spin_until_done(handle.get_result_async())
+        if not arms_ok:
+            return False
+        settle = time.monotonic() + 2.0
+        while time.monotonic() < settle:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        at = [self._joint.get(n, (float('nan'), 0.0))[0]
+              for n in ('torso_left_carriage_joint', 'torso_right_carriage_joint')]
+        self.get_logger().info(
+            f'STEP3b: CARRIAGE MEASURED left={at[0]:.4f} right={at[1]:.4f} m (commanded {height:.4f})')
+        if max(abs(a - height) for a in at) > 0.01:
+            return False
+        # Last part: straight down onto the detection pose, orientation held.
+        live = self._live_joints()
+        down, q = {}, dict(live)
+        for side in ('left', 'right'):
+            q.update(detection[side])
+        target = {side: jog[side].hand(q) for side in ('left', 'right')}
+        for side in ('left', 'right'):
+            R, t = target[side]
+            walk, path = dict(live), [{n: live[n] for n in jog[side].names}]
+            start = jog[side].hand(live)[1]
+            n_steps = max(2, int(math.ceil(np.linalg.norm(t - start) / 0.005)))
+            for k in range(1, n_steps + 1):
+                walk.update(zip(jog[side].names, jog[side].solve(
+                    walk, R, start + k / n_steps * (t - start), max_jump=0.3)))
+                path.append({n: walk[n] for n in jog[side].names})
+            down[side] = path
+        return self._straight_both(down, 'STEP3c straight down onto DETECTION_V4', 0.005 / 0.03)
+
+    def _state_valid(self, joints, label):
+        """MoveIt's verdict on a whole-robot joint state: True, False, or None
+        when the service is not there. The attached cube is not in its scene."""
+        if getattr(self, '_validity', None) is None:
+            self._validity = self.create_client(GetStateValidity, '/check_state_validity')
+        if not self._validity.wait_for_service(timeout_sec=5.0):
+            return None
+        req = GetStateValidity.Request()
+        req.group_name = 'both_arms'
+        names = [n for n, v in joints.items() if isinstance(v, float)]
+        req.robot_state.joint_state.name = names
+        req.robot_state.joint_state.position = [float(joints[n]) for n in names]
+        result = self._spin_until_done(self._validity.call_async(req))
+        if result is None:
+            return None
+        if not result.valid:
+            pairs = sorted({f'{c.contact_body_1} x {c.contact_body_2}' for c in result.contacts})
+            self.get_logger().warn(f'{label}: MoveIt says self-collision - {pairs[:3]}')
+        return bool(result.valid)
+
+    def _pull_cube_in(self, grip, half):
+        """Both hands straight towards the robot with the cube, then the elbows
+        away from the torso column (hands held). Skipped - with the cube still
+        held - whenever MoveIt or the torso clearance says no."""
+        pull = float(self.get_parameter('pull_cube_in').value)
+        limit = grip.x - half - (TORSO_FRONT_X + float(self.get_parameter('pull_torso_clearance').value))
+        if pull > limit:
+            self.get_logger().warn(
+                f'STEP6b pull limited to {max(0.0, limit) * 100:.1f} cm: the cube would come '
+                'too close to the torso')
+            pull = max(0.0, limit)
+        if pull < 0.005:
+            return
+        kin, hulls, jog = self._grasp_tools()
+        live = self._live_joints()
+        out = math.radians(float(self.get_parameter('pull_elbow_out_deg').value))
+        paths, turn = {}, {}
+        try:
+            pulled = dict(live)
+            for side in ('left', 'right'):
+                R, t = jog[side].hand(live)
+                steps = max(1, int(math.ceil(pull / 0.005)))
+                walk, path = dict(live), [{n: live[n] for n in jog[side].names}]
+                for k in range(1, steps + 1):
+                    walk.update(zip(jog[side].names, jog[side].solve(
+                        walk, R, t - np.array([k / steps * pull, 0.0, 0.0]), max_jump=0.3)))
+                    path.append({n: walk[n] for n in jog[side].names})
+                paths[side] = path
+                pulled.update(path[-1])
+            swung = dict(pulled)
+            for side in ('left', 'right'):
+                joints, _ = jog[side].elbow_swivel(swung, -out)
+                swung.update(zip(jog[side].names, joints))
+                start = {n: pulled[n] for n in jog[side].names}
+                turn[side] = [{n: start[n] + k / 10 * (swung[n] - start[n]) for n in start}
+                              for k in range(11)]
+        except ValueError as exc:
+            self.get_logger().warn(f'STEP6b cube not pulled in: {exc}')
+            return
+        # Checked where it happens: lifted, at the table, the table in the scene.
+        # (The lowered state is checked in step 7, after backing away - checked
+        # here it is 'in the table', which it will never be: run V4.)
+        if self._state_valid(swung, 'STEP6b check, lifted at the table') is not True:
+            self.get_logger().warn('STEP6b cube not pulled in: the end state is not '
+                                   'collision-free for MoveIt')
+            return
+        speed = float(self.get_parameter('pull_speed').value)
+        if not self._straight_both(paths, f'STEP6b pull the cube {pull * 100:.0f} cm in', 0.005 / speed):
+            self.get_logger().warn('STEP6b pull did not complete')
+            return
+        self._straight_both(turn, 'STEP6b elbows away from the torso', 0.3)
+        self.get_logger().info(
+            f'STEP6b cube pulled {pull * 100:.0f} cm in: back face '
+            f'{(grip.x - pull - half - TORSO_FRONT_X) * 100:.1f} cm in front of the torso')
+        self.measure_width('cube pulled in')
+
+    def _posture_goals(self, name):
+        """{side: {joint: value}} of a named posture, each continuous-joint value
+        taken as the equivalent nearest the arm's live angle (no extra turns)."""
+        goals = {}
+        for side, joints in POSTURES[name].items():
+            goals[side] = {}
+            for j, target in joints.items():
+                joint = f'{side}_joint_{j}'
+                live = self._joint.get(joint, (target, 0.0))[0]
+                if j in (1, 3, 5, 7):
+                    target = live + math.atan2(math.sin(target - live), math.cos(target - live))
+                goals[side][joint] = target
+        return goals
+
+    def _interpolate_both(self, goals, label, seconds=6.0, steps=40):
+        """Both arms straight through joint space to `goals`, released together.
+
+        For a move between two postures already known to be collision-free
+        when MoveIt will not plan it (the goal is a hand's breadth from the cube).
+        """
+        paths = {}
+        for side, goal in goals.items():
+            start = {n: self._joint[n][0] for n in goal}
+            paths[side] = [{n: start[n] + k / steps * (goal[n] - start[n]) for n in goal}
+                           for k in range(steps + 1)]
+        return self._straight_both(paths, label, seconds / steps)
+
+    def _straight_both(self, paths, label, step_time):
+        """Send precomputed joint paths (lists of joint dicts) to both arms at once."""
+        trajs = {}
+        for side, path in paths.items():
+            traj = JointTrajectory()
+            traj.joint_names = [f'{side}_joint_{j}' for j in range(1, 8)]
+            for k, joints in enumerate(path):
+                point = JointTrajectoryPoint()
+                point.positions = [float(joints[n]) for n in traj.joint_names]
+                t = k * step_time
+                point.time_from_start.sec = int(t)
+                point.time_from_start.nanosec = int((t - int(t)) * 1e9)
+                traj.points.append(point)
+            trajs[side] = traj
+        results = self.move_arms_parallel(trajs, label)
+        return all(results.values())
+
     def run(self):
         # The DetachableJoint starts attached; release it so the box sits free on
         # the table until we deliberately grasp it.
         self._attach_box(False)
+
+        # Get the wrists above tabletop height BEFORE driving anywhere. The
+        # robot spawns with the carriages near their lower stop, which puts the
+        # hands below the 0.75 m table, and the approach in step 2 drives right
+        # up to it. Step 4d refines this to the measured cube height once the
+        # cube has actually been seen; this is only about clearing the table.
+        travel = float(self.get_parameter('carriage_reference_height').value)
+        if not self.move_torso(travel, 'STEP0 carriages to travel height', secs=8):
+            return self._fail('carriages did not accept the travel height')
+        settle = time.monotonic() + 3.0
+        while time.monotonic() < settle:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        at = [self._joint.get(n, (float('nan'), 0.0))[0]
+              for n in ('torso_left_carriage_joint', 'torso_right_carriage_joint')]
+        self.get_logger().info(
+            f'CARRIAGE TRAVEL MEASURED left={at[0]:.4f} right={at[1]:.4f} m '
+            f'(commanded {travel:.4f})')
+        if max(abs(a - travel) for a in at) > 0.01:
+            return self._fail(
+                f'carriages did not reach the travel height ({at} vs {travel:.3f})')
 
         if self.get_parameter('navigate_region').value:
             if not move_to_posture(self, ARM_DRIVE, label='travel to region', freeze=True):
@@ -1830,297 +2331,173 @@ class MainTask(BaseDriver, Node):
             return self._fail('scan: marker not found')
         _, _, scan_pan = found
 
-        # 2. APPROACH: visual-servo only to ~0.9 m. Closer, the low marker forces
-        #    such a steep camera tilt that the vertical marker foreshortens and
-        #    ArUco drops it, so we stop where it is still readable, record the box
-        #    pose, then close the last bit open-loop + measure with depth.
-        if not self.visual_approach(scan_pan=scan_pan, target_x=0.90):
+        # 2. APPROACH in the drive posture to the dock distance. DRIVE_V4 is
+        #    tucked (0.27 m reach), so standing at the table is safe.
+        #    visual_approach servos on the MARKER, on the near face - half a cube
+        #    (0.15 m) in front of the centre the range refers to.
+        stand = float(self.get_parameter('detect_stand_range').value)
+        if not self.visual_approach(scan_pan=scan_pan, target_x=stand - 0.15):
             return self._fail('visual approach to box failed')
         self.look_down(0.65, 'STEP3 look at box')
         face = self.confirm_box()
         if face is None:
             return self._fail('box not seen at the table')
 
-        # 3. MEASURE from here (~0.95 m), BEFORE closing in: at this range the
-        #    seed window (within 0.25 m of the box) cannot contain any part of
-        #    the robot itself, so the cluster is clean by construction. Depth
-        #    does not foreshorten, so range is no problem for the cloud - the
-        #    close-up was only ever needed for the MARKER. The camera is already
-        #    aimed at the box from confirm_box (pitch 0.65). Measuring AFTER the
-        #    drive was tried twice and both arm postures (spawn and ARM_CARRY)
-        #    put the wrists inside the close-range window -> junk clusters.
+        # 3. LOCATE the cube with the head camera: marker plus depth.
         seed = Point(x=face.x, y=face.y, z=face.z)
         meas = self.measure_box(seed)
         if meas is None:
-            # No silent fall-back to a guessed x=0.55: a phantom centre is exactly
-            # what made the arms close ~0.5 m in front of the box. Abort honestly.
             return self._fail('depth measurement of the box failed (no fake grasp)')
         center, length, height, u = meas
-
-        # Cross-check the depth centre against the marker - same vantage point,
-        # nothing moved in between. A bad cluster must not silently send the
-        # arms to the wrong place.
         if abs(center.x - face.x) > 0.15 or abs(center.y - face.y) > 0.15:
-            self.get_logger().warn(
-                f'Depth centre ({center.x:.2f},{center.y:.2f}) disagrees with '
-                f'marker ({face.x:.2f},{face.y:.2f}); re-measuring once.')
-            meas2 = self.measure_box(seed)
-            if meas2 is None:
-                return self._fail('box measurement disagreement, not confirmed')
-            center, length, height, u = meas2
-            if abs(center.x - face.x) > 0.15 or abs(center.y - face.y) > 0.15:
-                # Accepting an unverified re-measure is how a phantom cluster
-                # (e.g. the robot's own arms) walks straight into the grasp.
-                return self._fail(
-                    'depth centre disagrees with the marker twice (no fake grasp)')
-
-        # 4. CLOSE IN: drive straight so the box sits at ~0.50 m (well within
-        #    reach). The drive is straight ahead, so the measured centre simply
-        #    shifts by the driven distance along base x. The +0.8 s compensates
-        #    the trapezoidal ramps (each ramp loses half its duration of travel,
-        #    2 x 0.4 s at 0.12 m/s ~ 0.10 m otherwise undershot). Any residual
-        #    open-loop error is caught by the later INDEPENDENT gates (EE reach
-        #    readback, fingertip geometry, physical contact) - a miss ends in an
-        #    abort, never a fake grasp.
-        close = max(0.0, face.x - 0.50)
-        if close > 0.03:
-            o0 = self._odom_xy()
-            self.drive(0.12, 0.0, close / 0.12 + 0.8)
-            o1 = self._odom_xy()
-            # Shift the percept by the ACTUALLY driven distance (wheel odometry
-            # over a straight segment, wheels tuned for negligible slip), not by
-            # the commanded one: cm-level open-loop error was enough for the
-            # grippers to close cleanly beside the bar (box untouched, live).
-            if o0 is not None and o1 is not None:
-                driven = math.hypot(o1[0] - o0[0], o1[1] - o0[1])
-            else:
-                driven = close
-                self.get_logger().warn(
-                    'No odometry sample; assuming the commanded close-in.')
-            self.get_logger().info(
-                f'Close-in: commanded {close:.3f} m, odometry {driven:.3f} m.')
-            center = Point(x=center.x - driven, y=center.y, z=center.z)
-
-        # Squeeze axis from the MARKER's orientation (depth PCA is degenerate
-        # on the cube's square top). marker_tangent() reads the last marker TF
-        # (pre-drive) - still valid: the close-in drive did not rotate the base.
+            return self._fail('depth centre disagrees with the marker (no fake grasp)')
         vt = self.marker_tangent()
         if vt is not None:
             u = vt
+
+        # 3b/3c. CARRIAGES UP and ARMS INTO DETECTION_V4 (a little wider).
+        try:
+            kin, hulls, jog = self._grasp_tools()
+        except RuntimeError as exc:
+            return self._fail(str(exc))
+        self.publish_collision_scene(Point(x=center.x, y=center.y, z=face.z),
+                                     table_top_z=face.z - 0.15)
+        lift_to = float(self.get_parameter('detection_carriage_height').value)
+        widen = float(self.get_parameter('detection_widen').value)
+        rise = float(self.get_parameter('detection_via_rise').value)
+        goals = self._posture_goals('DETECTION_V4')
+        final = dict(self._live_joints())
+        for side_goal in goals.values():
+            final.update(side_goal)
+        final['torso_left_carriage_joint'] = final['torso_right_carriage_joint'] = lift_to
+        via = dict(final)
+        try:
+            for side, sign in (('left', 1.0), ('right', -1.0)):
+                R, t = jog[side].hand(final)
+                final.update(zip(jog[side].names, jog[side].solve(
+                    final, R, t + np.array([0.0, sign * widen, 0.0]), max_jump=0.5)))
+                R, t = jog[side].hand(final)
+                via.update(zip(jog[side].names, jog[side].solve(
+                    final, R, t + np.array([0.0, 0.0, rise]), max_jump=0.8)))
+        except ValueError as exc:
+            return self._fail(f'no widened detection pose: {exc}')
+        detection = {side: {n: final[n] for n in jog[side].names} for side in ('left', 'right')}
+        if center.x >= float(self.get_parameter('together_min_range').value):
+            if not self._torso_and_arms_together(lift_to, via, detection, jog, rise):
+                return self._fail('carriages and arms did not reach DETECTION_V4 together')
         else:
-            self.get_logger().warn(
-                'No marker orientation; falling back to the depth PCA axis.')
-
-        # 4b. CENTER the cube: turn in place until it sits dead ahead. The
-        #     approach leaves it at y~-0.13, so the LEFT arm would press across
-        #     the torso centre where its straight line is chronically
-        #     IK-infeasible (partial fractions run after run), while the right
-        #     arm pressing comfortably outside was perfect every time. The
-        #     actual turn is measured by odometry and the percept (centre AND
-        #     squeeze axis) is rotated by it.
-        # Aim the cube at y ~ -0.075, NOT dead centre: the two arms' feasible
-        # straight-press regions don't overlap at one bearing (right was
-        # perfect with the cube at y=-0.13 but chronically line-infeasible at
-        # y=-0.02; left exactly the opposite) - the midpoint serves both.
-        bearing = math.atan2(center.y + 0.075, center.x)
-        if abs(bearing) > 0.05:
-            o0 = self._odom_yaw()
-            self.drive(0.0, 0.3 * (1.0 if bearing > 0 else -1.0),
-                       abs(bearing) / 0.3 + 0.8)
-            o1 = self._odom_yaw()
-            if o0 is not None and o1 is not None:
-                dyaw = math.atan2(math.sin(o1 - o0), math.cos(o1 - o0))
-            else:
-                dyaw = bearing
-                self.get_logger().warn('No odometry yaw; assuming commanded.')
-            c, s = math.cos(-dyaw), math.sin(-dyaw)
-            center = Point(x=c * center.x - s * center.y,
-                           y=s * center.x + c * center.y, z=center.z)
-            u = (c * u[0] - s * u[1], s * u[0] + c * u[1])
             self.get_logger().info(
-                f'Centering turn {math.degrees(dyaw):.1f} deg; cube now at '
-                f'({center.x:.2f},{center.y:.2f}), v=({u[0]:.2f},{u[1]:.2f}).')
+                f'STEP3b cube only {center.x:.2f} m ahead: carriages first, then MoveIt')
+            if not self._torso_to(lift_to, 'STEP3b carriages to the detection height'):
+                return self._fail('carriages did not reach the detection height')
+            if not self._plan_both(detection, 'STEP3c DETECTION_V4 (widened)'):
+                return self._fail('arms did not reach DETECTION_V4')
 
-        # 4c. SQUEEZE PLAN: the assignment cube (0.30 m, 1 kg) cannot be
-        #     enclosed by the 85 mm grippers, so BOTH arms press opposite side
-        #     faces with their CLOSED grippers (fingertip pads) and the
-        #     contact-verified attach joint carries it.
-        self.measure_tip_standoff()
-        grip = Point(x=center.x, y=center.y, z=face.z)  # marker sits mid-face
+        # 4. DRIVE IN until the cube is where the V4 postures expect it, then
+        #    centre by strafing (>= 11.8 cm off the table, 15 cm off the cube).
+        cube_range = float(self.get_parameter('detection_cube_range').value)
+        advance = center.x - cube_range
+        if advance > 0.02:
+            driven = self.drive_distance(advance, speed=0.08)
+            if driven is None:
+                return self._fail('drive-in did not track odometry')
+            center = Point(x=center.x - driven, y=center.y, z=center.z)
+            self.get_logger().info(f'STEP4 drove in {driven:.3f} m in DETECTION_V4')
+        if abs(center.y) > 0.01:
+            moved = self.strafe_distance(center.y)
+            if moved is not None:
+                center = Point(x=center.x, y=center.y - math.copysign(moved, center.y), z=center.z)
+
+        # 5a. The WRIST CAMERAS read the side markers. Their centres ARE the
+        #     targets for the tool tips (user, 16. 9.).
+        targets = {side: self.wrist_face(side, below_marker=0.0) for side in ('left', 'right')}
+        if any(t is None for t in targets.values()):
+            missing = [side for side, t in targets.items() if t is None]
+            return self._fail(f'wrist camera did not read the side marker: {missing}')
+        across = targets['left'] - targets['right']
+        span = float(np.linalg.norm(across[:2]))
+        normal = np.array([across[0], across[1], 0.0]) / span
+        yaw = math.atan2(-normal[0], normal[1])
+        middle = (targets['left'] + targets['right']) / 2.0
+        grip = Point(x=float(middle[0]), y=float(middle[1]), z=float(middle[2]) - 0.056)
+        u = (float(normal[0]), float(normal[1]))
         self.get_logger().info(
-            f'Squeeze plan: centre=({grip.x:.2f},{grip.y:.2f},{grip.z:.2f}) '
-            f'faces +/-0.15 along v=({u[0]:.2f},{u[1]:.2f}).')
-        # Let MoveIt SEE the world before any arm planning: floor, table and
-        # cube as collision objects (cube bottom = marker height - half cube).
-        self.publish_collision_scene(grip, table_top_z=grip.z - 0.15)
+            f'STEP5a WRIST CAMERAS: markers {span:.3f} m apart, cube centre '
+            f'({grip.x:.3f}, {grip.y:.3f}, {grip.z:.3f}), turned {math.degrees(yaw):+.1f} deg')
+        if not 0.24 <= span <= 0.36:
+            return self._fail(f'markers {span:.3f} m apart - not the 0.30 m cube')
+        self.publish_collision_scene(grip, table_top_z=grip.z - 0.15, yaw=yaw)
 
-        # 5. SQUEEZE: ready posture, CLOSE both grippers so the fingertips act
-        #    as pressing pads (contact sensors stay live on the tips), pre-pose
-        #    beside each face, then press horizontally with 5 mm interference.
-        self.move_arms_joint('ARM_HOME', 'STEP5 ready posture')
-        self.set_gripper(self.left_grip, 0.7, 'STEP5 close left pad')
-        self.set_gripper(self.right_grip, 0.7, 'STEP5 close right pad')
-        # Pre-squeeze goes through IK EXPLICITLY: solve IK for the PRESS pose
-        # first, then for the pre-pose SEEDED by that solution (same branch),
-        # and command the pre-pose as a JOINT goal. A plain pose-goal RRT
-        # parks the arm in an arbitrary IK branch, and from most of them the
-        # straight press line is infeasible (left arm: fractions 0.09-0.30
-        # across every roll, run after run).
-        pre_l, pre_r = self.squeeze_poses(grip, u, pre=0.10)
-        lp, rp = self.squeeze_poses(grip, u, pre=-0.030)
-        for side, group, ee, pre_pose, press_pose in (
-                ('left', 'left_arm', 'left_end_effector_link', pre_l, lp),
-                ('right', 'right_arm', 'right_end_effector_link', pre_r, rp)):
-            sol_press = self._ik(group, ee, press_pose)
-            sol_pre = (self._ik(group, ee, pre_pose, seed=sol_press,
-                                avoid_collisions=True)
-                       if sol_press is not None else None)
-            if sol_pre is not None:
-                self.move_arm_joints(group, sol_pre,
-                                     f'STEP5 pre-squeeze {side}')
-            else:
-                self.get_logger().warn(
-                    f'STEP5 pre-squeeze {side}: IK chain failed, falling back '
-                    'to a pose goal.')
-                self.plan_arm(group, ee, pre_pose, 'base_link',
-                              f'STEP5 pre-squeeze {side}', ori_tol=0.5)
-        # The press is a STRAIGHT Cartesian segment (~13 cm) for EACH arm, and
-        # both arms press SIMULTANEOUSLY (opposed forces cancel; a lone press
-        # bulldozed the cube 0.3 m across the table). The 3 cm interference is
-        # deliberate: the cube (not the goal pose) stops the pads, so contact
-        # is guaranteed for any tracking shortfall up to ~3.5 cm - with a 5 mm
-        # target the pads regularly hovered 1-3 cm off the face. The squeeze
-        # force stays bounded by the joint effort limits.
-        ok_l, ok_r = self.press_both_linear(lp, rp, pre_l, pre_r)
-        self._log_grasp_geometry(grip, 'at press pose')
+        # 5b. ARMS TO GRASP_V4. MoveIt first; its fingers end 1.4 cm off the
+        #     faces, so if the planner will not go that close, both arms move
+        #     straight through joint space - both postures are collision-free.
+        grasp_goals = self._posture_goals('GRASP_V4')
+        if not self._plan_both(grasp_goals, 'STEP5b GRASP_V4', retries=2):
+            self.get_logger().warn('STEP5b: MoveIt would not plan GRASP_V4; interpolating joints')
+            if not self._interpolate_both(grasp_goals, 'STEP5b GRASP_V4 (joint interpolation)'):
+                return self._fail('arms did not reach GRASP_V4')
+        for side in ('left', 'right'):
+            self._wait_settle(f'{side}_end_effector_link')
 
-        # 5b. REACH CHECK (independent of perception): both wrists must ACTUALLY
-        #     be at the press poses (TF readback vs commanded). One corrective
-        #     retry per arm: the tracking regularly leaves 4-10 cm of residual
-        #     (worst on the right arm), so re-command the goal shifted by the
-        #     measured error, then re-verify against the ORIGINAL goal.
-        def pad_contact(side, settle=1.5):
-            end = time.monotonic() + settle
-            while time.monotonic() < end:
-                if (self._tip_in_contact(f'{side}_left', max_age=1.0,
-                                         box_only=True)
-                        or self._tip_in_contact(f'{side}_right', max_age=1.0,
-                                                box_only=True)):
-                    return True
-                rclpy.spin_once(self, timeout_sec=0.05)
-            return False
-
-        def press_reached(side, group, ee, goal_pose, ok_flag):
-            if not ok_flag:
-                return False
-            # The JTC reports success at trajectory-end TIME while the sim arm
-            # still creeps toward the goal for seconds - settle before reading.
-            self._wait_settle(ee)
-            if self.verify_reached(ee, goal_pose, tol=0.05,
-                                   label=f'STEP5b reach {side}'):
-                return True
-            # A press is INTENDED contact: once the pad is on the face the
-            # wrist CANNOT converge to the interference pose - the residual is
-            # the press force, not a miss (seen live: tips exactly on the face
-            # plane, wrist 8 cm 'short'). Accept a live pad contact as reached;
-            # the two-sided physical gate below still has the final word.
-            if pad_contact(side):
+        # 5c. TOOL TIPS TO THE MARKER CENTRES: a straight line from GRASP_V4 with
+        #     its tool orientation kept (turned to the cube), both hands at once,
+        #     only `touch_depth` into the face - no squeeze.
+        live = self._live_joints()
+        reference = dict(live)
+        for side, joints in POSTURES['GRASP_V4'].items():
+            reference.update({f'{side}_joint_{j}': live.get(f'{side}_joint_{j}', v)
+                              for j, v in joints.items()})
+            reference[f'{side}_robotiq_85_left_knuckle_joint'] = GRIPPER_CLOSED
+        base = kin.place(live)['base_link'][1]
+        touch = float(self.get_parameter('touch_depth').value)
+        speed = float(self.get_parameter('grasp_approach_speed').value)
+        paths, tip_goals = {}, {}
+        try:
+            for side, sign in (('left', 1.0), ('right', -1.0)):
+                R, hand = pad_contact_pose(kin, hulls, reference, side,
+                                           base + targets[side], sign * normal, touch, yaw=yaw)
+                start = jog[side].hand(reference)[1]
+                steps = max(2, int(math.ceil(np.linalg.norm(hand - start) / 0.005)))
+                q, path = dict(reference), [{n: reference[n] for n in jog[side].names}]
+                for k in range(1, steps + 1):
+                    q.update(zip(jog[side].names,
+                                 jog[side].solve(q, R, start + k / steps * (hand - start), max_jump=0.3)))
+                    path.append({n: q[n] for n in jog[side].names})
+                paths[side] = path
+                tip_goals[side] = hand + 0.127 * R[:, 2] - base
+                moved = max(abs(math.degrees(q[n] - reference[n])) for n in jog[side].names)
                 self.get_logger().info(
-                    f'STEP5b {side}: wrist short of goal but the pad IS in '
-                    'contact - press OK.')
-                return True
-            # Re-target the ORIGINAL goal: move_linear replans from the current
-            # pose, so no error-mirroring is needed - and mirroring OVERSHOOTS
-            # (a 10 cm shortfall became a target 10 cm INSIDE the cube; the
-            # stiff position-controlled arm then tunnels straight through it,
-            # seen live in the GUI).
-            self.move_linear(group, ee, goal_pose, f'STEP5b re-press {side}')
-            self._wait_settle(ee)
-            if self.verify_reached(ee, goal_pose, tol=0.05,
-                                   label=f'STEP5b re-check {side}'):
-                return True
-            if pad_contact(side):
-                self.get_logger().info(
-                    f'STEP5b {side}: re-press ended in pad contact - press OK.')
-                return True
-            return False
+                    f'STEP5c {side}: tool tip goes {np.linalg.norm(hand - start) * 100:.1f} cm to the '
+                    f'marker centre; largest joint change from GRASP_V4 {moved:.1f} deg')
+        except ValueError as exc:
+            return self._fail(f'tool tips cannot reach the marker centres from GRASP_V4: {exc}')
+        if not self._straight_both(paths, 'STEP5c tool tips to the marker centres', 0.005 / speed):
+            return self._fail('straight approach to the marker centres failed')
+        self.measure_width('grasp pose')
 
-        reached_l = press_reached('left', 'left_arm',
-                                  'left_end_effector_link', lp, ok_l)
-        reached_r = press_reached('right', 'right_arm',
-                                  'right_end_effector_link', rp, ok_r)
-        if not (reached_l and reached_r):
-            return self._fail('arms did not reach the press poses (no fake grasp)')
-
-        # 5c. GEOMETRY check with the cube's dimensions: both grippers' tips at
-        #     the perceived cube volume (tips from TF, cube from the independent
-        #     depth+marker percept), plus one corrective nudge per failing arm
-        #     (MoveIt+controller tracking leaves up to ~4 cm residual error).
-        on_box_geom, tips = self.fingertips_on_box(
-            grip, u, 0.15, half_thick=0.15, half_h=0.16)
-        if not on_box_geom:
-            for side, goal_pose, group, ee in (
-                    ('left', lp, 'left_arm', 'left_end_effector_link'),
-                    ('right', rp, 'right_arm', 'right_end_effector_link')):
-                if tips.get(side):
-                    continue
-                # Straight-line nudge to the ORIGINAL press goal, WITHOUT
-                # collision checking (the goal deliberately touches the cube,
-                # which is now a planning-scene obstacle) and WITHOUT error-
-                # mirroring (that overshoots the target into the cube and the
-                # stiff arm tunnels through it).
-                self.move_linear(group, ee, goal_pose, f'STEP5c nudge {side}')
-                self._wait_settle(ee)
-            on_box_geom, tips = self.fingertips_on_box(
-                grip, u, 0.15, half_thick=0.15, half_h=0.16)
-
-        # 5d. PHYSICAL evidence: the press itself must register on the fingertip
-        #     contact sensors of BOTH sides. A flat-face press produces no
-        #     gripper stall (the fingers are already closed), so the sensors are
-        #     the physical signal; sample them over a short settle window.
+        # 5d. PROOF (R-17, D-05): BOTH hands in contact with the box itself, and
+        #     BOTH tool tips where they were sent. Anything less is an abort.
         deadline = time.monotonic() + 3.0
         contact_l = contact_r = False
         while time.monotonic() < deadline and not (contact_l and contact_r):
-            contact_l = (contact_l
-                         or self._tip_in_contact('left_left', box_only=True)
-                         or self._tip_in_contact('left_right', box_only=True))
-            contact_r = (contact_r
-                         or self._tip_in_contact('right_left', box_only=True)
-                         or self._tip_in_contact('right_right', box_only=True))
+            contact_l = contact_l or self.tips_on_box('left', max_age=1.0) >= 1
+            contact_r = contact_r or self.tips_on_box('right', max_age=1.0) >= 1
             rclpy.spin_once(self, timeout_sec=0.05)
-        self._log_grasp_geometry(grip, 'after press')
-
-        # FUSE the evidence honestly. The PHYSICAL signal is primary: BOTH pads
-        # report a fresh contact whose other collider is literally `aruco_box`
-        # (collision names from the message) - the historical failure mode
-        # (grippers closing on air 0.5 m away + fake weld) cannot produce that.
-        # Placement is the sanity layer: the strict fingertips-in-volume check
-        # OR both wrists within 12 cm of their press goals (guards against a
-        # pad merely grazing the cube while the arm is wildly displaced).
-        def ee_near(ee, goal_pose, tol=0.12):
-            a = self._tf_point('base_link', ee)
-            return a is not None and math.sqrt(
-                (a[0] - goal_pose.position.x) ** 2
-                + (a[1] - goal_pose.position.y) ** 2
-                + (a[2] - goal_pose.position.z) ** 2) < tol
-
-        near_ok = (ee_near('left_end_effector_link', lp)
-                   and ee_near('right_end_effector_link', rp))
-        placement_ok = on_box_geom or near_ok
-        physical_ok = contact_l and contact_r
+        placed = {}
+        for side in ('left', 'right'):
+            at = self._tf_point('base_link', f'{side}_tool_tip')
+            error = None if at is None else float(np.linalg.norm(at - tip_goals[side]))
+            placed[side] = error is not None and error <= 0.01
+            self.get_logger().info(
+                f'STEP5d {side} tool tip ' + ('not in TF' if error is None
+                                              else f'{error * 1000:.1f} mm from its target'))
         self.get_logger().info(
-            f'Squeeze evidence: placement(geom={on_box_geom}, '
-            f'near={near_ok})={placement_ok} '
-            f'physical(contact L={contact_l}, R={contact_r})={physical_ok}.')
-        if not (placement_ok and physical_ok):
-            # Retreat both arms off the faces before aborting.
-            self.plan_arm('left_arm', 'left_end_effector_link', pre_l,
-                          'base_link', 'release left', ori_tol=0.5)
-            self.plan_arm('right_arm', 'right_end_effector_link', pre_r,
-                          'base_link', 'release right', ori_tol=0.5)
-            return self._fail(
-                'squeeze not confirmed (need placement AND contact on BOTH '
-                'pads; no fake lift)')
+            f'Grasp evidence: contact L={contact_l} R={contact_r}, '
+            f'tool tips on target L={placed["left"]} R={placed["right"]}')
+        if not (contact_l and contact_r and placed['left'] and placed['right']):
+            self._interpolate_both(grasp_goals, 'release back to GRASP_V4', seconds=3.0)
+            return self._fail('grasp not confirmed (need contact AND tool tips on target on '
+                              'BOTH hands; no fake lift)')
 
         # 6. ATTACH (contact-verified), then LIFT. DART cannot hold the cube by
         #    pad friction alone, so the rigid attach - engaged only after the
@@ -2144,61 +2521,94 @@ class MainTask(BaseDriver, Node):
         # Right pad retreats along -v FROM ITS ACTUAL POSE (post-press wrist
         # orientation differs from the ideal one - a retreat to the ideal
         # pre-pose is IK-infeasible from here).
+        # The right pad EASES OFF, it does not leave. It used to retreat 100 mm,
+        # so the cube visibly ended up held by one hand - the assignment asks for
+        # both. Backing off only the interference relieves the fight against the
+        # now-rigid cube (two rigid paths explode the solver, P-17) while the pad
+        # stays on the face. A parameter, because the smallest back-off that is
+        # still stable is a measurement, not a guess.
+        # With a touch instead of a squeeze there is only `touch_depth` to give
+        # back: the right pad then rests on the face instead of pressing it.
+        backoff = float(self.get_parameter('touch_depth').value)
         if not self.retreat_linear('right_arm', 'right_end_effector_link',
-                                   u, -0.10, 'STEP6 release right'):
-            away_r = self.squeeze_poses(grip, u, pre=0.10)[1]
-            self.plan_arm('right_arm', 'right_end_effector_link', away_r,
-                          'base_link', 'STEP6 release right (RRT)', ori_tol=0.6)
-        lift_l = Pose()
-        lift_l.position = Point(x=lp.position.x, y=lp.position.y,
-                                z=lp.position.z + 0.15)
-        lift_l.orientation = lp.orientation
-        self.move_linear('left_arm', 'left_end_effector_link', lift_l,
-                         'STEP6 lift left')
+                                   u, -backoff, 'STEP6 ease right pad off'):
+            self.get_logger().warn(
+                'STEP6: right pad could not ease off; leaving it where it is')
+        self.get_logger().info(
+            f'STEP6: right pad eased off {backoff * 1000:.0f} mm, stays on the face')
+        # LIFT WITH THE CARRIAGES, not with the arm. D-09 moved the lift onto
+        # the arm because the carriages would not rise under load - that turned
+        # out to be wrong: they were spawned exactly on their lower hard stop,
+        # where Ignition freezes the joint in both directions. From 0.06 m they
+        # carry the arms to 0.35 m with 0.0000 mm of error (P-13 #10-11), so the
+        # lift goes back where R-03 wants it. The arm holds its pressed pose and
+        # the whole assembly rises with the rail.
+        # Not onto the rail's upper stop (0.65 m): a carriage resting exactly on
+        # a stop cannot be moved off it again (P-13), and from 0.50 m a full
+        # 0.15 m lift would end there.
+        pick_height = self._joint.get('torso_left_carriage_joint', (0.0, 0.0))[0]
+        lift_height = min(pick_height + 0.15, 0.64)
+        if not self.move_torso(lift_height, 'STEP6 lift on the carriages', secs=8):
+            return self._fail('carriages did not accept the lift command')
+        settle = time.monotonic() + 3.0
+        while time.monotonic() < settle:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        reached = [self._joint.get(n, (float('nan'), 0.0))[0]
+                   for n in ('torso_left_carriage_joint', 'torso_right_carriage_joint')]
+        self.get_logger().info(
+            f'CARRIAGE LIFT MEASURED left={reached[0]:.4f} right={reached[1]:.4f} m '
+            f'(commanded {lift_height:.4f})')
         self._log_grasp_geometry(grip, 'after lift')
+        carry_width = self.measure_width('carrying the cube')
+        door = float(self.get_parameter('door_width').value)
+        if carry_width is not None and carry_width >= door:
+            self.get_logger().warn(
+                f'CARRY WIDTH {carry_width:.3f} m does NOT clear the {door:.2f} m '
+                'doorway - this grasp can pick the cube up but cannot deliver it')
         self.get_logger().info('PICK+LIFT done (cube held by verified attach).')
 
-        # 7. TRANSPORT PROBE (Phase 1, gated by the probe_transport param):
-        #    open the pads so ONLY the rigid joint holds the cube (no gripper
-        #    contact left to fight the constraint - the leading explosion
-        #    hypothesis), then drive straight and turn in place while the cube
-        #    hangs on the left wrist. The cube's world pose is watched from
-        #    outside (gz) - if the solver explodes, it flies off visibly.
-        if self.get_parameter('probe_transport').value:
-            self.set_gripper(self.left_grip, 0.0, 'PROBE open left pad')
-            self.set_gripper(self.right_grip, 0.0, 'PROBE open right pad')
-            self.get_logger().info('TRANSPORT PROBE: straight 0.4 m.')
-            self.drive(0.10, 0.0, 4.0 + 0.8)
-            self.get_logger().info('TRANSPORT PROBE: settling 3 s.')
-            end = time.monotonic() + 3.0
-            while time.monotonic() < end:
-                rclpy.spin_once(self, timeout_sec=0.05)
-            self.get_logger().info('TRANSPORT PROBE: turn ~60 deg in place.')
-            self.drive(0.0, 0.3, 3.5 + 0.8)
-            self.get_logger().info(
-                'TRANSPORT PROBE done - check the cube pose externally.')
-            return
+        # 6b. PULL THE CUBE IN towards the robot before leaving the table (user).
+        self._pull_cube_in(grip, span / 2.0)
 
-        # 8. PLACE with CONTACT: lower with the LEFT arm to a target 2 cm
-        #    BELOW the pick height - the TABLE (not the goal pose) stops the
-        #    cube, so at detach the drop height is ~zero (the same interference
-        #    trick as the press; releasing a few cm high tipped the cube over).
-        place_l = Pose()
-        place_l.position = Point(x=lp.position.x, y=lp.position.y,
-                                 z=lp.position.z - 0.02)
-        place_l.orientation = lp.orientation
-        for attempt in ('STEP8 lower left', 'STEP8 re-lower left',
-                        'STEP8 re-lower left (2)'):
-            self.move_linear('left_arm', 'left_end_effector_link', place_l,
-                             attempt)
-            self._wait_settle('left_end_effector_link')
-            if self.verify_reached('left_end_effector_link', lp, tol=0.04,
-                                   label=f'{attempt} check'):
+        # 7. BACK AWAY FROM THE TABLE with the cube held, and stop (user, 16. 9.).
+        #    The arms keep the grasp; 0.83 m wide with the cube between the hands.
+        back = float(self.get_parameter('back_off_after_lift').value)
+        moved = self.drive_distance(-back, speed=0.08)
+        if moved is None:
+            return self._fail('could not back away from the table with the cube')
+        self.get_logger().info(f'STEP7 backed away {moved:.3f} m with the cube held')
+        # The table is behind us now, but MoveIt's copy rides along with the base
+        # (no world frame): drop it before asking about the lowered arms.
+        drop = PlanningScene()
+        drop.is_diff = True
+        for object_id in ['pick_table'] + [f'pick_table_leg_{i}' for i in range(4)]:
+            co = CollisionObject()
+            co.header.frame_id = 'base_link'
+            co.id = object_id
+            co.operation = CollisionObject.REMOVE
+            drop.world.collision_objects.append(co)
+        self.scene_pub.publish(drop)
+        settle = time.monotonic() + 0.5
+        while time.monotonic() < settle:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        # Then down with the cube in the hands (user: to 100 mm), as far as the
+        # arms stay clear of the torso column.
+        wanted = float(self.get_parameter('final_carriage_height').value)
+        live = self._live_joints()
+        final_height = None
+        for height in (wanted, DRIVE_CARRIAGE):
+            state = dict(live)
+            state['torso_left_carriage_joint'] = state['torso_right_carriage_joint'] = height
+            if self._state_valid(state, f'STEP7 check at carriages {height:.2f}') is not False:
+                final_height = height
                 break
-        self._attach_box(False)
-        self.retreat_linear('left_arm', 'left_end_effector_link',
-                            u, 0.10, 'STEP8 retreat left')
-        self.get_logger().info('TASK COMPLETE: cube placed on the table.')
+        if final_height is None:
+            self.get_logger().warn('STEP7 the held arms would touch the torso lower down; '
+                                   'the carriages stay where they are')
+        elif not self._torso_to(final_height, 'STEP7 carriages down with the cube'):
+            return self._fail('carriages did not come down with the cube')
+        self.measure_width('carrying the cube, away from the table')
+        self.get_logger().info('TASK COMPLETE: cube lifted and carried away from the table.')
 
     def _fail(self, where):
         self.get_logger().error(f'Task aborted during: {where}')

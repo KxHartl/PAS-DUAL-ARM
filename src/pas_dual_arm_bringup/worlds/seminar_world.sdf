@@ -39,6 +39,16 @@
       name="ignition::gazebo::systems::Contact">
     </plugin>
 
+    <!-- Force-torque system: drives the wrist <sensor type="force_torque">
+         sensors (robot.urdf.xacro). These exist ONLY to judge the joint-torque
+         force estimate offline. No control code may subscribe to them, exactly
+         as for the fingertip contact sensors: the real Gen3 has joint torque
+         sensors, not a wrist force-torque sensor. -->
+    <plugin
+      filename="libignition-gazebo-forcetorque-system.so"
+      name="ignition::gazebo::systems::ForceTorque">
+    </plugin>
+
     <!-- Light -->
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>

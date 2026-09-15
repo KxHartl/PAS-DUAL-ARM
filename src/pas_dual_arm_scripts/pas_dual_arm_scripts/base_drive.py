@@ -67,13 +67,14 @@ class BaseDriver:
                           1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
     # ---------------------------------------------------------------- commanding
-    def _send_vel(self, lin, ang):
+    def _send_vel(self, lin, ang, lat=0.0):
         tw = Twist()
         tw.linear.x = float(lin)
+        tw.linear.y = float(lat)      # mecanum: sideways without turning
         tw.angular.z = float(ang)
         self.cmd_vel.publish(tw)
 
-    def drive(self, lin, ang, secs, rate=20.0):
+    def drive(self, lin, ang, secs, rate=20.0, lat=0.0):
         """Drive the base for a duration with a trapezoidal velocity profile
         (ramp up, cruise, ramp down). A constant-velocity step jerks the base and,
         when the box is rigidly attached to the arm, that impulse makes the attach
@@ -97,7 +98,7 @@ class BaseDriver:
                 s = max(0.0, (n - i) / ramp)
             else:
                 s = 1.0
-            self._send_vel(lin * s, ang * s)
+            self._send_vel(lin * s, ang * s, lat * s)
             target_ns = t0_ns + int((i + 1) * period * 1e9)
             while (self.get_clock().now().nanoseconds < target_ns
                    and time.monotonic() < wall_deadline):
@@ -137,6 +138,43 @@ class BaseDriver:
             self.drive(math.copysign(speed, metres), 0.0,
                        max(0.5, min(2.0, remaining / speed + 0.8)))
         self.get_logger().error('straight drive failed to reach requested distance')
+        return None
+
+    def strafe_distance(self, metres, speed=0.08):
+        """Shift the base SIDEWAYS by an odometry-measured distance.
+
+        The base is mecanum, so lining the cube up between the two arms does not
+        need a turn: turning changes the approach heading the whole grasp
+        geometry was measured in, and it is what made the robot visibly swing
+        around before a pick. Strafing keeps the heading and just slides across.
+        Positive is to the robot's left (+Y in base_footprint).
+        """
+        start = self._odom_xy()
+        start_yaw = self._odom_yaw()
+        if start is None or start_yaw is None:
+            return None
+        previous = 0.0
+        for attempt in range(24):
+            here = self._odom_xy()
+            yaw = self._odom_yaw()
+            if here is None or yaw is None:
+                return None
+            moved = math.hypot(here[0] - start[0], here[1] - start[1])
+            yaw_error = math.atan2(math.sin(yaw - start_yaw),
+                                   math.cos(yaw - start_yaw))
+            if abs(yaw_error) > 0.08:
+                self.get_logger().error(f'strafe yaw drifted {yaw_error:.3f} rad')
+                return None
+            if moved >= abs(metres) - 0.01:
+                return moved
+            if attempt > 0 and moved < previous + 0.003:
+                self.get_logger().error('strafe made no odometry progress')
+                return None
+            previous = moved
+            remaining = abs(metres) - moved
+            self.drive(0.0, 0.0, max(0.5, min(2.0, remaining / speed + 0.8)),
+                       lat=math.copysign(speed, metres))
+        self.get_logger().error('strafe failed to reach requested distance')
         return None
 
     def turn_angle(self, radians, rate=0.25):

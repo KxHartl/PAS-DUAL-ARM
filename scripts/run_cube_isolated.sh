@@ -18,7 +18,7 @@ mkdir -p "$ROS_HOME"
 # them: RViz logs "Detected jump back in time" hundreds of times a second,
 # resets on every one, and eventually dies on "Cannot create GL vertex buffer".
 # The cause is invisible from the symptom, so catch it here instead.
-if [[ "$*" == *sim.launch.py* ]]; then
+if [[ "$*" == *sim.launch.py* || "$*" == *grasp_stage.launch.py* ]]; then
   for pid_dir in /proc/[0-9]*; do
     pid=${pid_dir#/proc/}
     [[ -r "$pid_dir/environ" ]] || continue

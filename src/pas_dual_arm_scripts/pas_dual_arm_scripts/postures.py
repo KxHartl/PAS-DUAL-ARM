@@ -44,15 +44,44 @@ _HOME = {1: 0.0, 2: 0.26, 3: 3.14, 4: -2.27, 5: 0.0, 6: 0.96, 7: 1.57}
 _CARRY_V2_LEFT = {1: 0.0, 2: 1.571, 3: 2.356, 4: -1.571, 5: -0.785, 6: 1.571, 7: 1.571}
 _CARRY_V2_RIGHT = {1: 0.0, 2: 1.571, 3: 0.785, 4: 1.571, 5: 0.785, 6: -1.571, 7: -1.571}
 
+# The user's first grasp reference (15. 9.). Kept for the record only: MoveIt
+# sees it as a self-collision (upper arm 1 mm into the torso box, run V1).
+_GRASP_V3_LEFT = {1: 0.243, 2: 2.088, 3: 0.909, 4: -1.314, 5: -0.946, 6: 1.824, 7: 2.367}
+_GRASP_V3_RIGHT = {1: -0.320, 2: 2.076, 3: -0.897, 4: -1.361, 5: 0.974, 6: 1.874, 7: 0.740}
+
+# The user's three working postures (joint_gui, 16. 9., notes/08_poze.md), all
+# with the grippers closed (0.791) and all free of self-collision in MoveIt:
+#   DRIVE_V4      carriages 0.20 - arms tucked, 0.821 m wide, reach 0.27 m ahead
+#   DETECTION_V4  carriages 0.40 - wrist cameras level, 0.30 m from the markers
+#                 of a cube 0.63 m ahead
+#   GRASP_V4      carriages 0.40 - approach 55 deg down, pads 1.4 cm off the faces
+_DRIVE_V4_LEFT = {1: 2.182, 2: 1.244, 3: 1.396, 4: -2.339, 5: 0.589, 6: -0.755, 7: 2.635}
+_DRIVE_V4_RIGHT = {1: -2.255, 2: 1.203, 3: -1.278, 4: -2.395, 5: -0.504, 6: -0.769, 7: 0.536}
+_DETECTION_V4_LEFT = {1: -0.191, 2: 1.317, 3: 2.008, 4: -0.667, 5: 4.763, 6: 1.964, 7: 2.463}
+_DETECTION_V4_RIGHT = {1: 0.151, 2: 1.273, 3: -1.996, 4: -0.723, 5: 1.535, 6: 1.983, 7: 0.681}
+_GRASP_V4_LEFT = {1: 0.574, 2: 1.429, 3: 1.549, 4: -1.045, 5: 4.464, 6: 1.544, 7: 2.652}
+_GRASP_V4_RIGHT = {1: -0.634, 2: 1.391, 3: -1.525, 4: -1.104, 5: 1.847, 6: 1.574, 7: 0.498}
+
 POSTURES = {
     'ARM_ZERO': {'left': _ZERO, 'right': _ZERO},
     'ARM_HOME': {'left': _HOME, 'right': _HOME},
     'ARM_CARRY_V2': {'left': _CARRY_V2_LEFT, 'right': _CARRY_V2_RIGHT},
+    'GRASP_V3': {'left': _GRASP_V3_LEFT, 'right': _GRASP_V3_RIGHT},
+    'DRIVE_V4': {'left': _DRIVE_V4_LEFT, 'right': _DRIVE_V4_RIGHT},
+    'DETECTION_V4': {'left': _DETECTION_V4_LEFT, 'right': _DETECTION_V4_RIGHT},
+    'GRASP_V4': {'left': _GRASP_V4_LEFT, 'right': _GRASP_V4_RIGHT},
 }
 
 # The posture to hold whenever the base drives: mapping tours, doorway transits,
 # any travel. Named separately so call sites read as intent, not as a pose name.
-ARM_DRIVE = 'ARM_CARRY_V2'
+# DRIVE_V4 since 16. 9. (user); ARM_CARRY_V2 before.
+ARM_DRIVE = 'DRIVE_V4'
+# Carriage heights that go with the V4 postures (saved with them).
+DRIVE_CARRIAGE = 0.20
+DETECTION_CARRIAGE = 0.40
+GRASP_CARRIAGE = 0.40
+# Closed grippers, as the V4 postures were saved.
+GRIPPER_CLOSED = 0.791
 
 
 def posture_names():

@@ -5,7 +5,7 @@ status: otvoreno
 requirements: ["[[R-09_moveit_arm_control]]", "[[R-14_slam_mapping]]", "[[R-17_dual_arm_lift]]", "[[R-06_realistic_parameters]]"]
 solutions: ["[[S-03_ros2_control_setup]]", "[[S-06_navigation]]", "[[S-08_grasp_squeeze_attach]]"]
 decisions: []
-updated: 2026-09-13
+updated: 2026-09-15
 ---
 # P-37: Ruke ne drže naređenu pozu — MoveIt javi „stiglo", a ruka visi
 
@@ -48,6 +48,8 @@ Te kartice treba ponovno vrednovati kad se hvat bude radio.
 | 4 | 13. 9. | čista headless simulacija, `ARM_CARRY_V2`, zatim autonomna tura; stvarna širina izmjerena `mesh_extent.py` nakon gibanja | **1.109 m**, najširi lijevi vrh prsta; TF vrha na y=0.537 m; vrata su 1.0 m | gain 20 **nije dovoljan** tijekom gibanja; poza je fizički neprolazna i status ostaje otvoren |
 | 5 | 13. 9. | provjera stvarnog ROS parametra `/gz_ros2_control/position_proportional_gain` te Humble izvornog koda; pokusi s YAML-om i SDF child tagom | parametar ostaje **0.1**; plugin ignorira `command_interface` gain i SDF child; uveden prekid vožnje na odstupanju te otpuštanje kontrolera ruku tijekom vožnje, ali stabilnost još nije potvrđena | raniji zaključak da je gain 20 radio bio je pogrešan; novi način držanja treba izmjeriti u vožnji |
 | 6 | 13. 9. | korisnički GUI run `mapping_tour` (run 41) | MoveIt/JTC `SUCCEEDED`; pet sekundi nakon otpuštanja kontrolera `left_joint_6` +0.614 rad od cilja; kontroleri vraćeni; baza nije dobila naredbu ture | sigurnosni prekid radi; ciljna poza nije fizički održana |
+| 7 | 15. 9., radno stablo | `effort` sučelje s PID-om u JTC-u umjesto pozicijskog (`force_grasp:=true`), pojačanja iz izmjerene inercije ([[P-41_effort_pid_arm_actuator_profile]]) | obje ruke stigle na pred-hvat u **8 mm**, staging javio `Goal reached` za obje; u mirovanju svi zglobovi **točno** na naredbi, brzina 0.0000 | Uzrok iz ove kartice (plugin pretvara poziciju u brzinu uz gain 0.1) **zaobiđen** dok je `force_grasp` profil aktivan. Za zadani `position` profil kartica ostaje otvorena |
+| 8 | 15. 9., radno stablo | **Ispravak pokušaja 5.** Plugin **ne** ignorira gain — `libgz_hardware_plugins.so` ga podržava i ispisuje `The position_proportional_gain has been set to:` **jednom po `ros2_control` komponenti**. Provjereno: (a) `<param>` na zglobu, (b) yaml pod ključem `gz_ros2_control:`, (c) yaml pod wildcardom `/**:`, (d) `ros2 param set` u letu | (a), (b), (c) → plugin i dalje javlja **0.1** za svih sedam komponenti; `<parameters>` datoteka ne stiže do tog čvora. (d) parametar **primljen** (`ros2 param get` vraća 20.0), ali vodilice se ne pomaknu: `probe_torso --height 0.20` daje `before 0.0500 / after 0.0500, error 0.15 m` | Gain je parametar **čvora plugina**, ne zgloba, i čita se **jednom pri inicijalizaciji**. Nijedna podržana SDF oznaka (`parameters`, `namespace`, `remapping`, `controller_manager_name`, `robot_param`, `robot_param_node`) ne omogućuje da se do njega dođe. Pozicijsko sučelje je time iscrpljeno za teret |
 
 ## Trenutno rješenje
 Ranije ubrizgavanje `position_proportional_gain = 20.0` u `command_interface`

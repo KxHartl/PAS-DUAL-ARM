@@ -89,7 +89,8 @@ def joints(node):
             key = f'{side}_joint_{j}'
             if key in got:
                 out[side][j] = got[key]
-    extra = {k: v for k, v in got.items() if 'carriage' in k or 'pan_tilt' in k}
+    extra = {k: v for k, v in got.items()
+             if 'carriage' in k or 'pan_tilt' in k or k.endswith('robotiq_85_left_knuckle_joint')}
     return out, extra
 
 
@@ -150,6 +151,13 @@ def main():
              f"```python\n"
              f"# lijeva ruka\n{args.name}_LEFT = {fmt_dict(q['left'])}\n"
              f"# desna ruka\n{args.name}_RIGHT = {fmt_dict(q['right'])}\n"
+             # The rest of the posture: carriages and gripper opening. They
+             # used to be printed and dropped, so a saved grasp did not say
+             # how high or how closed it was.
+             + ''.join(f"{args.name}_{key} = {value!r}\n" for key, value in (
+                 ('TORSO', {k: round(v, 4) for k, v in sorted(extra.items()) if 'carriage' in k}),
+                 ('GRIPPER', {k: round(v, 4) for k, v in sorted(extra.items()) if 'knuckle' in k}),
+             ) if value) +
              f"```\n"
              f"Širina {dims['width']:.2f} m → vrata {door:.2f} m; "
              f"doseg naprijed {dims['front']:.2f} m; "
