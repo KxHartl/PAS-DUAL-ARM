@@ -142,19 +142,23 @@ Slijed:
 | 3   | hvataljke se otvore, obje ruke **paralelno** na pred-poze (20 cm od ploha) |
 | 4   | svaka ruka očita **svoj** marker na plohi koju će pritisnuti               |
 | 5   | obje ruke, **jednim potezom**, na 2 cm od ploha i na **istu visinu**       |
-| 6   | **desna** ruka sama, polako, dok oba njena jastučića ne jave kontakt       |
-| 7   | **lijeva** ruka isto, pritišće kocku o desnu                               |
-| 8   | vodilice dignu 10 cm, pa se izmjeri koliko su se stvarno pomaknule         |
+| 6   | obje ruke **zajedno** stežu dok **sva četiri** jastučića ne jave kocku, pa **stanu** |
+| 7   | vodilice dignu 10 cm, pa se izmjeri koliko su se stvarno pomaknule         |
 
-> [!important] Zašto jedna po jedna, a ne obje odjednom
-> Simultano zatvaranje je izgledalo simetrično, ali nije bilo: 15. 9. su zapešća na pred-pozi
-> bila **2 cm razmaknuta po z** (`0.812` i `0.832`), a `verify_reached` s tolerancijom 5 cm to
-> pusti. Dva jastučića na različitim visinama su spreg — kocka se prevrnula. Zato korak 5 obje
-> ruke prvo **poravna po visini**, a koraci 6 i 7 drže naredenu visinu fiksnom dok se prilazi
-> vodoravno.
+> [!important] Visina se poravnava prije dodira, i poslije se ne dira
+> Korak 5 obje ruke dovede na **istu visinu** dok još ništa ne dodiruju. U koraku 6 svaka ruka
+> zadrži visinu na kojoj **stvarno jest** i miče se čisto vodoravno.
+>
+> Ispravljanje visine **dok se pritišće** je ono što je 15. 9. nakosilo kocku: zapešće se pomakne
+> po z uz plohu koju već dodiruje, kocka se nagne, desna popusti, lijeva učini isto, i obje je
+> onda drže ukoso.
 
-Korak po korak, 4 mm, 1.5 s, najviše 2.5 cm stezanja preko zadane poze — kocka (ne poza)
-zaustavlja jastučić. Ako sva četiri jastučića ne jave kontakt, run **padne**.
+> [!important] Četiri jastučića zaustavljaju ruke
+> Provjera ide **prije svakog koraka**. Kad sva četiri jave svjež kontakt s `aruco_box`, rukama
+> se ne šalje više nijedna naredba.
+
+Korak 4 mm, 1.5 s, najviše 2.5 cm stezanja preko zadane poze — kocka (ne poza) zaustavlja
+jastučić. Ako sva četiri ne jave kontakt, run **padne**.
 
 ---
 
