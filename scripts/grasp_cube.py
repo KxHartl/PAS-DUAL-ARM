@@ -7,14 +7,13 @@ Stages, in order:
   3. open both hands and take them to the pre-grasp poses, together
   4. read the marker on each pressed face with that hand's own camera
   5. bring both hands to a standoff off the faces, LEVEL with each other
-  6. right hand onto its face, alone and slowly, until both its pads report
-  7. left hand onto its face the same way
-  8. lift with the torso carriages
+  6. close both hands together until all four pads report the cube, then stop
+  7. lift with the torso carriages
 
-Steps 6 and 7 are sequential on purpose. Closing both hands at once looked
-symmetric but was not: the wrists sat 2 cm apart in z, and a pair of pads at
-different heights is a couple, which rolled the cube over. One hand at a time,
-both at the same height, presses without turning it.
+The hands are levelled at the standoff and never asked to change height again.
+Correcting height while pressing is what skewed the cube: a wrist shifting in z
+against a face it is already touching tilts it, and both hands then hold it
+crooked. Four pads stops the arms outright.
 """
 
 import argparse
@@ -157,60 +156,77 @@ def backed_off(pose, centre, distance):
     return out
 
 
-def close_one_hand(node, side, goal, label):
-    """Walk ONE hand onto its face until both of its pads report the box.
+def squeeze_together(node, contacts):
+    """Close both hands on the cube at once, and STOP the moment all four pads
+    report it.
 
-    The step is horizontal and the commanded height is held at the goal's, so
-    the hand cannot drift in z on the way in - two pads at different heights
-    make a couple, and that is what rolled the cube over.
+    Both hands always move, by the same amount, so the cube is squeezed rather
+    than pushed. Each step is purely horizontal and keeps the hand at the
+    height it is already at: the hands were levelled at the standoff, and
+    correcting height WHILE pressing is what skewed the cube - the right wrist
+    shifted in z against a face it was already touching, the cube tilted, and
+    both hands ended up holding it crooked.
+
+    Four pads is the stop condition, checked before every step. Nothing is
+    commanded after it is met.
     """
-    ee = f'{side}_end_effector_link'
-    group = f'{side}_arm'
-    node._wait_settle(ee)
-    here = node._ee_pose(ee)
-    if here is None:
-        raise RuntimeError(f'no TF for {ee}')
-    dx = goal.position.x - here.position.x
-    dy = goal.position.y - here.position.y
-    span = math.hypot(dx, dy)
-    if span < 1e-4:
-        raise RuntimeError(f'{side} is already at its contact pose')
-    heading = (dx / span, dy / span)
-    budget = span + CLOSE_OVERSHOOT
-    node.get_logger().info(
-        f'{label}: {span:.3f} m to the face, up to '
-        f'{CLOSE_OVERSHOOT * 100:.1f} cm of squeeze, height held at '
-        f'{goal.position.z:.3f} m')
-
-    travelled = 0.0
-    for step in range(1, CLOSE_MAX_STEPS + 1):
-        pads = node.tips_on_box(side)
-        if pads >= 2:
-            node.get_logger().info(f'{label}: both pads on the box')
-            return True
-        if travelled >= budget:
-            break
+    headings = {}
+    budgets = {}
+    for side, goal in contacts.items():
+        ee = f'{side}_end_effector_link'
+        node._wait_settle(ee)
         here = node._ee_pose(ee)
         if here is None:
             raise RuntimeError(f'no TF for {ee}')
-        size = min(CLOSE_STEP, budget - travelled)
-        pose = Pose()
-        pose.orientation = goal.orientation
-        pose.position = Point(x=here.position.x + heading[0] * size,
-                              y=here.position.y + heading[1] * size,
-                              z=goal.position.z)
+        dx = goal.position.x - here.position.x
+        dy = goal.position.y - here.position.y
+        span = math.hypot(dx, dy)
+        if span < 1e-4:
+            raise RuntimeError(f'{side} is already at its contact pose')
+        headings[side] = (dx / span, dy / span)
+        budgets[side] = span + CLOSE_OVERSHOOT
         node.get_logger().info(
-            f'{label} step {step}: {size * 1000:.0f} mm, pads {pads}/2')
+            f'{side}: {span * 1000:.0f} mm to the face, then up to '
+            f'{CLOSE_OVERSHOOT * 1000:.0f} mm of squeeze')
+
+    travelled = 0.0
+    for step in range(1, CLOSE_MAX_STEPS + 1):
+        pads = {side: node.tips_on_box(side) for side in contacts}
+        total = sum(pads.values())
+        node.get_logger().info(
+            f'squeeze step {step}: pads on the box - left {pads["left"]}/2, '
+            f'right {pads["right"]}/2')
+        if total >= 4:
+            node.get_logger().info(
+                'all four pads are on the cube - stopping the arms here')
+            return True
+        size = min([CLOSE_STEP] + [b - travelled for b in budgets.values()])
+        if size < 1e-4:
+            break
+
+        moving = {}
+        for side, goal in contacts.items():
+            ee = f'{side}_end_effector_link'
+            here = node._ee_pose(ee)
+            if here is None:
+                raise RuntimeError(f'no TF for {ee}')
+            pose = Pose()
+            pose.orientation = goal.orientation
+            # Height is whatever this hand already holds. Levelling belongs to
+            # the standoff, before anything is being pressed.
+            pose.position = Point(
+                x=here.position.x + headings[side][0] * size,
+                y=here.position.y + headings[side][1] * size,
+                z=here.position.z)
+            moving[side] = (f'{side}_arm', ee, pose)
         results = node.approach_both_linear(
-            {side: (group, ee, pose)}, f'{label} step {step}',
-            min_duration=CLOSE_SECONDS)
-        if results is None or not results.get(side):
-            raise RuntimeError(f'{label}: step {step} did not execute')
+            moving, f'squeeze step {step}', min_duration=CLOSE_SECONDS)
+        if results is None or not all(results.values()):
+            raise RuntimeError(f'squeeze step {step} did not execute')
         travelled += size
 
-    pads = node.tips_on_box(side)
-    node.get_logger().error(f'{label}: only {pads}/2 pads on the box')
-    return False
+    pads = {side: node.tips_on_box(side) for side in contacts}
+    return sum(pads.values()) >= 4
 
 
 def main():
@@ -354,12 +370,12 @@ def main():
                     f'{side} standoff height {here.position.z:.3f} m '
                     f'(commanded {pose.position.z:.3f})')
 
-        # 6-7. One hand at a time. The right hand settles first and holds; the
-        # left then presses the cube against it.
-        for side in ('right', 'left'):
-            if not close_one_hand(node, side, contacts[side],
-                                  f'{side} onto the face'):
-                raise RuntimeError(f'{side} hand never made contact')
+        # 6. Both hands close together and stop on four pads.
+        if not squeeze_together(node, contacts):
+            pads = {side: node.tips_on_box(side) for side in ('left', 'right')}
+            raise RuntimeError(
+                f'only {pads["left"] + pads["right"]} of 4 pads are on the box '
+                f'(left {pads["left"]}/2, right {pads["right"]}/2)')
         pads = {side: node.tips_on_box(side) for side in ('left', 'right')}
         node.get_logger().info(
             f'pads on the box: left {pads["left"]}/2, right {pads["right"]}/2')

@@ -135,16 +135,16 @@ Zaustavljanje ranije: `--pregrasp-only` (ništa ne dodiruje) ili `--no-lift` (st
 
 Slijed:
 
-| # | radnja |
-|---|---|
-| 1 | glavna kamera izmjeri kocku (marker + dubina) |
-| 2 | baza se primakne na doseg ruku, uz granicu stola |
-| 3 | hvataljke se otvore, obje ruke **paralelno** na pred-poze (20 cm od ploha) |
-| 4 | svaka ruka očita **svoj** marker na plohi koju će pritisnuti |
-| 5 | obje ruke, **jednim potezom**, na 2 cm od ploha i na **istu visinu** |
-| 6 | **desna** ruka sama, polako, dok oba njena jastučića ne jave kontakt |
-| 7 | **lijeva** ruka isto, pritišće kocku o desnu |
-| 8 | vodilice dignu 10 cm, pa se izmjeri koliko su se stvarno pomaknule |
+| #   | radnja                                                                     |
+| --- | -------------------------------------------------------------------------- |
+| 1   | glavna kamera izmjeri kocku (marker + dubina)                              |
+| 2   | baza se primakne na doseg ruku, uz granicu stola                           |
+| 3   | hvataljke se otvore, obje ruke **paralelno** na pred-poze (20 cm od ploha) |
+| 4   | svaka ruka očita **svoj** marker na plohi koju će pritisnuti               |
+| 5   | obje ruke, **jednim potezom**, na 2 cm od ploha i na **istu visinu**       |
+| 6   | **desna** ruka sama, polako, dok oba njena jastučića ne jave kontakt       |
+| 7   | **lijeva** ruka isto, pritišće kocku o desnu                               |
+| 8   | vodilice dignu 10 cm, pa se izmjeri koliko su se stvarno pomaknule         |
 
 > [!important] Zašto jedna po jedna, a ne obje odjednom
 > Simultano zatvaranje je izgledalo simetrično, ali nije bilo: 15. 9. su zapešća na pred-pozi
