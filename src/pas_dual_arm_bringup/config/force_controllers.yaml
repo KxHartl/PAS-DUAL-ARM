@@ -1,0 +1,209 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 1000
+    use_sim_time: true
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    left_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    right_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    torso_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    pan_tilt_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    left_gripper_controller:
+      type: position_controllers/GripperActionController
+    right_gripper_controller:
+      type: position_controllers/GripperActionController
+    base_controller:
+      type: mecanum_drive_controller/MecanumDriveController
+base_controller:
+  ros__parameters:
+    reference_timeout: 0.5
+    front_left_wheel_command_joint_name: wheel_front_left_joint
+    front_right_wheel_command_joint_name: wheel_front_right_joint
+    rear_right_wheel_command_joint_name: wheel_rear_right_joint
+    rear_left_wheel_command_joint_name: wheel_rear_left_joint
+    front_left_wheel_state_joint_name: wheel_front_left_joint
+    front_right_wheel_state_joint_name: wheel_front_right_joint
+    rear_right_wheel_state_joint_name: wheel_rear_right_joint
+    rear_left_wheel_state_joint_name: wheel_rear_left_joint
+    use_stamped_vel: false
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+    enable_odom_tf: true
+    twist_covariance_diagonal:
+    - 0.001
+    - 0.001
+    - 0.001
+    - 0.001
+    - 0.001
+    - 0.01
+    pose_covariance_diagonal:
+    - 0.001
+    - 0.001
+    - 0.001
+    - 0.001
+    - 0.001
+    - 0.01
+    kinematics:
+      wheels_radius: 0.0762
+      sum_of_robot_center_projection_on_X_Y_axis: 0.467575
+      base_frame_offset:
+        x: 0.0
+        y: 0.0
+        theta: 0.0
+left_arm_controller:
+  ros__parameters:
+    joints:
+    - left_joint_1
+    - left_joint_2
+    - left_joint_3
+    - left_joint_4
+    - left_joint_5
+    - left_joint_6
+    - left_joint_7
+    command_interfaces:
+    - effort
+    state_interfaces:
+    - position
+    - velocity
+    constraints:
+      goal_time: 5.0
+      stopped_velocity_tolerance: 0.2
+    gains:
+      left_joint_1:
+        p: 387.0
+        i: 193.5
+        d: 5.16
+        i_clamp: 39.0
+      left_joint_2:
+        p: 10181.25
+        i: 5090.625
+        d: 135.75
+        i_clamp: 39.0
+      left_joint_3:
+        p: 265.5
+        i: 132.75
+        d: 3.54
+        i_clamp: 39.0
+      left_joint_4:
+        p: 4524.75
+        i: 2262.375
+        d: 60.33
+        i_clamp: 39.0
+      left_joint_5:
+        p: 177.75
+        i: 88.875
+        d: 2.37
+        i_clamp: 9.0
+      left_joint_6:
+        p: 398.25
+        i: 199.125
+        d: 5.31
+        i_clamp: 9.0
+      left_joint_7:
+        p: 34.875
+        i: 17.438
+        d: 0.465
+        i_clamp: 9.0
+right_arm_controller:
+  ros__parameters:
+    joints:
+    - right_joint_1
+    - right_joint_2
+    - right_joint_3
+    - right_joint_4
+    - right_joint_5
+    - right_joint_6
+    - right_joint_7
+    command_interfaces:
+    - effort
+    state_interfaces:
+    - position
+    - velocity
+    constraints:
+      goal_time: 5.0
+      stopped_velocity_tolerance: 0.2
+    gains:
+      right_joint_1:
+        p: 387.0
+        i: 193.5
+        d: 5.16
+        i_clamp: 39.0
+      right_joint_2:
+        p: 10181.25
+        i: 5090.625
+        d: 135.75
+        i_clamp: 39.0
+      right_joint_3:
+        p: 265.5
+        i: 132.75
+        d: 3.54
+        i_clamp: 39.0
+      right_joint_4:
+        p: 4524.75
+        i: 2262.375
+        d: 60.33
+        i_clamp: 39.0
+      right_joint_5:
+        p: 177.75
+        i: 88.875
+        d: 2.37
+        i_clamp: 9.0
+      right_joint_6:
+        p: 398.25
+        i: 199.125
+        d: 5.31
+        i_clamp: 9.0
+      right_joint_7:
+        p: 34.875
+        i: 17.438
+        d: 0.465
+        i_clamp: 9.0
+torso_controller:
+  ros__parameters:
+    joints:
+    - torso_left_carriage_joint
+    - torso_right_carriage_joint
+    command_interfaces:
+    - effort
+    state_interfaces:
+    - position
+    - velocity
+    constraints:
+      goal_time: 3.0
+      torso_left_carriage_joint:
+        goal: 0.01
+      torso_right_carriage_joint:
+        goal: 0.01
+    gains:
+      torso_left_carriage_joint:
+        p: 1500.0
+        i: 500.0
+        d: 100.0
+        i_clamp: 300.0
+      torso_right_carriage_joint:
+        p: 1500.0
+        i: 500.0
+        d: 100.0
+        i_clamp: 300.0
+pan_tilt_controller:
+  ros__parameters:
+    joints:
+    - pan_tilt_yaw_joint
+    - pan_tilt_pitch_joint
+    command_interfaces:
+    - position
+    state_interfaces:
+    - position
+    - velocity
+left_gripper_controller:
+  ros__parameters:
+    joint: left_robotiq_85_left_knuckle_joint
+    allow_stalling: true
+right_gripper_controller:
+  ros__parameters:
+    joint: right_robotiq_85_left_knuckle_joint
+    allow_stalling: true
