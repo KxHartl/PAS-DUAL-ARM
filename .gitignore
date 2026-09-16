@@ -21,3 +21,38 @@ src/pas_dual_arm_bringup/maps/map_2*
 /*-local-command-caveat*.txt
 /codex-session-*.md
 /*-zadatak-*.txt
+
+# --- Priprema za predaju (16. 9. 2026.) ---
+# Sve niže ostaje na disku; samo izlazi iz repozitorija, jer nije dio zadatka
+# ni simulacije. Povijest je i dalje u gitu.
+
+# AI/LiteRealm scaffolding
+/.ai/
+/CLAUDE.md
+/GEMINI.md
+/.env
+/.env.example
+
+# Zastarjeli dokumenti ranih faza; sadržaj koji vrijedi prenesen je u notes/
+/TASK.md
+/HUMAN.md
+/LINKS.md
+/STATE.md
+/src/README.md
+
+# Radni docs/ - upute su sada README.md, MAPPING.md i RUNNING.md
+/docs/
+
+# RAG/LiteRealm scaffolding. data/raw/zadatak/ ([ZAD], [MAIL]) OSTAJE u repou.
+/data/README.md
+/data/rag/
+/data/processed/
+/dist/
+
+# Vanjski paketi: skidaju se od autora preko `vcs import src < ros2.repos`.
+# Repo nosi samo manifest, ne i njihov kod (ni gitlink pointere).
+/src/aruco_ros/
+/src/omni_base_simulation/
+/src/pan_tilt_ros/
+/src/realsense-ros/
+/src/ros2_kortex/

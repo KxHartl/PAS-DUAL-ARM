@@ -1,13 +1,6 @@
-# Project dependencies detected from imports
-numpy
-matplotlib
-scipy
-open3d
-ultralytics
-Pillow
-opencv-python
-
-# Optional / hardware-specific (install only if needed)
-# pyrealsense2  # Intel RealSense SDK; install only if you have the device and wheels available
-# ur_rtde       # UR RTDE Python bindings (if using RTDEReceiveInterface)
-# rtde          # alternative RTDE package
+# Python ovisnosti koje kod stvarno koristi (provjereno prema importima u
+# src/ i scripts/). ROS 2 pakete instalira apt/rosdep, ne ovaj popis.
+numpy           # čvorovi, mjerenja, obrada oblaka točaka
+scipy           # transformacije, distance_transform_edt u nav_zones
+opencv-python   # cv2.aruco - vlastiti detektor markera
+Pillow          # generiranje ArUco tekstura (scripts/make_marker.py)
