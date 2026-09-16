@@ -180,9 +180,13 @@ commitove. Repo sadrži samo manifest `ros2.repos`.
 | [`realsense-ros`](https://github.com/realsenseai/realsense-ros) | Intel RealSense | Apache-2.0 | `6d87b07` | opis RealSense D435 kamere |
 | [`aruco_ros`](https://github.com/pal-robotics/aruco_ros) | PAL Robotics | MIT | `86a0bbb` | ArUco (koristi se vlastiti detektor, [D-02](notes/04_odluke/D-02_own_aruco_detector.md)) |
 
-**Jedina izmjena tuđeg koda** je `patches/ros2_kortex-robotiq_2f_85-drop-isaac-args.patch` — miče
-tri Isaac argumenta iz `robotiq_2f_85_macro.xacro` kojih na Humble grani nema. Primjenjuje je
-`scripts/apply_patches.sh`.
+**Izmjene tuđeg koda** su dvije, obje kao zakrpe u `patches/`, koje primjenjuje
+`scripts/apply_patches.sh` (idempotentno):
+
+| Zakrpa | Što radi |
+|---|---|
+| `ros2_kortex-robotiq_2f_85-drop-isaac-args.patch` | miče tri Isaac argumenta iz `robotiq_2f_85_macro.xacro` kojih na Humble grani nema |
+| `pan_tilt_ros-inertials-and-effort-limits.patch` | dodaje inercije pan-tilt linkovima i diže effort limite `0.0 → 10.0`; bez toga `urdf2sdf` izbaci linkove i `ign_ros2_control` se ne digne |
 
 **STL vodilica i torza** isporučuju se **s ovim repoom** (`src/dual_arm_torso/meshes/`) i autor im
 je **Branimir Ćaran** — prilog uz mail od 4. 5. 2026., korišteno uz dopuštenje autora zadatka.

@@ -37,11 +37,12 @@ Ovo je jedina kategorija gdje repo **redistribuira** tuđe datoteke, pa atribuci
 
 ## 3. Izmjene tuđeg koda
 
-Jedna, i dokumentirana je:
+Dvije, obje dokumentirane:
 
 | Zakrpa | Meta | Što radi | Zašto |
 |---|---|---|---|
 | `patches/ros2_kortex-robotiq_2f_85-drop-isaac-args.patch` | `kortex_description/grippers/robotiq_2f_85/urdf/robotiq_2f_85_macro.xacro` | miče `sim_isaac`, `isaac_joint_commands`, `isaac_joint_states` | ti argumenti ne postoje na pinanoj Humble grani pa xacro puca |
+| `patches/pan_tilt_ros-inertials-and-effort-limits.patch` | `pan_tilt_description/urdf/pan_tilt.urdf.xacro` | dodaje `<inertial>` na base/yaw/pitch linkove, effort `0.0 → 10.0` | bez inercija `urdf2sdf` izbaci linkove i sruši graf modela, pa `ign_ros2_control` ne krene; s effortom 0 zglobovi nisu upravljivi ([[P-46_pinned_commit_not_on_upstream]]) |
 
 Primjenjuje je `scripts/apply_patches.sh` (idempotentno, provjerava je li već primijenjena).
 
