@@ -11,6 +11,7 @@
 
   <exec_depend>dual_arm_torso</exec_depend>
   <exec_depend>omni_base_description</exec_depend>
+  <exec_depend>pal_urdf_utils</exec_depend>
   <exec_depend>kortex_description</exec_depend>
   <exec_depend>pan_tilt_description</exec_depend>
   <exec_depend>realsense2_description</exec_depend>

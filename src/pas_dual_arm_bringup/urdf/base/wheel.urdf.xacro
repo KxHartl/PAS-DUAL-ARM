@@ -63,7 +63,7 @@
             <mesh filename="package://omni_base_description/meshes/wheels/wheel_link.stl" scale="1 1 1"/>
           </xacro:if>
           <xacro:unless value="${sagital_reflect == 1}">
-            <mesh filename="package://omni_base_description/meshes/wheels/wheel_link_reverted.stl" scale="1 1 1"/>
+            <mesh filename="package://omni_base_description/meshes/wheels/wheel_link_reflected.stl" scale="1 1 1"/>
           </xacro:unless>
         </geometry>
         <material name="DarkGrey"/>

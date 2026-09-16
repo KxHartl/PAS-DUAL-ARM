@@ -17,6 +17,8 @@
        The base is instead driven by the Ignition MecanumDrive plugin (see section 5). -->
   <xacro:property name="namespace" value=""/>
   <xacro:property name="is_public_sim" value="true"/>
+  <!-- Prevent duplicate aluminum/plastic material definitions between pal_urdf_utils (>=2.11) and realsense2_description -->
+  <xacro:property name="realsense_materials_defined" value="true" scope="global"/>
   <!-- pal_urdf_utils laser/sensor macros branch on this; we skip omni_base.urdf.xacro
        (see note above) so it's never set upstream. Anything != 'classic' is correct
        here since we run on Ignition/gz sim, not Gazebo Classic. -->

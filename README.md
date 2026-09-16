@@ -34,6 +34,7 @@ sudo apt install ros-humble-desktop ignition-fortress ros-humble-ros-gz \
                  ros-humble-nav2-bringup ros-humble-slam-toolbox ros-humble-moveit \
                  ros-humble-ros2-control ros-humble-ros2-controllers \
                  ros-humble-teleop-twist-keyboard \
+                 ros-humble-omni-base-description ros-humble-pal-urdf-utils \
                  python3-vcstool python3-rosdep python3-colcon-common-extensions
 ```
 
@@ -62,7 +63,7 @@ ne postavlja ROS varijable.
 
 ```bash
 ./scripts/run_native.sh colcon build --symlink-install
-./scripts/run_native.sh bash scripts/verify_environment.sh     # 17/17 provjera
+./scripts/run_native.sh bash scripts/verify_environment.sh     # 20/20 provjera
 ```
 
 > `colcon` će javiti da `realsense2_description` nadjačava apt verziju — **namjerno je**, cijeli
@@ -75,9 +76,19 @@ bash scripts/clean_ros.sh        # nikad dvije simulacije odjednom
 ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mission.launch.py |& tee log/run-mission.log
 ```
 
+> [!TIP]
+> **Za prijenosna računala / grafičko opterećenje:** Ako simulator uspori ili RViz hoda sporo
+> (Gazebo Ogre2 GUI izgladnjuje procesor i ruši Real Time Factor), pokreni u **headless** modu:
+> ```bash
+> ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mission.launch.py headless:=true
+> ```
+> U headless modu Gazebo radi bez teškog GUI prozora, a robot, senzori i kretanje se fluidno
+> prate kroz RViz2 prozor i kontrolni panel.
+
 Robot se stvori u srednjoj (home) sobi **s raširenim rukama**, sam ih složi u pozu vožnje i
-**čeka**. Kad u logu piše `WAITING for the user`, pritisni zeleni gumb **„MISIJA: po kutiju"** u
-navigacijskom panelu, ili iz drugog terminala:
+**čeka**. **Važno:** opcija *Move To* u Gazebo GUI-ju samo pozicionira kameru i **ne pokreće robota**.
+Kad u logu piše `WAITING for the user`, pritisni zeleni gumb **„MISIJA: po kutiju"** u
+navigacijskom panelu (`nav_gui`), ili iz drugog terminala:
 
 ```bash
 ./scripts/run_native.sh ros2 topic pub --once /mission/start std_msgs/String "{data: blue}"

@@ -129,6 +129,19 @@ def generate_launch_description():
          f'table_arms:={table_arms}']).decode('utf-8')
     robot_xml = re.sub(r'(scale="[0-9. ]*)-([0-9])', r'\1\2', robot_xml)
 
+    # Backward compatibility: PAL omni_base_description renamed wheel_link_reverted.stl
+    # to wheel_link_reflected.stl in version 2.18.0 (8. 9. 2026). If the installed package
+    # is <= 2.17.0, map reflected back to reverted so Ogre2 loads the mesh on older installs.
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        omni_share = get_package_share_directory('omni_base_description')
+        mesh_wheels = os.path.join(omni_share, 'meshes', 'wheels')
+        if not os.path.exists(os.path.join(mesh_wheels, 'wheel_link_reflected.stl')) and \
+           os.path.exists(os.path.join(mesh_wheels, 'wheel_link_reverted.stl')):
+            robot_xml = robot_xml.replace('wheel_link_reflected.stl', 'wheel_link_reverted.stl')
+    except Exception:
+        pass
+
     # Do not inject position_proportional_gain into joint interfaces here:
     # the installed Humble plugin ignores that tag and retains its 0.1 default.
     # Explicit experimental profile: preserve the default model/controllers.
@@ -216,9 +229,14 @@ def generate_launch_description():
         return Node(
             package='controller_manager',
             executable='spawner',
-            # Large CM timeout: Gazebo Fortress needs ~50-60 s to load this big model,
-            # so a short default makes spawners retry and double-load ("already loaded").
-            arguments=[name, '--controller-manager-timeout', '120'],
+            # Large timeouts: Gazebo Fortress needs ~50-60 s to load this big model,
+            # and under heavy load (e.g. GUI rendering) service calls may take >10s (default timeout).
+            arguments=[
+                name,
+                '--controller-manager-timeout', '120',
+                '--service-call-timeout', '120',
+                '--switch-timeout', '120',
+            ],
             output=bg_output,
         )
 

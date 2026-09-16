@@ -60,13 +60,20 @@ done
 
 for package_name in \
   pas_dual_arm_bringup pas_dual_arm_scripts pas_dual_arm_moveit_config \
-  slam_toolbox nav2_bringup ros_gz_sim controller_manager; do
+  slam_toolbox nav2_bringup ros_gz_sim controller_manager \
+  omni_base_description pal_urdf_utils; do
   if ros2 pkg prefix "$package_name" >/dev/null 2>&1; then
     pass "package: $package_name"
   else
     fail "missing package: $package_name (build or install first)"
   fi
 done
+
+if xacro "$project_root/src/pas_dual_arm_bringup/urdf/robot.urdf.xacro" >/dev/null 2>&1; then
+  pass 'robot.urdf.xacro expands cleanly'
+else
+  fail 'robot.urdf.xacro xacro expansion failed'
+fi
 
 if $check_live; then
   for topic_name in /clock /joint_states /scan_filtered /base_controller/odom; do
