@@ -17,16 +17,19 @@ Korisnik, 13. 9. 2026. (zadnji dan). [ZAD] i [MAIL] ne propisuju oblik predaje.
 ## Tehnički znači
 | Predmet | Oblik | Gdje | Kriterij |
 |---|---|---|---|
-| Seminarski rad | PDF po FSB predlošku (`latex_format: fsb-seminar`) | `docs/` → `dist/` | sva poglavlja, slike, iskrena odstupanja ([[odstupanja]]) |
-| Repo + simulacija | GitHub repo, `README` + `RUNNING.md` | root | čisti build iz checkouta, jedna naredba do demoa |
+| Seminarski rad | PDF po FSB predlošku (`latex_format: fsb-seminar`) | lokalno (izvan repoa) → predaja | sva poglavlja, slike, iskrena odstupanja ([[odstupanja]]) |
+| Repo + simulacija | GitHub repo, `README.md` + `MAPPING.md` + `RUNNING.md` | root | čisti build iz checkouta, jedna naredba do demoa |
 | Video | snimka Gazebo GUI runa | `dist/` | cijela misija ili najdalji stabilni dio, s naslovima koraka |
 | Prezentacija | slajdovi | `dist/` | cilj → arhitektura → rezultati → problemi → odstupanja |
 
 **Kriterij prihvaćanja:**
-- [ ] `dist/` sadrži PDF seminara, video i slajdove
-- [ ] `docs/` sadrži `.tex` izvor, a PDF je generiran (`.ai/scripts/helpers/build-docs.sh`)
-- [ ] repo čist, zadnji commit označen (tag predaje)
+- [ ] PDF seminara, video i slajdovi spremni za predaju
+- [ ] `.tex` izvor napisan, PDF generiran (LaTeX predložak i `build-docs.sh` su **lokalno**,
+      u `.ai/`, izvan repozitorija od 16. 9.)
+- [x] repo čist (16. 9.: README/MAPPING/RUNNING prepisani, scaffolding i zastarjeli dokumenti
+      izašli iz indeksa, vanjski paketi samo preko `ros2.repos` — [[vanjski_paketi]])
+- [ ] zadnji commit označen (tag predaje)
 
 ## Trenutno stanje
-❌ `docs/` je prazan (samo README), `dist/` prazan. Mapa sadržaja: [[seminar_mapa]]. Redoslijed
-dana: [[danas]].
+⚠ Repozitorij je pripremljen za predaju (16. 9.). Seminar, video i slajdovi još nisu napravljeni.
+Mapa sadržaja: [[seminar_mapa]]. Redoslijed dana: [[danas]].

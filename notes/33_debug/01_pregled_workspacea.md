@@ -15,11 +15,17 @@ izvor: pregled Obsidian bilježaka, git povijesti (48 commitova), koda i transkr
 > - Kartice u tekstu linkane su kao Obsidian wikilinkovi (npr. [[00_MAPA]]).
 > - Datoteke izvan bilješki linkane su kao relativne Markdown putanje (npr. [run_native.sh](../../scripts/run_native.sh)) s brojevima redaka (`:linija`).
 
+> [!warning] Snimka stanja od 13. 9. 2026.
+> Ovo je **povijesni presjek** i namjerno se ne ažurira. Dio datoteka koje spominje više nije u
+> repozitoriju (priprema za predaju, 16. 9.): `TASK.md`, `HUMAN.md`, `LINKS.md`, `src/README.md`,
+> `STATE.md`, `docs/`, `.ai/` i transkripti sesija. Sve je ostalo lokalno na disku i u git
+> povijesti. Aktualne upute: `README.md`, `MAPPING.md`, `RUNNING.md`; aktualna pravila: [[AGENT_GUIDE]].
+
 ---
 
 ## 1. Kako čitati repozitorij i hijerarhija istine
 
-Pravila rada za sve agente i suradnike definirana su u [AGENT_GUIDE.md](../AGENT_GUIDE.md) i [.ai/config/AGENTS.md](../../.ai/config/AGENTS.md).
+Pravila rada za sve agente i suradnike definirana su u [AGENT_GUIDE.md](../AGENT_GUIDE.md).
 
 ### 1.1 Hijerarhija izvora istine
 Kada se u repozitoriju naiđe na kontradiktorne tvrdnje, vrijedi sljedeća stroga hijerarhija:
@@ -27,9 +33,8 @@ Kada se u repozitoriju naiđe na kontradiktorne tvrdnje, vrijedi sljedeća strog
 2. **`D` kartice (Odluke)** ([notes/04_odluke/](../04_odluke/)): važeće inženjerske i arhitektonske odluke. Svako odstupanje od `[ZAD]`/`[MAIL]` mora imati `deviation: true` i biti navedeno u [[odstupanja]].
 3. **`P` kartice (Problemi)** ([notes/03_problemi/](../03_problemi/)): izvor istine o neuspjelim pokušajima, anomalijama i ograničenjima simulatora.
 4. **`S` kartice (Rješenja / Podsustavi)** ([notes/02_rjesenja/](../02_rjesenja/)): opisi implementiranih mehanizama.
-5. **[STATE.md](../../STATE.md)**: operativna primopredaja sesije (kratki sažetak zadnjeg stanja).
-6. **Komentari i stanje u kodu**: često zaostaju za odlukama i nose zastarjele parametre.
-7. **Zastarjeli dokumenti**: `TASK.md`, `HUMAN.md` i `src/README.md` služe isključivo kao povijesna arhiva i ne smiju se koristiti kao smjernice.
+5. **Komentari i stanje u kodu**: često zaostaju za odlukama i nose zastarjele parametre.
+6. **Zastarjeli dokumenti** (`TASK.md`, `HUMAN.md`, `src/README.md`, `LINKS.md`, `STATE.md`): povijesna arhiva, ne smiju se koristiti kao smjernice. Od 16. 9. 2026. su izvan repozitorija.
 
 ### 1.2 Ključne invarijante sustava (nikad ne kršiti)
 - **Nema lažnog uspjeha (poštenje iznad svega):** `attach` kocke na ruku dopušten je isključivo uz fizički dokazan obostrani kontakt s kutijom (`aruco_box`). Nema teleporta i lažnih vezanja iz daljine ([[D-12_honesty_abort_over_fake]]).
@@ -58,10 +63,10 @@ Kada se u repozitoriju naiđe na kontradiktorne tvrdnje, vrijedi sljedeća strog
 | **Struktura seminara** | [notes/07_predaja/seminar_mapa.md](../07_predaja/seminar_mapa.md) | Preslikavanje kartica i postignuća u poglavlja završnog seminarskog rada. |
 | **Registar poza ruku** | [notes/08_poze.md](../08_poze.md) | Točni zglobni kutovi i izmjerene širine robota (`ARM_CARRY_V2` = 85.4 cm). |
 | **Operativne upute za rad** | [notes/00_run/](../00_run/) (`01_pokretanje.md`, itd.) | Naredbe za pokretanje terminala 1–4, testiranje dionica i uvođenje izmjena. |
-| **SLAM plan i dizajn** | [docs/MAPPING_LOCALIZATION.md](../../docs/MAPPING_LOCALIZATION.md) | Codexov dizajn SLAM filtriranja, autonomne ture i registracije objekata. |
-| **Sesijska primopredaja** | [STATE.md](../../STATE.md) | Sažetak stanja na razini repozitorija na kraju sesija. |
-| **Brze upute za pokretanje** | [RUNNING.md](../../RUNNING.md) | Skraćene upute za build i podizanje sustava kroz skripte. |
-| **Transkripti sesija 13. 9.** | Korijenski `.md` i `.txt` fajlovi | Transkripti Codexove SLAM sesije i Claudeove pripremne sesije. |
+| **SLAM plan i dizajn** | `docs/MAPPING_LOCALIZATION.md` (lokalno, izvan repoa od 16. 9.) | Codexov dizajn SLAM filtriranja, autonomne ture i registracije objekata. Aktualni postupak: [MAPPING.md](../../MAPPING.md). |
+| **Sesijska primopredaja** | `STATE.md` (lokalno, izvan repoa od 16. 9.) | Sažetak stanja na razini repozitorija na kraju sesija. |
+| **Brze upute za pokretanje** | [README.md](../../README.md), [MAPPING.md](../../MAPPING.md), [RUNNING.md](../../RUNNING.md) | Instalacija, misija iz jedne naredbe, mapiranje od nule, rad po terminalima. |
+| **Transkripti sesija 13. 9.** | Korijenski `.md` i `.txt` fajlovi (lokalno, nikad u repou) | Transkripti Codexove SLAM sesije i Claudeove pripremne sesije. |
 
 ---
 

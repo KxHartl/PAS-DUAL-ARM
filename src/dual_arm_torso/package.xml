@@ -3,9 +3,18 @@
 <package format="3">
   <name>dual_arm_torso</name>
   <version>0.0.0</version>
-  <description>The dual_arm_torso description package</description>
-  <maintainer email="user@todo.todo">user</maintainer>
-  <license>TODO: License declaration</license>
+  <description>
+    Opis torza i vertikalnih linearnih vodilica (mesh + xacro) na kojima su
+    montirane obje Kinova Gen3 ruke. STL modele vodilica i torza izradio je
+    Branimir Ćaran; stigli su kao prilog uz mail od 4. 5. 2026. u kojem je
+    zadan ovaj projekt. Detalji: README.md u ovom paketu.
+  </description>
+  <maintainer email="hartl.kresimir@gmail.com">Krešimir Hartl</maintainer>
+  <author>Branimir Ćaran</author>
+  <!-- Apache-2.0 pokriva xacro i integraciju iz ovog repozitorija.
+       STL meshovi u meshes/ NISU pod tom licencom: autor je Branimir Ćaran,
+       korišteno uz dopuštenje autora zadatka. Vidi README.md. -->
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

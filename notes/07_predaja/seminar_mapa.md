@@ -5,9 +5,9 @@ updated: 2026-09-13
 ---
 # Mapa seminara: koja kartica hrani koje poglavlje
 
-Format: FSB seminar (`.ai/config/project.yaml` → `latex_format: fsb-seminar`, predložak
-`.ai/templates/fsb-seminar/latex/seminar.tex`, pravila `.ai/templates/fsb-seminar/instructions.md`).
-Izvor teksta su kartice, a ne STATE.md.
+Format: FSB seminar (`latex_format: fsb-seminar`). Predložak i pravila su **lokalno**, u
+`.ai/templates/fsb-seminar/` — od 16. 9. izvan repozitorija (vidi [[vanjski_paketi]]).
+Izvor teksta su kartice.
 
 | Poglavlje | Sadržaj | Izvori (kartice) | Slike |
 |---|---|---|---|
@@ -25,5 +25,5 @@ Izvor teksta su kartice, a ne STATE.md.
 | 12. PROBLEMI I RJEŠENJA | 6–8 ključnih P-kartica (tablice pokušaja) | [[P-09_omni_drive_on_fortress]], [[P-11_nav2_slam_drift]], [[P-15_dart_friction_no_hold]], [[P-17_detachable_joint_explodes]], [[P-18_transport_drops_box]], [[P-24_press_path_chain]], [[P-16_fake_teleport_grasp]] | — |
 | 13. ODSTUPANJA I OGRANIČENJA | iskreno | [[odstupanja]] | — |
 | ZAKLJUČAK | što radi, što ne, sljedeći koraci | [[00_MAPA]], [[danas]] | — |
-| LITERATURA | upstream repoi, dokumentacija, predavanja | [[izvori]]; predavanja `03 ros2_control`, `05 MoveIt`, `06 Gazebo, SLAM, navigacija` (`~/FSB/projektiranje-autonomnih-sustava/seminar/sources/docs/`) | — |
+| LITERATURA | upstream repoi (autori, licence, commitovi → [[vanjski_paketi]]), STL vodilica (B. Ćaran), dokumentacija, predavanja | [[izvori]]; predavanja `03 ros2_control`, `05 MoveIt`, `06 Gazebo, SLAM, navigacija` (`~/FSB/projektiranje-autonomnih-sustava/seminar/sources/docs/`) | — |
 | PRILOZI | pokretanje, parametri | `RUNNING.md`, [[06_parametri]] | — |

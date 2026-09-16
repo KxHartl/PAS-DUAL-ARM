@@ -258,5 +258,5 @@ lokalizacije može se probati `auto_start:=true navigate_region:=true` uz
 `region_x`, `region_y`, `region_yaw`. Zadani cilj je plava soba, ali dolazak,
 hvat i transport u novom svijetu nisu potvrđeni; ne predstavljati to kao demo.
 
-Detaljniji tehnički plan: `docs/MAPPING_LOCALIZATION.md`. Stariji `RUNNING.md`
-opisuje pretežno prethodni zadatak i nije izvor za aktualni SLAM tijek.
+Postupak mapiranja za predaju (pravila vožnje, ruta, gate-ovi) je u `MAPPING.md` u korijenu
+repozitorija. Raniji `docs/MAPPING_LOCALIZATION.md` izašao je iz repoa 16. 9. (ostao lokalno).

@@ -29,8 +29,9 @@ Raspored komponenti odgovara slici:
 - [x] cijeli robot se renderira u Gazebu (bez nevidljivih dijelova)
 
 ## Trenutno stanje
-✅ Geometrija je kalibrirana 12. 6. uz vizualne provjere korisnika (`5b96ffc` … `d1af724`,
-protokol u `HUMAN.md`). Mjere su u `LINKS.md`: torzo rpy 0, klizači na ±Y, desni rotiran 180°.
+✅ Geometrija je kalibrirana 12. 6. uz vizualne provjere korisnika (`5b96ffc` … `d1af724`;
+protokol GUI checkpointa je danas [[AGENT_GUIDE]] §6). Mjere su u [[S-01_robot_description]]
+§ „Geometrija montaže": torzo rpy 0, klizači na ±Y, desni rotiran 180°.
 Izvor mjera je CAD slika `data/raw/zadatak/torzo_cad_mjere.png`. Mesh URI popravak
 [[P-04_mesh_uri_not_found]].
 

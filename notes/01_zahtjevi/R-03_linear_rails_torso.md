@@ -20,7 +20,8 @@ Torzo s dvije vertikalne vodilice. Svaka nosi klizač (prismatic zglob) na kojem
 se u simulaciji stvarno pomiče gore-dolje preko ros2_control.
 
 **Kriterij prihvaćanja:**
-- [x] STL-ovi u ispravnoj skali (0.001) i orijentaciji, klizači na širokim plohama (`LINKS.md`)
+- [x] STL-ovi u ispravnoj skali (0.001) i orijentaciji, klizači na širokim plohama
+      ([[S-01_robot_description]] § „Geometrija montaže"; autor STL-a: **Branimir Ćaran**)
 - [x] `torso_left/right_carriage_joint` (prismatic, **0.05–0.65 m**, hod stvarne vodilice) s `torso_controller`
 - [x] klizač se stvarno diže **pod težinom ruke** u Gazebu (15. 9.: 0.06 → 0.20 → 0.35 m, greška 0.0000 mm, na **pozicijskom** sučelju; [[P-13_torso_prismatic_no_lift]] #11)
 

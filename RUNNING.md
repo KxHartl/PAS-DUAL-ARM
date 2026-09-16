@@ -63,10 +63,14 @@ Pričekaj da se aktivira svih osam kontrolera. Bez GUI-ja: `headless:=true`.
 **Samo hvat** (robot se stvori na dock pozi, bez vožnje): postupak u
 [`hvat_kocke.md`](notes/00_run/00_testing/hvat_kocke.md).
 
-**Mapiranje** (zaseban korak; misija vozi po spremljenoj karti):
+**Mapiranje** (zaseban korak; misija vozi po spremljenoj karti iz repoa). Cijeli postupak —
+pravila vožnje, ruta, gate-ovi — je u [`MAPPING.md`](MAPPING.md); ukratko:
 ```bash
+PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py
 ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mapping.launch.py
-bash scripts/save_map.sh
+./scripts/run_native.sh ros2 run teleop_twist_keyboard teleop_twist_keyboard
+./scripts/save_map.sh moja_tura
+./scripts/run_native.sh colcon build --symlink-install --packages-select pas_dual_arm_bringup
 ```
 
 ## 3. Provjere bez simulatora
@@ -75,6 +79,8 @@ bash scripts/save_map.sh
 ./scripts/run_native.sh bash scripts/verify_environment.sh   # 17/17
 ./scripts/run_native.sh python3 scripts/check_doors.py       # vrata iz karte
 ./scripts/run_native.sh python3 scripts/check_zones.py       # zone, portali, dock poze
+./scripts/run_native.sh python3 scripts/check_map.py \
+    src/pas_dual_arm_bringup/maps/seminar_map.yaml           # kvaliteta karte (traži putanju)
 ```
 Ako `check_*` ne prođu, **ne pokreći simulaciju** — zone su krive i vožnja nema smisla.
 

@@ -53,8 +53,8 @@ korak ostavlja nešto što se može pokazati: kartu, dolazak u regiju, hvat, pri
 time-boxan, a neuspjeh se piše kao iskreno odstupanje.
 
 ## Checklist predaje ([[R-21_deliverables]])
-- [ ] `docs/seminar.tex` (FSB predložak iz `.ai/templates/fsb-seminar/latex/`) → PDF
-      (`.ai/scripts/helpers/build-docs.sh`)
+- [ ] `seminar.tex` → PDF (FSB predložak i `build-docs.sh` su **lokalno**, u `.ai/`, izvan
+      repozitorija od 16. 9.; vidi [[vanjski_paketi]])
 - [ ] slike: robot (Gazebo), svijet s tri sobe, **SLAM karta u RViz-u**, TF stablo, graf čvorova,
       hvat (sekvenca), dijagram slijeda misije
 - [ ] video (GUI run) → `dist/`

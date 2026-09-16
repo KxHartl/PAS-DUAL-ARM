@@ -28,7 +28,8 @@ zatvaraju. Jedina lokalna zakrpa upstreama je uklanjanje Isaac-Sim xacro argumen
 (`patches/ros2_kortex-robotiq_2f_85-drop-isaac-args.patch`).
 
 ## Kako se rješava
-- [[S-01_robot_description]]: montaža na klizače (`LINKS.md`: `xyz=0.060 0.0735 0.112`, `rpy=-π/2 0 0`)
+- [[S-01_robot_description]]: montaža na klizače (`xyz=0.060 0.0735 0.112`, `rpy=-π/2 0 0`;
+  brojke su u [[S-01_robot_description]] § „Geometrija montaže")
 - [[S-03_ros2_control_setup]]: `left/right_arm_controller`, `left/right_gripper_controller`
 
 ## Problemi

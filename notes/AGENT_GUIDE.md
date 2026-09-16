@@ -13,9 +13,13 @@ updated: 2026-09-14
 5. Tek onda kod.
 
 ## 2. Hijerarhija istine
-`[ZAD]`/`[MAIL]` ([[izvori]]) > D-kartice (važeće odluke) > P-kartice > S-kartice > `STATE.md`
-(primopredaja sesije) > komentari u kodu > stari dokumenti (`TASK.md`, `HUMAN.md`, `src/README.md`
-su zastarjeli). Kad nađeš kontradikciju, **ne biraj tiho**: zapiši je u karticu i pitaj korisnika.
+`[ZAD]`/`[MAIL]` ([[izvori]]) > D-kartice (važeće odluke) > P-kartice > S-kartice > komentari u
+kodu. Kad nađeš kontradikciju, **ne biraj tiho**: zapiši je u karticu i pitaj korisnika.
+
+> **16. 9. 2026. (priprema za predaju):** `TASK.md`, `HUMAN.md`, `src/README.md`, `LINKS.md` i
+> `STATE.md` više nisu u repozitoriju — bili su zastarjeli i nisu bili izvor istine. Ostali su
+> lokalno na disku i u git povijesti. Geometrija montaže iz `LINKS.md` prenesena je u
+> [[S-01_robot_description]].
 
 ## 3. Invarijante (nikad ne kršiti)
 1. **Nikad lažni uspjeh:** attach samo uz box-only kontakt na oba jastučića; nema teleporta, nema
@@ -38,7 +42,7 @@ su zastarjeli). Kad nađeš kontradikciju, **ne biraj tiho**: zapiši je u karti
 - **Nova odluka** koja mijenja staru: nova D-kartica, a staroj postaviš `status: zamijenjena` i
   `superseded_by`. Staru se ne briše.
 - Status R-kartice mijenjaj samo uz dokaz (datum + GUI/headless + commit). Ažuriraj i red u [[00_MAPA]].
-- Na kraju sesije: `STATE.md` kratko (što je napravljeno, gdje je stalo) + commit.
+- Na kraju sesije: red u [[runovi]] (što je napravljeno, gdje je stalo) + commit.
 
 ## 5. Slijepe ulice (ne ponavljati bez NOVOG dokaza)
 | Slijepa ulica | Zašto | Kartica |
