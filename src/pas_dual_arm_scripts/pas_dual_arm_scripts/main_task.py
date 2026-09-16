@@ -49,7 +49,7 @@ from moveit_msgs.msg import (
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
-from std_msgs.msg import String
+from std_msgs.msg import Empty, String
 from sensor_msgs.msg import JointState, PointCloud2
 from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformListener
@@ -351,6 +351,15 @@ class MainTask(BaseDriver, Node):
             self, FollowJointTrajectory,
             '/pan_tilt_controller/follow_joint_trajectory')
 
+        # DetachableJoint topics (bridged via ros_gz_bridge)
+        self.attach_box_pub = self.create_publisher(
+            Empty, '/aruco_box/attach', 10)
+        self.detach_box_pub = self.create_publisher(
+            Empty, '/aruco_box/detach', 10)
+        self._box_state = None
+        self._box_state_sub = self.create_subscription(
+            String, '/aruco_box/state', self._on_box_state, 10)
+
         # --- base velocity ---------------------------------------------------
         # Drive the base directly (no Nav2): the skid-steer base rotates by wheel
         # slip, which breaks wheel odometry and SLAM during an in-place turn, so
@@ -526,18 +535,56 @@ class MainTask(BaseDriver, Node):
         self.get_logger().info(f'{name}: {"OK" if ok else "FAILED"}')
         return ok
 
-    def _attach_box(self, attach):
+    def _on_box_state(self, msg: String):
+        self._box_state = msg.data.strip().lower()
+
+    def _attach_box(self, attach: bool, timeout: float = 5.0) -> bool:
         """Rigidly attach / detach the box to the left wrist via the
-        DetachableJoint topics (Ignition transport). Only called to ATTACH after
+        DetachableJoint topics. Only called to ATTACH after
         the contact check confirms the grippers are genuinely on the box, so the
         rigid hold stands in for the friction DART cannot provide - not a fake."""
-        topic = '/aruco_box/attach' if attach else '/aruco_box/detach'
-        subprocess.run(
-            ['ign', 'topic', '-t', topic, '-m', 'ignition.msgs.Empty',
-             '-p', 'unused: true'],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self.get_logger().info(
-            f'Box {"ATTACHED to" if attach else "DETACHED from"} left wrist.')
+        target_state = 'attached' if attach else 'detached'
+        topic_name = '/aruco_box/attach' if attach else '/aruco_box/detach'
+        pub = self.attach_box_pub if attach else self.detach_box_pub
+
+        if self._box_state == target_state:
+            self.get_logger().info(f'Box already {target_state}.')
+            return True
+
+        self.get_logger().info(f'Requesting box {target_state.upper()}...')
+        msg = Empty()
+        deadline = time.monotonic() + timeout
+        last_pub = 0.0
+
+        while time.monotonic() < deadline:
+            now = time.monotonic()
+            if now - last_pub >= 0.2:
+                # 1. Publish via persistent ROS 2 bridge
+                pub.publish(msg)
+                # 2. Also trigger via ign topic CLI as redundant fallback
+                subprocess.run(
+                    ['ign', 'topic', '-t', topic_name, '-m', 'ignition.msgs.Empty',
+                     '-p', 'unused: true'],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                last_pub = now
+
+            rclpy.spin_once(self, timeout_sec=0.05)
+
+            if self._box_state == target_state:
+                self.get_logger().info(
+                    f'Box {target_state.upper()} confirmed via /aruco_box/state.')
+                return True
+
+        if self._box_state is None and not attach:
+            # At startup, joint may have already been detached on spawn and therefore
+            # no state change was emitted.
+            self.get_logger().warn(
+                'No state received on /aruco_box/state; detach command was sent.')
+            return True
+
+        self.get_logger().error(
+            f'Box {target_state.upper()} NOT confirmed! Current state: {self._box_state}')
+        return False
 
     # ------------------------------------------------------------ TF / reach
     def _tf_point(self, target, source):
@@ -2702,7 +2749,11 @@ class MainTask(BaseDriver, Node):
         #    moves - a hand that leaves while still pressing drags the cube off
         #    the marker, and a hand pulled off a still-attached cube explodes the
         #    solver (P-17).
-        self._attach_box(False)
+        if not self._attach_box(False):
+            self.get_logger().error(
+                'PLACE step 8: box could not be detached from left wrist! '
+                'Aborting before arm motion to avoid dragging box.')
+            return False
         self._hold = None
         self._publish_carried_nothing()
         settle = time.monotonic() + 1.0
@@ -3062,7 +3113,8 @@ class MainTask(BaseDriver, Node):
         #    teleport). NEVER two rigid holds: the RIGHT arm releases its
         #    pressure and retreats FIRST; a second rigid path shoving the fixed
         #    cube explodes the constraint solver (flings it metres away).
-        self._attach_box(True)
+        if not self._attach_box(True):
+            return self._fail('box could not be attached to wrist')
         # Record how the cube sits in the hand WHILE THE MEASUREMENT IS STILL
         # GOOD. From here the cube is rigidly attached to the left wrist, so this
         # relation holds until it is let go - and it is the only way to know
