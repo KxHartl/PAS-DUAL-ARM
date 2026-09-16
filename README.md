@@ -1,81 +1,155 @@
-# PAS-DUAL-ARM (Simulacijski Model)
+# PAS-DUAL-ARM — simulacijski model dual-arm robota (ROS 2 Humble + Gazebo Fortress)
 
-Ovaj repozitorij sadrži cjelokupni simulacijski model i okruženje za robota s dvije ruke (Dual Arm) i omnidirekcijskom bazom. Model je razvijen u okviru seminara iz kolegija, a cilj je realistična ROS2 Humble i Gazebo Fortress simulacija.
+Simulacijski model mobilnog robota s **dvije Kinova Gen3 ruke** na **vertikalnim linearnim
+vodilicama**, **omnidirekcijskom bazom** i **pan-tilt kamerom**, te cijela misija u jednoj naredbi:
 
-## Arhitektura i Alati
+> robot mapira prostor → korisnik ga pošalje u sobu s kutijom → nađe kutiju → **podigne je objema
+> rukama** → pronese je kroz vrata → **odloži je na označeno mjesto** u drugoj sobi.
 
-Projekt koristi sljedeće ključne komponente:
-- **Baza**: PAL Robotics `omni_base_simulation`
-- **Torzo**: Custom dizajn s dva vertikalna linearna klizača (vodilice) pokretana `prismatic` zglobovima. Mase su aproksimirane prema standardnim aluminijskim profilima.
-- **Ruke**: Dva komada Kinova Gen3 (7-DOF) sa `robotiq_2f_85` hvataljkama, preuzete iz `ros2_kortex`.
-- **Senzorika**: Pan-tilt mehanizam (`pan_tilt_ros`) s montiranom Intel RealSense D435 kamerom (`realsense-ros`).
-- **Gazebo Simulator**: Gazebo Fortress LTS, korištenjem `ign_ros2_control` plugina za hardversku apstrakciju upravljanja zglobovima.
+Zadnji potvrđeni run (GUI, 16. 9. 2026.): kutija spuštena **4 mm** iznad ploče i sjela **5 mm** od
+centra markera — `PLACE VERIFIED`, `MISSION COMPLETE`.
 
-## Odabir Aruco Markera i Parametara
-Za detekciju i manipulaciju ciljanom kutijom (0.3x0.3x0.3 m, 1 kg) odabran je **Aruco Marker iz DICT_4X4_50 rječnika (ID 0)**.
-*Opravdanje:* Manji rječnik (50 markera) smanjuje false positive detekcije i ubrzava obradu slike na robotu u stvarnom vremenu. Dimenzija od 4x4 pixela (unutarnja matrica) pruža dovoljnu robusnost i savršeno je prikladna za identifikaciju većih objekata poput kutija u logistici (gdje nema mnogo različitih unikatnih oznaka koje su simultano vidljive).
+---
 
-## Pokretanje i Korištenje (Vodič)
+## 1. Preduvjeti
 
-> Napomena: Slijedite upute iz `HUMAN.md` datoteke kada je potrebna vaša intervencija za vizualnu i funkcionalnu provjeru.
+| | |
+|---|---|
+| OS | Ubuntu 22.04 |
+| ROS 2 | Humble |
+| Simulator | Gazebo **Fortress** (LTS) + `ros-humble-ros-gz` |
+| Ostalo | `python3-vcstool`, `python3-rosdep`, `colcon` |
 
-### 1. Preduvjeti i Instalacija (Setup)
-Sustav se oslanja na Ubuntu 22.04 i ROS2 Humble. Automatska instalacija rješava `rosdep` i sistemske alate. Za ručnu instalaciju (već provedenu skriptom):
 ```bash
 sudo apt update
-sudo apt install ignition-fortress ros-humble-ros-gz ...
-rosdep install --from-paths src --ignore-src -y -r
+sudo apt install ros-humble-desktop ignition-fortress ros-humble-ros-gz \
+                 ros-humble-nav2-bringup ros-humble-slam-toolbox ros-humble-moveit \
+                 ros-humble-ros2-control ros-humble-ros2-controllers \
+                 python3-vcstool python3-rosdep python3-colcon-common-extensions
 ```
 
-### 2. Dohvat izvornih ovisnosti (provenance)
-Pet paketa u `src/` (`aruco_ros`, `omni_base_simulation`, `pan_tilt_ros`, `realsense-ros`,
-`ros2_kortex`) su vanjski repozitoriji. Svježi `clone` ovog repozitorija ih ne povlači, pa su njihov
-točan URL i commit pinani u `ros2.repos`. Za rekonstrukciju radnog prostora iz čistog checkouta:
-```bash
-cd ~/FSB/PAS-DUAL-ARM
-vcs import src < ros2.repos        # klonira svih 5 paketa na pinane commitove
-./scripts/apply_patches.sh         # ponovno primijeni lokalne zakrpe iz patches/
-rosdep install --from-paths src --ignore-src -y -r
-```
-Verzije su pinane na točan commit (ne granu) da build ne odluta kad upstream krene naprijed.
-Namjerne lokalne izmjene upstream paketa žive kao zakrpe u `patches/` (trenutno jedna: uklanjanje
-Isaac-Sim xacro argumenata iz `robotiq_2f_85_macro.xacro` koji nisu definirani u ovoj verziji
-Kortexa) i `apply_patches.sh` ih ponovno primjenjuje; skripta je idempotentna.
+## 2. Dohvat
 
-### 3. Kompilacija
-Nakon dohvata izvora prevedite sve iz eksplicitnog projektnog okruženja:
+Pet paketa u `src/` su vanjski repozitoriji i **ne dolaze** s `git clone`; njihovi točni commitovi
+pinani su u `ros2.repos`, pa je radni prostor reproducibilan.
+
 ```bash
-cd ~/FSB/PAS-DUAL-ARM
+git clone git@github.com:KxHartl/PAS-DUAL-ARM.git
+cd PAS-DUAL-ARM
+
+vcs import src < ros2.repos     # aruco_ros, omni_base_simulation, pan_tilt_ros,
+                                # realsense-ros, ros2_kortex — na pinane commitove
+./scripts/apply_patches.sh      # lokalne zakrpe iz patches/ (idempotentno)
+
+rosdep install --from-paths src --ignore-src -y -r
+pip install -r requirements.txt
+```
+
+## 3. Build
+
+Sve ide kroz **projektno okruženje** (`scripts/run_native.sh`): učitava samo `/opt/ros/humble` i
+ovaj overlay, Fast DDS, ROS domenu 5 i lokalno otkrivanje čvorova. Globalni `~/.bashrc` namjerno
+ne postavlja ROS varijable.
+
+```bash
 ./scripts/run_native.sh colcon build --symlink-install
+./scripts/run_native.sh bash scripts/verify_environment.sh     # 17/17 provjera
 ```
 
-Za interaktivni rad otvorite projektni shell:
+> `colcon` će javiti da `realsense2_description` nadjačava apt verziju — **namjerno je**, cijeli
+> `realsense-ros` dolazi iz izvora radi usklađenosti s driverom.
+
+## 4. Pokretanje misije — jedna naredba
 
 ```bash
-./scripts/run_native.sh
+bash scripts/clean_ros.sh        # nikad dvije simulacije odjednom
+./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mission.launch.py |& tee log/run-mission.log
 ```
 
-Shell učitava samo `/opt/ros/humble` i lokalni PAS-DUAL-ARM overlay, koristi Fast DDS, ROS domenu 5
-i lokalno otkrivanje čvorova. Prije prelaska u drugi ROS projekt izađite naredbom `exit`; nemojte
-učitavati njegov `setup.bash` u isti shell. Globalni `~/.bashrc` ne smije učitavati ROS distribuciju,
-workspace, middleware, domenu ni adresu robota.
+Robot se stvori u srednjoj (home) sobi **s raširenim rukama**, sam ih složi u pozu vožnje i
+**čeka**. Kad u logu piše `WAITING for the user`, pritisni zeleni gumb **„MISIJA: po kutiju"** u
+navigacijskom panelu, ili iz drugog terminala:
 
-### 4. Vizualna Verifikacija (RViz2)
-Kako biste pregledali statični model (bez Gazeba, služi za provjeru URDF-a i spajanja ruku):
 ```bash
-ros2 launch pas_dual_arm_bringup display.launch.py
+./scripts/run_native.sh ros2 topic pub --once /mission/start std_msgs/String "{data: blue}"
 ```
-Ovdje možete pomicati klizače i promatrati kinematic-stablo robota.
 
-### 5. Pokretanje Gazebo Simulacije
-Za pokretanje punog okruženja (svijet + robot):
+Dalje ide samo: plava soba → hvat → kroz vrata → crvena soba → odlaganje.
+
+**Argumenti** (`mission.launch.py`):
+
+| argument | zadano | značenje |
+|---|---|---|
+| `headless` | `false` | Gazebo bez GUI-ja (kad GUI izgladnjuje upravljačku petlju) |
+| `open_rviz` | `true` | RViz; pogled biraš s `rviz_config:=…/cube.rviz` |
+| `gui` | `true` | panel s gumbima (`nav_gui`) |
+| `map` | `maps/seminar_map.yaml` | karta za AMCL |
+| `pick_room` / `place_room` | `blue` / `red` | odakle se uzima i kamo se odlaže |
+
+Mapiranje je zaseban korak (`mapping.launch.py`); misija vozi po **spremljenoj** karti.
+
+## 5. Što se očekuje u logu
+
+```
+mission: drive posture ... verified
+WAITING for the user: press "MISIJA: po kutiju" ...
+NAV: arrived at "blue:dock"
+STEP5d left tool tip 1.1 mm from its target
+CARRIAGE LIFT MEASURED left=0.5500 right=0.5500 m
+NAV: arrived at "red:dock"
+PLACE step 6: the arms carry the cube +19.6 cm forward and +1.3 cm across
+PLACE the cube bottom is +4 mm from the table top
+PLACE VERIFIED: the centre of the cube is 5 mm from the marker centre
+MISSION COMPLETE: the cube is on the marker.
+```
+
+Bez retka `PLACE VERIFIED` run **nije** uspjeh, ma što ostalo pisalo — sve provjere su neovisne o
+naredbi, a neuspjeh se prijavljuje i prekida
+([odluka D-12](notes/04_odluke/D-12_honesty_abort_over_fake.md)).
+
+## 6. Provjere bez simulatora
+
 ```bash
-ros2 launch pas_dual_arm_bringup sim.launch.py
+./scripts/run_native.sh python3 scripts/check_doors.py    # vrata iz karte
+./scripts/run_native.sh python3 scripts/check_zones.py    # zone, portali, dock poze
+./scripts/run_native.sh python3 scripts/check_map.py      # kvaliteta karte
 ```
-Ova skripta učitava `seminar_world.sdf` koji sadrži zid s 0.8m prolazom, startnu kutiju s Aruco markerom i ciljani stol na fiksnoj lokaciji, a zatim instancira kontrolere za aktuatore robota.
 
-## Očekivani Rad (Future Tasks)
-1. Detekcija Aruco markera putem kamere (aruco_ros).
-2. Autonomna navigacija (Nav2) pomoću Lidar senzora na bazi.
-3. Rješavanje inverzne kinematike (MoveIt2) za zahvat objema rukama simultano.
-4. Prenošenje kroz vrata i odlaganje na stol.
+## 7. Arhitektura
+
+| Dio | Izvor | Upravljanje |
+|---|---|---|
+| Mobilna baza | PAL `omni_base_simulation` (geometrija, kotači, lidar) | `mecanum_drive_controller` (omnidirekcijski, x/y/yaw) |
+| Ruke (2 × Kinova Gen3, 7-DOF) | `ros2_kortex` | `joint_trajectory_controller` + **MoveIt 2** |
+| Hvataljke Robotiq 2F-85 | `ros2_kortex` | `GripperActionController` |
+| Torzo: 2 vertikalne vodilice | STL iz priloga zadatka | `joint_trajectory_controller` (prismatic, 0.05–0.65 m) |
+| Pan-tilt + RealSense D435 | `pan_tilt_ros`, `realsense-ros` | `joint_trajectory_controller` |
+| Senzori | lidar (1080 zraka), RGBD na glavi, **2 × RGBD na zapešćima**, kontaktni senzori na jastučićima, FT na zapešćima | — |
+| Sučelje prema Gazebu | `ign_ros2_control/IgnitionSystem` | — |
+| Mapiranje / navigacija | `slam_toolbox` + `nav2` (AMCL, NavFn, DWB, collision monitor) | — |
+| Percepcija kutije | ArUco `DICT_4X4_50` (vlastiti detektor, `cv2.aruco`) | — |
+
+Kutija: **0.30 m, 0.3 kg**, ArUco marker na prednjoj plohi i po jedan na bočnima (za kamere na
+zapešćima). Svijet: tri sobe u obliku slova L, dva otvora od **0.98 m**.
+
+## 8. Poznata ograničenja (iskreno)
+
+| Što | Zašto |
+|---|---|
+| Kutija se drži **krutim spojem** (`DetachableJoint`), uključenim tek nakon dokazanog obostranog kontakta | DART je ne drži trenjem — iscrpno probano (`notes/03_problemi/P-15…`) |
+| Mase torza su **procjena** (12 kg vodilica, 2 kg klizač) | nema podataka proizvođača vodilica |
+| Nošenje visi o spoju na **lijevom** zapešću, iako obje ruke drže kutiju | dvije krute veze ruše solver (`P-17`) |
+| Pogon je `mecanum_drive_controller`, ne PAL-ov `omni_drive_controller` | PAL-ov nije dostupan za Humble (`P-09`) |
+
+Puni popis s obrazloženjima: `notes/07_predaja/odstupanja.md`.
+
+## 9. Dokumentacija
+
+| Gdje | Što |
+|---|---|
+| `notes/00_MAPA.md` | stablo zahtjeva i status svakog (ulazna točka) |
+| `notes/00_run/00_testing/misija.md` | postupak pokretanja i što gledati, korak po korak |
+| `notes/03_problemi/` | svaki problem s **tablicom svih pokušaja** i izmjerenim ishodima |
+| `notes/04_odluke/` | odluke (ADR) |
+| `notes/06_parametri.md` | svaka podesiva vrijednost i zašto je takva |
+| `RUNNING.md` | kraće upute za rad po terminalima |
