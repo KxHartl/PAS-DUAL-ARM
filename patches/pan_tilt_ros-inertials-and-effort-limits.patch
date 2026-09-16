@@ -1,0 +1,56 @@
+diff --git a/pan_tilt_description/urdf/pan_tilt.urdf.xacro b/pan_tilt_description/urdf/pan_tilt.urdf.xacro
+index 734b5fb..da4c7e4 100644
+--- a/pan_tilt_description/urdf/pan_tilt.urdf.xacro
++++ b/pan_tilt_description/urdf/pan_tilt.urdf.xacro
+@@ -20,6 +20,11 @@
+           <color rgba="0.2 0.2 0.2 1"/>
+         </material>
+       </visual>
++      <inertial>
++        <origin xyz="0 0 0.01" rpy="0 0 0"/>
++        <mass value="0.3"/>
++        <inertia ixx="0.0005" ixy="0" ixz="0" iyy="0.0005" iyz="0" izz="0.0005"/>
++      </inertial>
+     </link>
+ 
+     <link name="${prefix}_yaw_link">
+@@ -32,13 +37,18 @@
+           <color rgba="0.2 0.2 0.2 1"/>
+         </material>
+       </visual>
++      <inertial>
++        <origin xyz="0 0 0.02" rpy="0 0 0"/>
++        <mass value="0.3"/>
++        <inertia ixx="0.0005" ixy="0" ixz="0" iyy="0.0005" iyz="0" izz="0.0005"/>
++      </inertial>
+     </link>
+     <joint name="${prefix}_yaw_joint" type="revolute">
+       <origin xyz="0.0 0.0 0.023" rpy="0.0 0.0 0.0"/>
+       <parent link="${prefix}_base_link"/>
+       <child link="${prefix}_yaw_link"/>
+       <axis xyz="0 0 1"/>
+-      <limit lower="${-P_PI/3}" upper="${P_PI/3}" effort="0.0" velocity="${P_PI/6}"/>
++      <limit lower="${-P_PI/3}" upper="${P_PI/3}" effort="10.0" velocity="${P_PI/6}"/>
+     </joint>
+ 
+     <link name="${prefix}_pitch_link">
+@@ -51,13 +61,18 @@
+           <color rgba="0.2 0.2 0.2 1"/>
+         </material>
+       </visual>
++      <inertial>
++        <origin xyz="0 0 0.02" rpy="0 0 0"/>
++        <mass value="0.2"/>
++        <inertia ixx="0.0003" ixy="0" ixz="0" iyy="0.0003" iyz="0" izz="0.0003"/>
++      </inertial>
+     </link>
+     <joint name="${prefix}_pitch_joint" type="revolute">
+       <origin xyz="0.0 0.0 0.062" rpy="0.0 0.0 0.0"/>
+       <parent link="${prefix}_yaw_link"/>
+       <child link="${prefix}_pitch_link"/>
+       <axis xyz="0 1 0"/>
+-      <limit lower="${-P_PI/3}" upper="${P_PI/3}" effort="0.0" velocity="${P_PI/6}"/>
++      <limit lower="${-P_PI/3}" upper="${P_PI/3}" effort="10.0" velocity="${P_PI/6}"/>
+     </joint>
+ 
+     <link name="${prefix}_surface"/>

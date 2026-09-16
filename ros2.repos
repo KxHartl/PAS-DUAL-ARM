@@ -11,6 +11,16 @@
 # Versions are pinned to the exact commit (not a branch) so the build does not
 # drift when upstream moves. The upstream branch each commit came from is noted
 # in a comment for future deliberate updates.
+#
+# Every version here MUST be a commit that exists on the upstream remote. A
+# local-only commit looks fine in this workspace and still breaks a fresh
+# clone: vcs import cannot check it out, silently leaves the repository's
+# default branch, and the build then fails somewhere unrelated. pan_tilt_ros
+# was pinned to a local commit until 16. 9. 2026., which left fresh clones on
+# the ROS 1 `master` branch and failed the whole workspace on find_package
+# (catkin). Local changes to upstream packages belong in patches/, never in a
+# commit that only exists here. Verify with:
+#   git ls-remote <url> | grep <commit>        # must print the commit
 repositories:
   aruco_ros:
     type: git
@@ -23,7 +33,10 @@ repositories:
   pan_tilt_ros:
     type: git
     url: https://github.com/I-Quotient-Robotics/pan_tilt_ros.git
-    version: b0f653428d25b968a4871ad0d9aae0e4d672affd   # humble-devel
+    # humble-devel (ROS 2). NOT master, which is the ROS 1/catkin branch.
+    # Our Ignition fix (inertials + effort limits) rides on top as
+    # patches/pan_tilt_ros-inertials-and-effort-limits.patch.
+    version: 9b0875817de805c126336f3ba68a1af718d393c6
   realsense-ros:
     type: git
     url: https://github.com/realsenseai/realsense-ros.git

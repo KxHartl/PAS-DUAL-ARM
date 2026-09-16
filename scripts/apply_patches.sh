@@ -18,6 +18,7 @@ cd "$repo_root"
 # patch file -> package directory it applies in
 declare -A patches=(
   ["patches/ros2_kortex-robotiq_2f_85-drop-isaac-args.patch"]="src/ros2_kortex"
+  ["patches/pan_tilt_ros-inertials-and-effort-limits.patch"]="src/pan_tilt_ros"
 )
 
 for patch in "${!patches[@]}"; do
