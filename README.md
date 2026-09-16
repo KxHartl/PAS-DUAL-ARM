@@ -176,7 +176,7 @@ commitove. Repo sadrži samo manifest `ros2.repos`.
 |---|---|---|---|---|
 | [`omni_base_simulation`](https://github.com/pal-robotics/omni_base_simulation) | PAL Robotics | Apache-2.0 | `77248ac` | mobilna baza: geometrija, kotači, lidar |
 | [`ros2_kortex`](https://github.com/Kinovarobotics/ros2_kortex) | Kinova | BSD | `116d87a` | Kinova Gen3 ruke + Robotiq 2F-85 hvataljke |
-| [`pan_tilt_ros`](https://github.com/I-Quotient-Robotics/pan_tilt_ros) | I-Quotient-Robotics | MIT | `b0f6534` | pan-tilt mehanizam na vrhu robota |
+| [`pan_tilt_ros`](https://github.com/I-Quotient-Robotics/pan_tilt_ros) | I-Quotient-Robotics | MIT | `9b08758` | pan-tilt mehanizam na vrhu robota |
 | [`realsense-ros`](https://github.com/realsenseai/realsense-ros) | Intel RealSense | Apache-2.0 | `6d87b07` | opis RealSense D435 kamere |
 | [`aruco_ros`](https://github.com/pal-robotics/aruco_ros) | PAL Robotics | MIT | `86a0bbb` | ArUco (koristi se vlastiti detektor, [D-02](notes/04_odluke/D-02_own_aruco_detector.md)) |
 
