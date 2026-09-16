@@ -6,8 +6,8 @@ log/
 .venv/
 __pycache__/
 *.pyc
-# Obsidian: per-user UI state only (vault config itself is tracked)
-.obsidian/workspace*.json
+# Obsidian: postavke uredivaca, nisu dio simulacije - ostaju lokalno
+/.obsidian/
 # Assistant's email contains personal data - quoted in notes/01_zahtjevi/izvori.md instead
 data/raw/zadatak/email_*
 # SLAM maps: the .yaml/.pgm pair is what map_server and the keepout filter need and
@@ -42,11 +42,12 @@ src/pas_dual_arm_bringup/maps/map_2*
 
 # Radni docs/ - upute su sada README.md, MAPPING.md i RUNNING.md
 /docs/
+# Izvor seminara (LaTeX, slike): gotov PDF je u rootu kao seminar.pdf
+/seminar/
 
-# RAG/LiteRealm scaffolding. data/raw/zadatak/ ([ZAD], [MAIL]) OSTAJE u repou.
-/data/README.md
-/data/rag/
-/data/processed/
+# Materijal zadatka (PDF i slike asistenta) i RAG scaffolding: nije nas rad,
+# ostaje lokalno.
+/data/
 /dist/
 
 # Napušteni pokus hvata silom (D-21): misija radi na `position` sučelju i ovo
