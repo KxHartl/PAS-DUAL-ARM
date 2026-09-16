@@ -43,6 +43,11 @@ class NavGuiNode(Node):
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.goto = self.create_publisher(String, '/room_navigator/goto', 10)
+        # The mission node waits for this before anything drives; the room name
+        # tells it where the cube is. Separate from /room_navigator/goto on
+        # purpose: that one drives the base right now, this one hands the whole
+        # run over to main_task, which drives through the navigator itself.
+        self.mission = self.create_publisher(String, '/mission/start', 10)
         self.status = {'state': 'idle', 'detail': 'waiting for the navigator'}
         self.graph = None
         self.scan = None
@@ -68,6 +73,10 @@ class NavGuiNode(Node):
     def send(self, room):
         self.goto.publish(String(data=room))
         self.get_logger().info(f'requested: {room}')
+
+    def start_mission(self, room):
+        self.mission.publish(String(data=room))
+        self.get_logger().info(f'mission requested: go for the cube in {room}')
 
     def pose(self):
         try:
@@ -102,7 +111,7 @@ class NavGui:
         self.node = node
         self.root = tk.Tk()
         self.root.title('PAS dual arm - room navigation')
-        self.root.geometry('560x430')
+        self.root.geometry('560x490')
         pad = {'padx': 8, 'pady': 5}
 
         frame = ttk.Frame(self.root, padding=12)
@@ -120,23 +129,32 @@ class NavGui:
             button.grid(row=1, column=column, **pad)
             self.buttons[room] = button
 
+        # Hands the whole run to the mission node: it drives to the cube itself,
+        # picks it up, carries it to the red room and places it. The buttons
+        # above stay what they are - plain drives, nothing else.
+        mission = tk.Button(frame, text='MISIJA: po kutiju', height=2,
+                            bg='#276749', fg='white',
+                            font=('TkDefaultFont', 11, 'bold'),
+                            command=lambda: self.node.start_mission('blue'))
+        mission.grid(row=2, column=0, columnspan=3, sticky='ew', **pad)
+
         stop = tk.Button(frame, text='STOP', height=2, bg='#c53030', fg='white',
                          font=('TkDefaultFont', 11, 'bold'),
                          command=lambda: self.node.send('stop'))
-        stop.grid(row=2, column=0, columnspan=3, sticky='ew', **pad)
+        stop.grid(row=3, column=0, columnspan=3, sticky='ew', **pad)
 
         self.state = tk.Label(frame, text='idle', font=('TkDefaultFont', 11, 'bold'),
                               fg='white', bg=COLOURS['idle'], anchor='w', padx=10, pady=6)
-        self.state.grid(row=3, column=0, columnspan=3, sticky='ew', **pad)
+        self.state.grid(row=4, column=0, columnspan=3, sticky='ew', **pad)
 
         self.detail = ttk.Label(frame, text='', wraplength=510, justify='left')
-        self.detail.grid(row=4, column=0, columnspan=3, sticky='w', **pad)
+        self.detail.grid(row=5, column=0, columnspan=3, sticky='w', **pad)
 
-        ttk.Separator(frame, orient='horizontal').grid(row=5, column=0, columnspan=3,
+        ttk.Separator(frame, orient='horizontal').grid(row=6, column=0, columnspan=3,
                                                        sticky='ew', pady=6)
         self.readout = ttk.Label(frame, text='', justify='left',
                                  font=('TkFixedFont', 9))
-        self.readout.grid(row=6, column=0, columnspan=3, sticky='w', **pad)
+        self.readout.grid(row=7, column=0, columnspan=3, sticky='w', **pad)
 
         for column in range(3):
             frame.columnconfigure(column, weight=1)

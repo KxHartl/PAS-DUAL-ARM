@@ -549,7 +549,7 @@ def default_params(node=None):
         # turn to the door heading without a corner entering the lane - plus the
         # 0.10 m it may stop short by and room for the drift of a DWB turn, which
         # rotates and translates at once. 0.673 + 0.10 + 0.15 = 0.923.
-        'portal_standoff': 0.95,
+        'portal_standoff': 0.65,
         # The top overhangs the legs the detector finds: 0.80 m of table over a
         # 0.70 m leg span, and the 0.2086 m scan plane sees only the legs. 0.05 m
         # a side is the difference, added to every zone and pose built from a
@@ -562,7 +562,7 @@ def default_params(node=None):
         # centre of these tables, which is the 1.50 m that worked in runs 46-58.
         # It only has to be close enough for the camera; the last metre is the
         # visual servo's, on raw cmd_vel, which reads no costmap at all.
-        'table_standoff': 1.15,
+        'table_standoff': 0.95,
         # The field (Zones.field). `field_width` is how far the ramp falls off
         # beyond the lethal core, `field_peak` how hard it pushes right at the
         # core - a mask value 0-100, which Costmap2D turns into 0-254 of cost and
@@ -587,7 +587,7 @@ def default_params(node=None):
         # Clearance from the table's edge to the robot's front at the dock pose.
         # Everything else about that pose is geometry: plate + HALF_LENGTH is
         # where the front touches.
-        'table_dock_safety': 0.10,
+        'table_dock_safety': 0.15,
         # How far the doorway zones are grown before the global planner is shown
         # them - see Zones.mask(). The robot's inscribed radius: the largest
         # circle that fits inside its 1.04 x 0.854 m footprint, which is the same

@@ -81,7 +81,11 @@ class BaseDriver:
         joint's constraint solver explode and flings the box; smooth ramps avoid
         it (the way Nav2's smoothed velocities did when carry worked before)."""
         n = max(1, int(secs * rate))
-        ramp = max(1, int(0.8 * rate))   # ~0.8 s ease in / ease out
+        # ~0.8 s ease in / ease out, but never more than a third of the move:
+        # on a short correction an 0.8 s ramp is the whole profile, so the base
+        # either crawls or - with the ramp padding the duration - sails past the
+        # target. A 2 cm strafe has to be a 2 cm strafe (user, 16. 9.).
+        ramp = max(1, min(int(0.8 * rate), n // 3))
         period = 1.0 / rate
         # Pace the ticks by SIM time, not wall time: `secs` of commanded motion
         # only integrates `secs` of sim time worth of distance, and the GUI sim
@@ -128,15 +132,19 @@ class BaseDriver:
             if abs(yaw_error) > 0.08:
                 self.get_logger().error(f'straight drive yaw drifted {yaw_error:.3f} rad')
                 return None
-            if moved >= abs(metres) - 0.02:
+            if moved >= abs(metres) - 0.01:
                 return moved
-            if _ > 0 and moved < previous + 0.005:
+            if _ > 0 and moved < previous + 0.004:
                 self.get_logger().error('straight drive made no odometry progress')
                 return None
             previous = moved
             remaining = abs(metres) - moved
-            self.drive(math.copysign(speed, metres), 0.0,
-                       max(0.5, min(2.0, remaining / speed + 0.8)))
+            # Ease off as the target approaches: at full speed the shortest
+            # possible burst still covers several centimetres, which turns a
+            # small correction into an overshoot.
+            step = min(speed, max(0.02, remaining / 1.5))
+            self.drive(math.copysign(step, metres), 0.0,
+                       max(0.4, min(2.0, remaining / step + 0.4)))
         self.get_logger().error('straight drive failed to reach requested distance')
         return None
 
@@ -165,15 +173,18 @@ class BaseDriver:
             if abs(yaw_error) > 0.08:
                 self.get_logger().error(f'strafe yaw drifted {yaw_error:.3f} rad')
                 return None
-            if moved >= abs(metres) - 0.01:
+            if moved >= abs(metres) - 0.008:
                 return moved
             if attempt > 0 and moved < previous + 0.003:
                 self.get_logger().error('strafe made no odometry progress')
                 return None
             previous = moved
             remaining = abs(metres) - moved
-            self.drive(0.0, 0.0, max(0.5, min(2.0, remaining / speed + 0.8)),
-                       lat=math.copysign(speed, metres))
+            # Same as the straight drive: the last centimetres are taken slowly,
+            # or a 2 cm correction lands 4 cm across (user, 16. 9.).
+            step = min(speed, max(0.02, remaining / 1.5))
+            self.drive(0.0, 0.0, max(0.4, min(2.0, remaining / step + 0.4)),
+                       lat=math.copysign(step, metres))
         self.get_logger().error('strafe failed to reach requested distance')
         return None
 

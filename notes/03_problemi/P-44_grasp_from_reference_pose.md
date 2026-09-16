@@ -108,6 +108,9 @@ i dalje 3 mm).
   plohe (debljina jastučića pod nagibom 55°): u plohu ulazi površina jastučića, ne središte.
 
 ## Otvoreno
-- Navigacija s `DRIVE_V4` kao pozom vožnje nije ponovno provjerena (Nav2 statički footprint je
-  mjeren za `ARM_CARRY_V2`; dinamički footprint, [[D-19_dynamic_footprint]], prati stvarni obris).
+- ~~Navigacija s `DRIVE_V4` kao pozom vožnje nije ponovno provjerena.~~ **Riješeno 16. 9. (run M1,
+  GUI korisnika):** 3 prolaza kroz vrata bez aborta, gate ruku `worst joint 0.000 rad`, poravnanje
+  traži 0.854–0.879 m otvora, najtješnji razmak 4.4–4.9 cm — na razini runa 62 s `ARM_CARRY_V2`.
+  Detalji u [[runovi]] (M1) i [[P-45_mission_integration]]. **Dock poza time nije provjerena** (M1 je
+  vozio `approach`, ne `blue:dock`); to vozi M2.
 - GUI potvrda korisnika.

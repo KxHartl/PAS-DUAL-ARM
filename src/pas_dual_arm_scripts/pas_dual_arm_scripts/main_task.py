@@ -24,6 +24,7 @@ Run order (separate terminals, all with Fast DDS):
   ros2 launch pas_dual_arm_bringup nav2.launch.py
   ros2 launch pas_dual_arm_bringup task.launch.py   # move_group + aruco + this
 """
+import json
 import math
 import subprocess
 import time
@@ -32,7 +33,7 @@ import numpy as np
 import rclpy
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory, GripperCommand
-from geometry_msgs.msg import Pose, Point, Quaternion
+from geometry_msgs.msg import Pose, Point, Point32, Polygon, Quaternion
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from nav2_msgs.action import NavigateToPose
 from moveit_msgs.srv import GetStateValidity, GetCartesianPath, GetPositionIK
@@ -59,7 +60,8 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from pas_dual_arm_scripts.base_drive import BaseDriver
 from pas_dual_arm_scripts.kinematics import ArmJog, Kinematics, pad_contact_pose
 from pas_dual_arm_scripts.robot_extent import link_points
-from pas_dual_arm_scripts.postures import (ARM_DRIVE, DETECTION_CARRIAGE, DRIVE_CARRIAGE,
+from pas_dual_arm_scripts.postures import (ARM_CARRY, ARM_DRIVE, DETECTION_CARRIAGE,
+                                           DRIVE_CARRIAGE,
                                            GRIPPER_CLOSED,
                                            POSTURES, joint_constraints,
                                            move_to_posture, switch_arm_hold)
@@ -277,6 +279,32 @@ class MainTask(BaseDriver, Node):
         self.declare_parameter('region_x', 0.0)
         self.declare_parameter('region_y', -4.5)
         self.declare_parameter('region_yaw', -1.57079632679)
+        # --- mission mode (user, 16. 9.) -------------------------------------
+        # The whole [MAIL] run in one node: wait for the user, drive to the room
+        # with the cube, pick it, carry it through the doorway, place it. Off by
+        # default so the isolated pick runs (V2-V5, spawned at the dock) are
+        # unchanged. Driving goes through room_navigator, NOT through the raw
+        # /navigate_to_pose goal `navigate_region` sends: only the navigator has
+        # the portal poses and the dock geometry that made the doorways work
+        # (P-39, runs 62/70).
+        self.declare_parameter('mission', False)
+        self.declare_parameter('pick_room', 'blue')
+        self.declare_parameter('place_room', 'red')
+        self.declare_parameter('goto_timeout', 600.0)
+        # Putting the cube down on the marker. How high above the table top the
+        # cube's bottom face rides while the base moves it into place, how far
+        # into the table it is pressed at the end (nothing: it is set down, not
+        # pushed), and how fast the carriages lower it.
+        # How high the cube's BOTTOM rides above the marker while the base moves
+        # it in: the user's rule is hands at marker + this + half a cube (16. 9.).
+        self.declare_parameter('place_clearance', 0.20)
+        self.declare_parameter('place_touch', 0.002)
+        self.declare_parameter('place_lower_speed', 0.01)
+        # How far the base may close in on the table from the dock. Worked out
+        # from the run of 16. 9.: the marker sat 0.915 m ahead and the table edge
+        # 0.22 m nearer, so the edge was 0.695 m ahead of base_link while the
+        # base itself ends at 0.41 m - 0.285 m of slack. This keeps 4.5 cm of it.
+        self.declare_parameter('place_max_advance', 0.24)
 
         self.pregrasp_xy = self.get_parameter('pregrasp_xy').value
         self.pregrasp_yaw = self.get_parameter('pregrasp_yaw').value
@@ -397,7 +425,51 @@ class MainTask(BaseDriver, Node):
                 'ros_gz_interfaces/Contacts unavailable; contact-sensor signal '
                 'disabled (depth + stall + effort still used).')
 
+        # --- mission plumbing -------------------------------------------------
+        # room_navigator drives; this node only asks and waits. Its status topic
+        # is LATCHED, so an 'arrived' left over from an earlier leg arrives the
+        # moment we subscribe - see _goto for why that cannot be trusted on its
+        # own.
+        self.goto_pub = self.create_publisher(String, '/room_navigator/goto', 10)
+        self._nav_status = None
+        self.create_subscription(
+            String, '/room_navigator/status', self._nav_status_cb,
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        # The user's go-ahead: the panel button or a topic publication. Nothing
+        # moves the base before this arrives.
+        self._mission_start = None
+        self.create_subscription(String, '/mission/start',
+                                 self._mission_start_cb, 10)
+        # Which posture the arms are holding, for the navigator's doorway gate.
+        # Empty: DRIVE_V4. With the cube: CARRY_V4. Latched, because the gate
+        # reads it whenever it happens to run, not when we happen to publish.
+        self.arm_posture_pub = self.create_publisher(
+            String, '/room_navigator/arm_posture',
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        # The cube's own ground corners while it is carried, so the footprint
+        # Nav2 plans with includes what the robot holds and not just its arms.
+        self.carried_pub = self.create_publisher(
+            Polygon, '/mission/carried_points',
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        # How the cube sits in the hand, recorded at the moment of the attach:
+        # {'offset', 'normal', 'half'} in the left_tool_tip frame. The wrist
+        # cameras CANNOT be used once the cube is held - the pads end up 2 cm
+        # from the markers and nothing decodes at that range - so the pose of a
+        # held cube comes from this rigid relation instead (P-45).
+        self._hold = None
+
         self.get_logger().info('Main task node ready.')
+
+    def _nav_status_cb(self, msg):
+        try:
+            self._nav_status = json.loads(msg.data)
+        except json.JSONDecodeError:
+            self._nav_status = {'state': 'unknown', 'detail': msg.data}
+
+    def _mission_start_cb(self, msg):
+        self._mission_start = msg.data.strip() or ''
+        self.get_logger().info(
+            f'mission start requested by the user: "{self._mission_start}"')
 
     def _cloud_cb(self, msg):
         self._last_cloud = msg
@@ -641,8 +713,8 @@ class MainTask(BaseDriver, Node):
         req.group_name = group
         req.num_planning_attempts = 10
         req.allowed_planning_time = 5.0
-        req.max_velocity_scaling_factor = 0.2
-        req.max_acceleration_scaling_factor = 0.2
+        req.max_velocity_scaling_factor = 0.7
+        req.max_acceleration_scaling_factor = 0.7
         c = Constraints(name=label)
         for name, val in joints.items():
             jc = JointConstraint()
@@ -657,8 +729,8 @@ class MainTask(BaseDriver, Node):
         self.get_logger().info(f'{label}: planning {group} (joint-space)')
         return self._send_and_wait(self.move, goal, label)
 
-    def plan_arm_joints(self, group, joints, label, velocity_scale=0.2,
-                        acceleration_scale=0.2):
+    def plan_arm_joints(self, group, joints, label, velocity_scale=0.6,
+                        acceleration_scale=0.6):
         """Plan ONE arm to explicit joint targets WITHOUT executing it, and
         return the trajectory. Needed because move_group executes one
         trajectory at a time: a two-arm move driven through it is necessarily
@@ -1195,8 +1267,8 @@ class MainTask(BaseDriver, Node):
             req.group_name = group
             req.num_planning_attempts = 20
             req.allowed_planning_time = 8.0
-            req.max_velocity_scaling_factor = 0.2
-            req.max_acceleration_scaling_factor = 0.2
+            req.max_velocity_scaling_factor = 0.7
+            req.max_acceleration_scaling_factor = 0.7
             req.goal_constraints.append(
                 self._pose_goal_constraint(link, frame, pose,
                                            pos_tol=0.05, ang_tol=ori_tol))
@@ -1218,8 +1290,8 @@ class MainTask(BaseDriver, Node):
         req.group_name = 'both_arms'
         req.num_planning_attempts = 10
         req.allowed_planning_time = 5.0
-        req.max_velocity_scaling_factor = 0.2
-        req.max_acceleration_scaling_factor = 0.2
+        req.max_velocity_scaling_factor = 0.7
+        req.max_acceleration_scaling_factor = 0.7
         req.goal_constraints.append(Constraints(
             name=label,
             position_constraints=(
@@ -1248,8 +1320,8 @@ class MainTask(BaseDriver, Node):
         req.group_name = 'both_arms'
         req.num_planning_attempts = 10
         req.allowed_planning_time = 5.0
-        req.max_velocity_scaling_factor = 0.2
-        req.max_acceleration_scaling_factor = 0.2
+        req.max_velocity_scaling_factor = 0.7
+        req.max_acceleration_scaling_factor = 0.7
         req.goal_constraints.append(joint_constraints(posture, label))
         goal.planning_options.plan_only = False
         self.get_logger().info(f'{label}: planning both_arms (joint-space)')
@@ -1265,7 +1337,7 @@ class MainTask(BaseDriver, Node):
         traj.joint_names = ['pan_tilt_yaw_joint', 'pan_tilt_pitch_joint']
         pt = JointTrajectoryPoint()
         pt.positions = [0.0, float(pitch)]
-        pt.time_from_start.sec = 2
+        pt.time_from_start.sec = 1
         traj.points.append(pt)
         goal.trajectory = traj
         self.get_logger().info(f'{label}: tilt camera to pitch={pitch:.2f}')
@@ -1358,7 +1430,7 @@ class MainTask(BaseDriver, Node):
         return width
 
     # ------------------------------------------------------------------ torso
-    def move_torso(self, height, label, secs=4):
+    def move_torso(self, height, label, secs=2):
         if not self._wait_server(self.torso, 'torso_controller'):
             return False
         goal = FollowJointTrajectory.Goal()
@@ -1783,7 +1855,7 @@ class MainTask(BaseDriver, Node):
         traj.joint_names = ['pan_tilt_yaw_joint', 'pan_tilt_pitch_joint']
         pt = JointTrajectoryPoint()
         pt.positions = [float(pan), float(pitch)]
-        pt.time_from_start.sec = 2
+        pt.time_from_start.sec = 1
         traj.points.append(pt)
         goal.trajectory = traj
         self.get_logger().info(f'{label}: camera pan={pan:.2f} pitch={pitch:.2f}')
@@ -1984,6 +2056,64 @@ class MainTask(BaseDriver, Node):
             f'wrist|effort|={wrist_eff:.2f}.')
         return {'contact': contact, 'stalled': bool(stalled)}
 
+    def _wait_for_start(self, default_room):
+        """Block until the user sends the robot after the cube. Returns the room."""
+        self.get_logger().info(
+            'WAITING for the user: press "MISIJA: po kutiju" in the navigation '
+            'panel, or run: ros2 topic pub --once /mission/start '
+            f'std_msgs/String "{{data: {default_room}}}"')
+        while rclpy.ok() and self._mission_start is None:
+            rclpy.spin_once(self, timeout_sec=0.1)
+        room = (self._mission_start or '').strip() or default_room
+        self._mission_start = None
+        self.get_logger().info(f'MISSION START: going for the cube in "{room}"')
+        return room
+
+    def _goto(self, destination, timeout=None):
+        """Drive to `destination` through room_navigator and wait for its verdict.
+
+        Not /navigate_to_pose: the navigator is what knows the portal poses, the
+        doorway gate and the dock geometry (P-39). The verdict is read off the
+        latched status topic, where a stale 'arrived' from an earlier leg is
+        indistinguishable from this one's - so an 'arrived' only counts after a
+        'driving' has been seen for the destination we just asked for.
+        """
+        timeout = (float(self.get_parameter('goto_timeout').value)
+                   if timeout is None else float(timeout))
+        self._nav_status = None
+        deadline = time.monotonic() + 30.0
+        while rclpy.ok() and self.goto_pub.get_subscription_count() < 1:
+            if time.monotonic() > deadline:
+                self.get_logger().error(
+                    'room_navigator is not listening on /room_navigator/goto; '
+                    'is nav2.launch.py up (zones:=true)?')
+                return False
+            rclpy.spin_once(self, timeout_sec=0.1)
+        self.goto_pub.publish(String(data=destination))
+        self.get_logger().info(f'NAV: asked room_navigator for "{destination}"')
+        seen_driving = False
+        end = time.monotonic() + timeout
+        while rclpy.ok() and time.monotonic() < end:
+            rclpy.spin_once(self, timeout_sec=0.1)
+            status = self._nav_status
+            if not status or status.get('destination') != destination:
+                continue
+            state = status.get('state')
+            if state == 'driving':
+                if not seen_driving:
+                    self.get_logger().info(f'NAV: {status.get("detail")}')
+                seen_driving = True
+            elif state in ('failed', 'aborted', 'cancelled'):
+                self.get_logger().error(
+                    f'NAV {state} on the way to "{destination}": '
+                    f'{status.get("detail")}')
+                return False
+            elif state == 'arrived' and seen_driving:
+                self.get_logger().info(f'NAV: arrived at "{destination}"')
+                return True
+        self.get_logger().error(f'NAV: timed out on the way to "{destination}"')
+        return False
+
     def _navigate_to_region(self):
         """Reach the operator's approximate map-frame region before scanning."""
         xy = (self.get_parameter('region_x').value,
@@ -2037,11 +2167,11 @@ class MainTask(BaseDriver, Node):
 
     # --------------------------------------------------------------------- run
     # ------------------------------------------------------- grasp helpers
-    def _torso_to(self, height, label, secs=8):
+    def _torso_to(self, height, label, secs=3):
         """Carriages to `height`, then MEASURED - the action status is not trusted."""
         if not self.move_torso(height, label, secs=secs):
             return False
-        settle = time.monotonic() + 3.0
+        settle = time.monotonic() + 1.2
         while time.monotonic() < settle:
             rclpy.spin_once(self, timeout_sec=0.05)
         at = [self._joint.get(n, (float('nan'), 0.0))[0]
@@ -2105,7 +2235,7 @@ class MainTask(BaseDriver, Node):
         results = self.move_arms_parallel(trajs, label, min_duration=4.0)
         return all(results.values())
 
-    def _torso_and_arms_together(self, height, via, detection, jog, rise, seconds=8.0):
+    def _torso_and_arms_together(self, height, via, detection, jog, rise, seconds=4.0):
         """Carriages to `height` while both arms swing to `via`, then drop to
         the detection pose. The arms start after `arm_start_delay` of the
         carriage stroke and take as long as it does; the path was checked
@@ -2246,6 +2376,395 @@ class MainTask(BaseDriver, Node):
             f'{(grip.x - pull - half - TORSO_FRONT_X) * 100:.1f} cm in front of the torso')
         self.measure_width('cube pulled in')
 
+    def _publish_carried_cube(self):
+        """Tell the footprint publisher the ground corners of the held cube.
+
+        Measured, like everything else about the cube while it is held: the two
+        wrist cameras give its centre and the direction across it, and the cube
+        is square. Without this the outline Nav2 plans with ends at the hands
+        and the cube hangs outside it (user, 16. 9.).
+        """
+        cube, half, normal = self._cube_in_hands()
+        if cube is None:
+            self.get_logger().error(
+                'cannot work out where the held cube is; the footprint would cover '
+                'the arms only and the cube would hang outside it')
+            return False
+        along = np.array([-normal[1], normal[0], 0.0])
+        message = Polygon()
+        for sx in (1.0, -1.0):
+            for sy in (1.0, -1.0):
+                corner = cube + sx * half * normal + sx * sy * half * along
+                message.points.append(Point32(x=float(corner[0]),
+                                              y=float(corner[1]), z=0.0))
+        self.carried_pub.publish(message)
+        self.get_logger().info(
+            f'carried cube published to the footprint: {2 * half:.3f} m square at '
+            f'({cube[0]:.2f}, {cube[1]:.2f})')
+        return True
+
+    def _publish_carried_nothing(self):
+        self.carried_pub.publish(Polygon())
+        self.get_logger().info('carrying nothing: footprint is the robot again')
+
+    def _place_marker_in_base(self, timeout=8.0, max_age=0.6):
+        """Centre of the place marker in base_link, from a FRESH detection."""
+        deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
+        while rclpy.ok() and self.get_clock().now().nanoseconds < deadline:
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    'base_link', 'place_marker_frame', rclpy.time.Time())
+            except Exception:
+                rclpy.spin_once(self, timeout_sec=0.1)
+                continue
+            stamp = tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9
+            age = self.get_clock().now().nanoseconds * 1e-9 - stamp
+            if not 0 <= age <= max_age:
+                rclpy.spin_once(self, timeout_sec=0.05)
+                continue
+            t = tf.transform.translation
+            return np.array([t.x, t.y, t.z])
+        return None
+
+    def _cube_in_hands(self, timeout=6.0):
+        """(centre, half width, face normal) of the cube, in base_link.
+
+        While the cube is HELD this comes from the relation recorded when the
+        hands closed on it (`_hold`), carried forward through the live transform
+        of the tool tip. The wrist cameras are useless at that point: the pads
+        sit on the markers, 2 cm away, and nothing decodes there - which is what
+        aborted the place on 16. 9. (P-45). Before the grasp, when the hands are
+        still 30 cm off, the cameras are exactly the right source and are used.
+        """
+        if self._hold is not None:
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    'base_link', 'left_tool_tip', rclpy.time.Time())
+            except Exception as exc:
+                self.get_logger().error(f'no tool tip transform for the held cube: {exc}')
+                return None, None, None
+            rotation = quat_to_matrix(tf.transform.rotation)
+            origin = np.array([tf.transform.translation.x,
+                               tf.transform.translation.y,
+                               tf.transform.translation.z])
+            centre = rotation @ self._hold['offset'] + origin
+            normal = rotation @ self._hold['normal']
+            return centre, self._hold['half'], normal
+        faces = {side: self.wrist_face(side, timeout=timeout, below_marker=0.0)
+                 for side in ('left', 'right')}
+        if any(f is None for f in faces.values()):
+            missing = [s for s, f in faces.items() if f is None]
+            self.get_logger().error(
+                f'wrist cameras cannot see the cube they are holding: {missing}')
+            return None, None, None
+        across = faces['left'] - faces['right']
+        span = float(np.linalg.norm(across[:2]))
+        if not 0.24 <= span <= 0.36:
+            self.get_logger().error(
+                f'faces {span:.3f} m apart - that is not the 0.30 m cube')
+            return None, None, None
+        centre = (faces['left'] + faces['right']) / 2.0
+        # The markers sit 0.056 m above the face centres (seminar_world.sdf).
+        centre[2] -= 0.056
+        normal = np.array([across[0], across[1], 0.0]) / span
+        return centre, span / 2.0, normal
+
+    def _move_cube_by(self, delta, label):
+        """Carry the held cube `delta` (base_link metres) with both hands at once.
+
+        A straight line to a computed point, orientation held - this is how the
+        arms put the cube exactly where it has to go once the base has stopped,
+        forward AND across (user, 16. 9.). MoveIt checks the end state, so this
+        either makes the move or says it cannot.
+        """
+        delta = np.asarray(delta, dtype=float)
+        distance = float(np.linalg.norm(delta))
+        if distance < 0.005:
+            return True
+        kin, hulls, jog = self._grasp_tools()
+        live = self._live_joints()
+        paths, moved = {}, dict(live)
+        try:
+            for side in ('left', 'right'):
+                R, t = jog[side].hand(live)
+                steps = max(1, int(math.ceil(distance / 0.005)))
+                walk, path = dict(live), [{n: live[n] for n in jog[side].names}]
+                for k in range(1, steps + 1):
+                    walk.update(zip(jog[side].names, jog[side].solve(
+                        walk, R, t + k / steps * delta, max_jump=0.3)))
+                    path.append({n: walk[n] for n in jog[side].names})
+                paths[side] = path
+                moved.update(path[-1])
+        except ValueError as exc:
+            self.get_logger().error(f'{label}: the arms cannot reach there: {exc}')
+            return False
+        if self._state_valid(moved, f'{label}: MoveIt check') is False:
+            self.get_logger().error(f'{label}: that move ends in a collision')
+            return False
+        speed = float(self.get_parameter('pull_speed').value)
+        return self._straight_both(paths, label, 0.005 / speed)
+
+    def _to_odom(self, point_xy):
+        """A base_link (x, y) as an odom (x, y), or None."""
+        here = self._odom_xy()
+        yaw = self._odom_yaw()
+        if here is None or yaw is None:
+            return None
+        return (here[0] + point_xy[0] * math.cos(yaw) - point_xy[1] * math.sin(yaw),
+                here[1] + point_xy[0] * math.sin(yaw) + point_xy[1] * math.cos(yaw))
+
+    def _marker_in_base(self, mark_odom, height):
+        """Where the remembered marker is now, in base_link, from odometry.
+
+        The marker is read ONCE, from the dock, and carried forward from there.
+        Close in it cannot be read at all - after the base has taken its 24 cm
+        the plate is under the robot's own nose - and a stale reading looks
+        exactly like a fresh one. On 16. 9. that cost the run: the marker was
+        still remembered at 0.92 m while the cube had moved 0.24 m closer, so the
+        arms were asked to reach 43 cm and refused, correctly, as unreachable.
+        """
+        here = self._odom_xy()
+        yaw = self._odom_yaw()
+        if here is None or yaw is None:
+            return None
+        dx, dy = mark_odom[0] - here[0], mark_odom[1] - here[1]
+        return np.array([dx * math.cos(yaw) + dy * math.sin(yaw),
+                         -dx * math.sin(yaw) + dy * math.cos(yaw),
+                         float(height)])
+
+    def _place_on_marker(self):
+        """Put the cube down with the centre of its BOTTOM face on the marker.
+
+        The mirror of the pick: the marker is measured the way the cube was, the
+        carriages set the height, the base closes the last stretch and the
+        carriages lower the cube onto the table. Nothing is taken from the world
+        file - the marker is where the camera says it is, and if the camera
+        cannot find it the cube is not put down anywhere (D-12).
+        """
+        clearance = float(self.get_parameter('place_clearance').value)
+        touch = float(self.get_parameter('place_touch').value)
+        lower_speed = float(self.get_parameter('place_lower_speed').value)
+
+        # P1. Read the marker from the dock: far enough not to foreshorten it
+        #     (P-19) and with nothing of the robot over it.
+        self.look_down(0.65, 'PLACE look at the table')
+        mark = self._place_marker_in_base()
+        if mark is None:
+            self._fail('the place marker was never seen; the cube stays in the hands')
+            return False
+        self.get_logger().info(
+            f'PLACE marker at base_link ({mark[0]:.3f}, {mark[1]:.3f}, {mark[2]:.3f})')
+        # Remember it in odom too: once the cube is on it the marker is covered,
+        # and the check at the end still has to know where it was.
+        mark_odom = self._to_odom(mark)
+        if mark_odom is None:
+            self._fail('no odometry to remember where the marker is')
+            return False
+        # The table top does not move, so its height is kept from this one
+        # reading; everything after this works from the odometry copy.
+        mark_height = float(mark[2])
+        # The table under the marker, so MoveIt knows what the arms are over.
+        self.publish_collision_scene(
+            Point(x=float(mark[0]), y=float(mark[1]), z=float(mark[2]) + 0.15),
+            table_top_z=float(mark[2]))
+
+        # P2. Stopped at the table, the robot is no longer driving: first it
+        #     lifts the cube to where the user wants the hands - the marker,
+        #     plus `place_clearance`, plus half a cube - so the cube rides
+        #     clear above the table top before the base moves at all.
+        cube, half, _ = self._cube_in_hands()
+        if cube is None:
+            self._fail('cannot work out where the held cube is')
+            return False
+        carriage = self._joint.get('torso_left_carriage_joint', (0.0, 0.0))[0]
+        hands_want = mark[2] + clearance + half
+        want = max(0.06, min(0.64, carriage + hands_want - cube[2]))
+        self.get_logger().info(
+            f'PLACE marker at {mark[2]:.3f} m -> hands to {hands_want:.3f} m '
+            f'(+{clearance * 100:.0f} cm +{half * 100:.0f} cm half a cube); '
+            f'carriages {carriage:.3f} -> {want:.3f} m')
+        if not self._torso_to(want, 'PLACE carriages lift the cube over the table'):
+            self._fail('carriages did not reach the height that clears the table')
+            return False
+
+        # P3. The BASE goes first, with the cube still tucked in against the
+        #     robot (user, 16. 9.): the arms are up in the air and block nothing,
+        #     so there is no reason to reach out before the base has taken every
+        #     centimetre it can. The arms then cover the whole remaining gap in
+        #     one move - the 15 cm the cube was pulled in with, plus whatever the
+        #     base could not close.
+        #
+        # P4. The base closes in on the table by what the ROBOT can do, not
+        #     by what the marker asks for (user, 16. 9.): forward as far as it
+        #     still fits, and no further. At the dock the base's real front
+        #     (0.41 m ahead of base_link) sits about 0.26 m from the table edge,
+        #     because the dock pose is computed with the conservative 0.52 m
+        #     half-length - `place_max_advance` is that slack, less a margin.
+        #     Sideways is a different matter: nothing blocks it, so the cube is
+        #     still centred across the marker.
+        limit = float(self.get_parameter('place_max_advance').value)
+        mark = self._marker_in_base(mark_odom, mark_height)
+        cube, half, _ = self._cube_in_hands()
+        if mark is None or cube is None:
+            self._fail('cannot work out where the held cube is before lowering')
+            return False
+        need = float(mark[0] - cube[0])
+        advance = max(0.0, min(need, limit))
+        self.get_logger().info(
+            f'PLACE step 4: the cube is {need * 100:+.1f} cm short of the marker; the '
+            f'base closes in {advance * 100:.1f} cm of the {limit * 100:.0f} cm it may')
+        if advance >= 0.01 and self.drive_distance(advance, speed=0.05) is None:
+            self._fail('the approach to the table did not track odometry')
+            return False
+
+        # 5. THE ROBOT lines up with the marker: a strafe puts the marker on the
+        #    robot's own centreline, so the arms are left as little to do as
+        #    possible (user, 16. 9.).
+        mark = self._marker_in_base(mark_odom, mark_height)
+        if mark is None:
+            self._fail('lost the odometry copy of the marker')
+            return False
+        if abs(float(mark[1])) >= 0.01:
+            self.get_logger().info(
+                f'PLACE step 5: the marker is {float(mark[1]) * 100:+.1f} cm to the side; '
+                'strafing the robot onto it')
+            if self.strafe_distance(float(mark[1])) is None:
+                self._fail('the strafe onto the marker did not track odometry')
+                return False
+
+        # 6. THE ARMS put the cube on the marker centre - across as well as
+        #    forward, in one straight move to a computed point.
+        mark = self._marker_in_base(mark_odom, mark_height)
+        cube, half, _ = self._cube_in_hands()
+        if mark is None or cube is None:
+            self._fail('cannot work out where the held cube is before lowering')
+            return False
+        delta = np.array([float(mark[0] - cube[0]), float(mark[1] - cube[1]), 0.0])
+        self.get_logger().info(
+            f'PLACE step 6: the arms carry the cube {delta[0] * 100:+.1f} cm forward and '
+            f'{delta[1] * 100:+.1f} cm across, onto the marker centre')
+        if float(np.linalg.norm(delta)) >= 0.01 and not self._move_cube_by(
+                delta, 'PLACE step 6: cube onto the marker centre'):
+            self.get_logger().warn(
+                'PLACE the arms could not take the cube all the way onto the centre')
+        self._publish_carried_cube()
+        mark = self._marker_in_base(mark_odom, mark_height)
+        cube, half, _ = self._cube_in_hands()
+        if mark is not None and cube is not None:
+            self.get_logger().info(
+                f'PLACE the cube sits {(mark[0] - cube[0]) * 100:+.1f} cm / '
+                f'{(mark[1] - cube[1]) * 100:+.1f} cm from the marker centre')
+
+        # P5. Down until the cube rests on the table: slowly, and stopping if the
+        #     cube leaves the pads on the way.
+        mark = self._marker_in_base(mark_odom, mark_height)
+        cube, half, normal = self._cube_in_hands()
+        if mark is None or cube is None:
+            self._fail('cannot measure the cube to lower it')
+            return False
+        carriage = self._joint.get('torso_left_carriage_joint', (0.0, 0.0))[0]
+        target = max(0.06, min(0.64, carriage + (mark[2] + touch) - (cube[2] - half)))
+        self.get_logger().info(
+            f'PLACE step 7: hands down to {mark[2] + half:.3f} m (marker + half a cube), '
+            f'carriages {carriage:.3f} -> {target:.3f} m at {lower_speed * 100:.0f} cm/s')
+        # No contact guard on the way down. It used to watch the fingertip
+        # sensors, but the cube is carried by the rigid attach with the pads only
+        # touching (`touch_depth` 2 mm), so there is nothing for them to report:
+        # on 16. 9. the guard fired in the same millisecond the descent started
+        # and the cube never moved. What decides this is the MEASURED height
+        # afterwards, which is the check right below - and it did its job, it
+        # refused to let go 20 cm in the air.
+        seconds = max(2.0, abs(target - carriage) / max(lower_speed, 0.001))
+        if not self.move_torso(target, 'PLACE lower the cube onto the marker',
+                               secs=int(round(seconds))):
+            self._fail('the carriages did not lower the cube')
+            return False
+        settle = time.monotonic() + 1.2
+        while time.monotonic() < settle:
+            rclpy.spin_once(self, timeout_sec=0.05)
+
+        # P5b. DOWN FIRST, LET GO SECOND (user, 16. 9.). The carriages reporting
+        #      that they arrived is not the cube being down - measure it, and if
+        #      it is still in the air, keep holding it rather than drop it.
+        cube, half, normal = self._cube_in_hands()
+        if cube is None:
+            self._fail('cannot check whether the cube is down; not letting go of it')
+            return False
+        resting = float(cube[2] - half - mark[2])
+        self.get_logger().info(
+            f'PLACE the cube bottom is {resting * 1000:+.0f} mm from the table top')
+        if resting > 0.02:
+            self._fail(f'the cube is still {resting * 100:.1f} cm above the table; '
+                       'not letting go of it in mid-air')
+            return False
+
+        # 8. LET GO of the hard link, then ease the pads apart before any arm
+        #    moves - a hand that leaves while still pressing drags the cube off
+        #    the marker, and a hand pulled off a still-attached cube explodes the
+        #    solver (P-17).
+        self._attach_box(False)
+        self._hold = None
+        self._publish_carried_nothing()
+        settle = time.monotonic() + 1.0
+        while time.monotonic() < settle:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        for side, sign in (('left', 1.0), ('right', -1.0)):
+            self.retreat_linear(f'{side}_arm', f'{side}_end_effector_link',
+                                (sign * normal[0], sign * normal[1]), 0.03,
+                                f'PLACE step 8: take the {side} pad off the cube')
+
+        # 9. DETECTION posture: hands wide and well clear of what they just put
+        #    down. MoveIt plans it against the table, so if it will not go there
+        #    from this close the run says so and carries on backing away.
+        if not move_to_posture(self, 'DETECTION_V4', label='PLACE step 9: detection posture'):
+            self.get_logger().warn(
+                'PLACE step 9: could not reach the detection posture at the table')
+
+        # 10. BACK AWAY from the table, empty.
+        if self.drive_distance(-0.50, speed=0.08) is None:
+            self.get_logger().warn('PLACE step 10: backing away did not track odometry')
+        drop = PlanningScene()
+        drop.is_diff = True
+        for object_id in ['pick_table'] + [f'pick_table_leg_{i}' for i in range(4)]:
+            co = CollisionObject()
+            co.header.frame_id = 'base_link'
+            co.id = object_id
+            co.operation = CollisionObject.REMOVE
+            drop.world.collision_objects.append(co)
+        self.scene_pub.publish(drop)
+
+        # 11. DRIVE posture, and the carriages back to travel height.
+        if move_to_posture(self, ARM_DRIVE, label='PLACE step 11: drive posture'):
+            self.arm_posture_pub.publish(String(data=ARM_DRIVE))
+        self._torso_to(DRIVE_CARRIAGE, 'PLACE carriages back to the drive height')
+
+        # P8. PROOF (D-12): where did it actually land? The head camera measures
+        #     the cube again - its front marker is visible once we have backed
+        #     off - and that is compared with where the marker was, in odom, the
+        #     one frame that does not move when the robot does.
+        self.look_down(0.65, 'PLACE look at what we left behind')
+        face = self.confirm_box(timeout=10.0)
+        if face is None:
+            self.get_logger().warn(
+                'PLACE: the cube is down but the camera cannot see it again; '
+                'landing position UNVERIFIED')
+            return True
+        meas = self.measure_box(Point(x=face.x, y=face.y, z=face.z))
+        if meas is None:
+            self.get_logger().warn(
+                'PLACE: the cube is down but depth could not measure it; '
+                'landing position UNVERIFIED')
+            return True
+        landed = self._to_odom((meas[0].x, meas[0].y))
+        if landed is None:
+            self.get_logger().warn('PLACE: no odometry for the landing check')
+            return True
+        dx, dy = landed[0] - mark_odom[0], landed[1] - mark_odom[1]
+        self.get_logger().info(
+            f'PLACE VERIFIED: the centre of the cube is {math.hypot(dx, dy) * 1000:.0f} mm '
+            f'from the marker centre (dx {dx * 1000:+.0f}, dy {dy * 1000:+.0f} mm)')
+        return True
+
     def _posture_goals(self, name):
         """{side: {joint: value}} of a named posture, each continuous-joint value
         taken as the equivalent nearest the arm's live angle (no extra turns)."""
@@ -2301,9 +2820,9 @@ class MainTask(BaseDriver, Node):
         # up to it. Step 4d refines this to the measured cube height once the
         # cube has actually been seen; this is only about clearing the table.
         travel = float(self.get_parameter('carriage_reference_height').value)
-        if not self.move_torso(travel, 'STEP0 carriages to travel height', secs=8):
+        if not self.move_torso(travel, 'STEP0 carriages to travel height', secs=3):
             return self._fail('carriages did not accept the travel height')
-        settle = time.monotonic() + 3.0
+        settle = time.monotonic() + 1.2
         while time.monotonic() < settle:
             rclpy.spin_once(self, timeout_sec=0.05)
         at = [self._joint.get(n, (float('nan'), 0.0))[0]
@@ -2314,6 +2833,19 @@ class MainTask(BaseDriver, Node):
         if max(abs(a - travel) for a in at) > 0.01:
             return self._fail(
                 f'carriages did not reach the travel height ({at} vs {travel:.3f})')
+
+        if bool(self.get_parameter('mission').value):
+            # A. The arms leave the spawn posture (ARM_ZERO, 2.28 m wide) before
+            #    the base moves at all. In the mission the robot spawns with them
+            #    spread, exactly as the user asked to see it.
+            if not move_to_posture(self, ARM_DRIVE, label='mission: drive posture'):
+                return self._fail('arms did not reach the drive posture')
+            self.arm_posture_pub.publish(String(data=ARM_DRIVE))
+            # B. Nothing drives until the user says so.
+            room = self._wait_for_start(str(self.get_parameter('pick_room').value))
+            # C. To the table in that room: approach pose, then the dock pose.
+            if not self._goto(f'{room}:dock'):
+                return self._fail(f'room_navigator did not reach {room}:dock')
 
         if self.get_parameter('navigate_region').value:
             if not move_to_posture(self, ARM_DRIVE, label='travel to region', freeze=True):
@@ -2403,10 +2935,35 @@ class MainTask(BaseDriver, Node):
                 return self._fail('drive-in did not track odometry')
             center = Point(x=center.x - driven, y=center.y, z=center.z)
             self.get_logger().info(f'STEP4 drove in {driven:.3f} m in DETECTION_V4')
-        if abs(center.y) > 0.01:
-            moved = self.strafe_distance(center.y)
-            if moved is not None:
-                center = Point(x=center.x, y=center.y - math.copysign(moved, center.y), z=center.z)
+        # Centre on a FRESH reading of the marker, not on where the depth camera
+        # put the cube before the drive-in. On 16. 9. the robot strafed away from
+        # a cube it was already centred on - the stale offset was the only reason
+        # it moved - and the hands then had to make uneven moves to reach it.
+        fresh = self.marker_in_base(max_age=0.6)
+        if fresh is None:
+            self.get_logger().info(
+                'STEP4 no fresh marker to centre on; leaving the base where it is')
+        else:
+            offset = float(fresh[1])
+            if abs(offset - center.y) > 0.05:
+                self.get_logger().warn(
+                    f'STEP4 the marker says the cube is {offset * 100:+.1f} cm to the side '
+                    f'but the depth measurement said {center.y * 100:+.1f} cm; '
+                    'centring on the fresh marker')
+            if abs(offset) <= 0.02:
+                self.get_logger().info(
+                    f'STEP4 cube already centred ({offset * 100:+.1f} cm); no strafe')
+                center = Point(x=center.x, y=offset, z=center.z)
+            elif self.strafe_distance(offset) is None:
+                self.get_logger().warn('STEP4 strafe did not track odometry; '
+                                       'the wrist cameras still set the targets')
+            else:
+                after = self.marker_in_base(max_age=0.6)
+                residual = center.y if after is None else float(after[1])
+                self.get_logger().info(
+                    f'STEP4 strafed {offset * 100:+.1f} cm to centre; '
+                    f'cube now {residual * 100:+.1f} cm off centre')
+                center = Point(x=center.x, y=residual, z=center.z)
 
         # 5a. The WRIST CAMERAS read the side markers. Their centres ARE the
         #     targets for the tool tips (user, 16. 9.).
@@ -2506,6 +3063,30 @@ class MainTask(BaseDriver, Node):
         #    pressure and retreats FIRST; a second rigid path shoving the fixed
         #    cube explodes the constraint solver (flings it metres away).
         self._attach_box(True)
+        # Record how the cube sits in the hand WHILE THE MEASUREMENT IS STILL
+        # GOOD. From here the cube is rigidly attached to the left wrist, so this
+        # relation holds until it is let go - and it is the only way to know
+        # where the cube is once the pads cover its markers (P-45).
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                'base_link', 'left_tool_tip', rclpy.time.Time())
+            rotation = quat_to_matrix(tf.transform.rotation)
+            origin = np.array([tf.transform.translation.x,
+                               tf.transform.translation.y,
+                               tf.transform.translation.z])
+            self._hold = {
+                'offset': rotation.T @ (np.array([grip.x, grip.y, grip.z]) - origin),
+                'normal': rotation.T @ normal,
+                'half': span / 2.0,
+            }
+            self.get_logger().info(
+                f'cube held: centre {span / 2.0 * 2:.3f} m square, '
+                f'{np.linalg.norm(self._hold["offset"]) * 100:.1f} cm from the tool tip')
+        except Exception as exc:
+            self._hold = None
+            self.get_logger().error(
+                f'could not record how the cube sits in the hand: {exc}; '
+                'the carry footprint and the place will have nothing to go on')
         # The cube now moves WITH the hand: drop its (stale) collision object
         # from the planning scene - it otherwise blocks every later RRT
         # fallback (release/lower/retreat plans kept failing against the copy
@@ -2548,9 +3129,9 @@ class MainTask(BaseDriver, Node):
         # 0.15 m lift would end there.
         pick_height = self._joint.get('torso_left_carriage_joint', (0.0, 0.0))[0]
         lift_height = min(pick_height + 0.15, 0.64)
-        if not self.move_torso(lift_height, 'STEP6 lift on the carriages', secs=8):
+        if not self.move_torso(lift_height, 'STEP6 lift on the carriages', secs=3):
             return self._fail('carriages did not accept the lift command')
-        settle = time.monotonic() + 3.0
+        settle = time.monotonic() + 1.2
         while time.monotonic() < settle:
             rclpy.spin_once(self, timeout_sec=0.05)
         reached = [self._joint.get(n, (float('nan'), 0.0))[0]
@@ -2569,6 +3150,12 @@ class MainTask(BaseDriver, Node):
 
         # 6b. PULL THE CUBE IN towards the robot before leaving the table (user).
         self._pull_cube_in(grip, span / 2.0)
+        # From here the arms hold the cube, so the doorway gate has to check them
+        # against the CARRY posture instead of the drive one - the mission
+        # aborted at the doorway on exactly this (P-45).
+        self.arm_posture_pub.publish(String(data=ARM_CARRY))
+        self.get_logger().info(f'arms now hold the cube: gate reference is {ARM_CARRY}')
+        self._publish_carried_cube()
 
         # 7. BACK AWAY FROM THE TABLE with the cube held, and stop (user, 16. 9.).
         #    The arms keep the grasp; 0.83 m wide with the cube between the hands.
@@ -2609,6 +3196,15 @@ class MainTask(BaseDriver, Node):
             return self._fail('carriages did not come down with the cube')
         self.measure_width('carrying the cube, away from the table')
         self.get_logger().info('TASK COMPLETE: cube lifted and carried away from the table.')
+
+        # 8. MISSION: carry it to the other room and put it down on the marker.
+        if bool(self.get_parameter('mission').value):
+            room = str(self.get_parameter('place_room').value)
+            if not self._goto(f'{room}:dock'):
+                return self._fail(f'room_navigator did not reach {room}:dock')
+            if not self._place_on_marker():
+                return None
+            self.get_logger().info('MISSION COMPLETE: the cube is on the marker.')
 
     def _fail(self, where):
         self.get_logger().error(f'Task aborted during: {where}')

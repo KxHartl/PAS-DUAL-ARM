@@ -31,7 +31,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 
-from pas_dual_arm_scripts.robot_extent import ExtentMeasurer
+from pas_dual_arm_scripts.robot_extent import ExtentMeasurer, ground_hull
 
 
 def polygon_changed(previous, current, tolerance):
@@ -94,6 +94,14 @@ class FootprintPublisher(Node):
         self._tf = Buffer()
         self._listener = TransformListener(self._tf, self)
 
+        # What the robot is carrying, as ground-plane corners in `frame`. The
+        # URDF knows nothing about the cube, so while the robot carries it the
+        # outline Nav2 plans with would stop at the hands and leave the cube
+        # sticking out of it (user, 16. 9.). Empty polygon = carrying nothing.
+        self._carried = None
+        self.create_subscription(Polygon, '/mission/carried_points',
+                                 self._on_carried, latched)
+
         self._measurer = None
         self._last = None
         self._sent_at = None
@@ -117,12 +125,26 @@ class FootprintPublisher(Node):
             f'in {self._measurer.frame}; publishing to '
             f'{", ".join(self._costmap_pubs)}')
 
+    def _on_carried(self, msg):
+        points = np.array([[p.x, p.y] for p in msg.points], dtype=float)
+        self._carried = points if len(points) >= 3 else None
+        self.get_logger().info(
+            f'carrying an object with {len(points)} ground corners'
+            if self._carried is not None else 'carrying nothing')
+
     def _tick(self):
         if self._measurer is None:
             return
-        polygon = self._measurer.footprint(
-            self._tf, rclpy.time.Time(),
-            max_vertices=self.get_parameter('max_vertices').value)
+        max_vertices = self.get_parameter('max_vertices').value
+        if self._carried is None:
+            polygon = self._measurer.footprint(
+                self._tf, rclpy.time.Time(), max_vertices=max_vertices)
+        else:
+            # The robot AND what it holds: one outline around both, so every
+            # layer that reasons about space sees the cube too.
+            points = self._measurer.points(self._tf, rclpy.time.Time())
+            polygon = None if points is None else ground_hull(
+                np.vstack([points[:, :2], self._carried]), max_vertices=max_vertices)
         if polygon is None or len(polygon) < 3:
             self.get_logger().warn('no link transforms yet; costmaps keep their '
                                    'configured footprint',

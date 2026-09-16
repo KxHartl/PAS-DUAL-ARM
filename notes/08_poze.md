@@ -39,6 +39,7 @@ updated: 2026-09-13
 | Poza | Širina | Vrata | Naprijed | Visina | Najširi link | Simetrična | Svrha | Snimljeno |
 |---|---|---|---|---|---|---|---|---|
 <!-- POSTURE ROWS -->
+| `CARRY_V4` | 0.82 m | 0.92 m | 0.55 m | — | left_spherical_wrist_2 | ne | **nošenje kutije** (izmjereno s robota) | 2026-09-16 |
 | `DRIVE_V4` | 0.83 m | 0.93 m | 0.31 m | 0.65–1.18 m | left_half_arm_1 | ne | spremljeno iz joint_gui | 2026-09-15 23:49 |
 | `GRASP_V4` | 0.84 m | 0.94 m | 0.72 m | 0.84–1.27 m | left_spherical_wrist_2 | ne | spremljeno iz joint_gui | 2026-09-15 23:35 |
 | `DETECTION_V4` | 1.38 m | 1.48 m | 0.72 m | 0.78–1.09 m | left_spherical_wrist_2 | ne | spremljeno iz joint_gui | 2026-09-15 23:32 |
@@ -188,3 +189,26 @@ DRIVE_V4_TORSO = {'torso_left_carriage_joint': 0.2, 'torso_right_carriage_joint'
 DRIVE_V4_GRIPPER = {'left_robotiq_85_left_knuckle_joint': 0.791, 'right_robotiq_85_left_knuckle_joint': 0.7918}
 ```
 Širina 0.83 m → vrata 0.93 m; doseg naprijed 0.31 m; visina 0.65–1.18 m; najširi link `left_half_arm_1_link`. Snimljeno 2026-09-15 23:49.
+
+### CARRY_V4
+Poza u kojoj robot **nosi kutiju** (korisnik, 16. 9.: „nazovi tu novu pozu carry i dozvoli gibanje
+s njom"). Nije crtana ni računata: **očitana je s robota** na kraju hvata (run M2), nakon
+`GRASP_V4` → privlačenje kutije 15 cm → laktovi 20° od torza. Vodilice na **0.10 m**, hvataljke
+zatvorene na kutiji (0.791).
+
+```python
+# lijeva ruka
+CARRY_V4_LEFT  = {1: 0.864, 2: 1.270, 3: 1.702, 4: -1.694, 5: -1.958, 6: 1.253, 7: 2.328}
+# desna ruka
+CARRY_V4_RIGHT = {1: -0.978, 2: 1.233, 3: -1.657, 4: -1.845, 5: 1.921, 6: 1.207, 7: 0.755}
+CARRY_V4_CARRIAGE = 0.10
+```
+
+Širina **0.821 m** (izmjereno u runovima V5/M2) → kroz otvor od 0.980 m prolazi s **8 cm po strani**.
+Gate pred vratima uspoređuje ruke s ovom pozom čim je kutija u rukama
+([[P-45_mission_integration]]); prije toga s [[08_poze#DRIVE_V4|DRIVE_V4]].
+
+> [!warning] `left_joint_5` je ovdje −1.958, a u `DRIVE_V4` +0.589
+> Razlika je 2.547 rad i točno na tome je misija pala na vratima 16. 9.: gate je znao samo za
+> `DRIVE_V4`. Uz to je gate uspoređivao kutove **bez 2π omota**, pa kontinuirani zglobovi mogu
+> lažno ispasti daleko od cilja i kad su točno na njemu.

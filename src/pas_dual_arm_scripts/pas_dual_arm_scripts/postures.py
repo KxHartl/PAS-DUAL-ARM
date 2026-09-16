@@ -62,8 +62,19 @@ _DETECTION_V4_RIGHT = {1: 0.151, 2: 1.273, 3: -1.996, 4: -0.723, 5: 1.535, 6: 1.
 _GRASP_V4_LEFT = {1: 0.574, 2: 1.429, 3: 1.549, 4: -1.045, 5: 4.464, 6: 1.544, 7: 2.652}
 _GRASP_V4_RIGHT = {1: -0.634, 2: 1.391, 3: -1.525, 4: -1.104, 5: 1.847, 6: 1.574, 7: 0.498}
 
+# The posture the arms actually hold while CARRYING the cube (user, 16. 9.:
+# "nazovi tu novu pozu carry i dozvoli gibanje s njom"). MEASURED off the live
+# robot at the end of the pick - GRASP_V4, then the cube pulled 15 cm in and the
+# elbows swung 20 deg off the torso - not derived on paper. Carriages at 0.10 m,
+# grippers closed on the cube, measured width 0.821 m, which clears the 0.98 m
+# doorway by 8 cm per side. See P-45: the run aborted at the doorway because the
+# gate was still comparing these arms against DRIVE_V4.
+_CARRY_V4_LEFT = {1: 0.864, 2: 1.270, 3: 1.702, 4: -1.694, 5: -1.958, 6: 1.253, 7: 2.328}
+_CARRY_V4_RIGHT = {1: -0.978, 2: 1.233, 3: -1.657, 4: -1.845, 5: 1.921, 6: 1.207, 7: 0.755}
+
 POSTURES = {
     'ARM_ZERO': {'left': _ZERO, 'right': _ZERO},
+    'CARRY_V4': {'left': _CARRY_V4_LEFT, 'right': _CARRY_V4_RIGHT},
     'ARM_HOME': {'left': _HOME, 'right': _HOME},
     'ARM_CARRY_V2': {'left': _CARRY_V2_LEFT, 'right': _CARRY_V2_RIGHT},
     'GRASP_V3': {'left': _GRASP_V3_LEFT, 'right': _GRASP_V3_RIGHT},
@@ -76,8 +87,14 @@ POSTURES = {
 # any travel. Named separately so call sites read as intent, not as a pose name.
 # DRIVE_V4 since 16. 9. (user); ARM_CARRY_V2 before.
 ARM_DRIVE = 'DRIVE_V4'
+# The posture to hold whenever the base drives WITH THE CUBE IN THE HANDS. The
+# doorway gate checks the arms against whichever of the two the robot is meant
+# to be in (room_navigator, /room_navigator/arm_posture).
+ARM_CARRY = 'CARRY_V4'
 # Carriage heights that go with the V4 postures (saved with them).
 DRIVE_CARRIAGE = 0.20
+# Where the carriages end up carrying the cube (user, 16. 9.: 100 mm).
+CARRY_CARRIAGE = 0.10
 DETECTION_CARRIAGE = 0.40
 GRASP_CARRIAGE = 0.40
 # Closed grippers, as the V4 postures were saved.
@@ -198,8 +215,13 @@ def move_to_posture(node, name, timeout=30.0, label=None, freeze=False):
     req.group_name = 'both_arms'
     req.num_planning_attempts = 10
     req.allowed_planning_time = 5.0
-    req.max_velocity_scaling_factor = 0.2
-    req.max_acceleration_scaling_factor = 0.2
+    # Free-space posture changes run at speed: they happen in the open, MoveIt
+    # has already checked them against the robot's own geometry, and at 0.2 the
+    # robot looked broken while it crawled between postures (user, 16. 9.).
+    # The slow moves that matter - onto the cube, and lowering it - are separate
+    # Cartesian paths with their own speeds, and they are NOT touched.
+    req.max_velocity_scaling_factor = 0.7
+    req.max_acceleration_scaling_factor = 0.7
     req.goal_constraints.append(joint_constraints(name, label))
     goal.planning_options.plan_only = False
 
@@ -223,7 +245,7 @@ def move_to_posture(node, name, timeout=30.0, label=None, freeze=False):
     return _verify_posture(node, name, freeze=freeze)
 
 
-def _move_via_jtc(node, name, duration_sec=4.0):
+def _move_via_jtc(node, name, duration_sec=2.0):
     """Direct trajectory execution to arm controllers without MoveIt."""
     try:
         sides = POSTURES[name]
@@ -305,7 +327,11 @@ def _verify_posture(node, name, freeze=False):
             worst_joint, worst_error = max(errors, key=lambda pair: pair[1])
             if worst_error <= 0.10:
                 stable_since = stable_since or time.monotonic()
-                if time.monotonic() - stable_since >= 3.0:
+                # 3 s of "hold still and let me check" after every posture, with
+                # nothing moving, is most of what made the robot look like it had
+                # frozen (user, 16. 9.). One second is still several control
+                # cycles of evidence that the arms are holding.
+                if time.monotonic() - stable_since >= 1.0:
                     node.get_logger().info(f'{name}: stable measured posture OK ({worst_error:.3f} rad max)')
                     return True
             else:

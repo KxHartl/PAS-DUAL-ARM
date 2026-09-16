@@ -63,6 +63,7 @@ su zastarjeli). Kad nađeš kontradikciju, **ne biraj tiho**: zapiši je u karti
 | ground truth iz Gazeba bilo gdje u upravljačkom lancu | stack mora raditi i na fizičkom robotu, koji tu pozu nema; `debug_truth` je zato po defaultu isključen | [[P-40_amcl_pose_disagrees_with_lidar]] |
 | zaključivanje o točnosti lokalizacije bez mjerenja | do 14. 9. se o 7 cm nagađalo; sad to mjere `loc_error` i `_report_disagreement` | [[P-40_amcl_pose_disagrees_with_lidar]] |
 | `scan_filter` `half_width` ≥ 0.35 | briše dovratnike (±0.50) i noge stolova; bez povrata voxel sloj ih ne može ni označiti ni očistiti, pa stare oznake zamrznu prolaz | [[P-39_nav2_enters_doorway_at_an_angle]] |
+| **vlastiti upravljač koji vozi po gradijentu polja umjesto Nav2 upravljača** | u vratima je slobodni koridor za **središte** robota samo **12 cm** (otvor 0.98 m − 2 × 0.427 m jezgre); svaka ruka centralne razlike šira od toga uzorkuje u jezgru i smjer skače. Izmjereno 16. 9.: 36–42 zaokreta > 30° po ruti, najgori 180°, uz zaglađivanje polja nepromijenjeno. Nav2 isti prolaz vozi 5/5 jer ga rješava **provjerom otiska**, ne gradijentom | [[P-45_mission_integration]] |
 
 ## 6. Rad s korisnikom
 - Komunikacija na **hrvatskom**, a kod i commitovi na engleskom (Conventional Commits).

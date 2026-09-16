@@ -39,6 +39,11 @@ def generate_launch_description():
     region_x = LaunchConfiguration('region_x')
     region_y = LaunchConfiguration('region_y')
     region_yaw = LaunchConfiguration('region_yaw')
+    # Mission mode: wait for the user, then drive through room_navigator and run
+    # the whole [MAIL] sequence. mission.launch.py is what turns it on.
+    mission = LaunchConfiguration('mission')
+    pick_room = LaunchConfiguration('pick_room')
+    place_room = LaunchConfiguration('place_room')
 
     moveit_dir = get_package_share_directory('pas_dual_arm_moveit_config')
     move_group = IncludeLaunchDescription(
@@ -53,22 +58,34 @@ def generate_launch_description():
     main_task = Node(
         package='pas_dual_arm_scripts',
         executable='main_task',
-        output='screen',
+        # 'both', not 'screen': after the 16. 9. run the only question that
+        # mattered - did it see the place marker? - could not be answered,
+        # because the mission's output existed solely in the terminal and the
+        # run directory held nothing but launch.log.
+        output='both',
         parameters=[{'use_sim_time': True,
                      'navigate_region': navigate_region,
                      'region_x': region_x,
                      'region_y': region_y,
-                     'region_yaw': region_yaw}],
+                     'region_yaw': region_yaw,
+                     'mission': mission,
+                     'pick_room': pick_room,
+                     'place_room': place_room}],
         condition=IfCondition(auto_start),
     )
-    # Give move_group + aruco ~12 s to advertise before orchestrating.
-    delayed_task = TimerAction(period=12.0, actions=[main_task])
+    # Give move_group + aruco a few seconds to advertise before orchestrating.
+    # main_task waits for every server it uses anyway, so this only has to cover
+    # the gap before the action servers exist; 12 s here was dead time.
+    delayed_task = TimerAction(period=3.0, actions=[main_task])
 
     return LaunchDescription([
         rmw_env,
         zenoh_env,
         auto_start_arg,
         DeclareLaunchArgument('navigate_region', default_value='false'),
+        DeclareLaunchArgument('mission', default_value='false'),
+        DeclareLaunchArgument('pick_room', default_value='blue'),
+        DeclareLaunchArgument('place_room', default_value='red'),
         DeclareLaunchArgument('region_x', default_value='0.0'),
         DeclareLaunchArgument('region_y', default_value='-4.5'),
         DeclareLaunchArgument('region_yaw', default_value='-1.57079632679'),

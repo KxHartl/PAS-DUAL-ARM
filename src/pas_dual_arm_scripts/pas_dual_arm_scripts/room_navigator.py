@@ -38,7 +38,9 @@ import numpy as np
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped, Quaternion
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import NavigateThroughPoses, NavigateToPose
+from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+from rcl_interfaces.srv import SetParameters
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
@@ -102,6 +104,13 @@ class RoomNavigator(Node):
         self.declare_parameter('square_corners', False)
         self.declare_parameter('leg_timeout', 240.0)
         self.declare_parameter('require_arms', True)
+        # Speed per leg (user, 16. 9.). The open-room legs run at `fast_*`; a
+        # doorway transit and a dock approach drop to `slow_*`. The collision
+        # monitor still scales anything down near an obstacle on top of this.
+        self.declare_parameter('fast_vel_x', 0.45)
+        self.declare_parameter('fast_speed_xy', 0.50)
+        self.declare_parameter('slow_vel_x', 0.18)
+        self.declare_parameter('slow_speed_xy', 0.22)
 
         self._graph = None
         self._scan = None
@@ -121,6 +130,12 @@ class RoomNavigator(Node):
         self._status_pub = self.create_publisher(String, '/room_navigator/status', latched)
         self.create_subscription(String, '/nav_graph', self._on_graph, latched)
         self.create_subscription(String, '/room_navigator/goto', self._on_goto, 10)
+        # Which posture the arms are meant to be holding right now. The mission
+        # switches this to the carry posture once the cube is in the hands.
+        # Latched, so it survives whoever subscribes late.
+        self._arm_posture = ARM_DRIVE
+        self.create_subscription(String, '/room_navigator/arm_posture',
+                                 self._on_arm_posture, latched)
         # nav2.launch.py remaps Nav2's own /goal_pose to /bt_goal_pose, so RViz
         # "2D Goal Pose" lands here instead of going straight to bt_navigator.
         # A goal in another room is then routed through the doorway portals
@@ -133,6 +148,12 @@ class RoomNavigator(Node):
         self._tf = Buffer()
         self._tf_listener = TransformListener(self._tf, self)
         self._nav = ActionClient(self, NavigateToPose, '/navigate_to_pose')
+        # Several poses as one goal, for the stretches between doorways: the
+        # robot passes through them instead of parking on each (user, 16. 9.).
+        self._nav_through = ActionClient(self, NavigateThroughPoses,
+                                         '/navigate_through_poses')
+        self._speed = self.create_client(SetParameters,
+                                         '/controller_server/set_parameters')
         self._status('idle', 'waiting for /nav_graph')
 
     # -------------------------------------------------------------- plumbing
@@ -166,6 +187,46 @@ class RoomNavigator(Node):
             self._pending_request = request
             return
         self._request = request
+
+    def _on_arm_posture(self, msg):
+        name = msg.data.strip() or ARM_DRIVE
+        if name not in POSTURES:
+            self.get_logger().error(
+                f'unknown arm posture "{name}"; keeping {self._arm_posture}')
+            return
+        if name != self._arm_posture:
+            self.get_logger().info(f'arm reference posture is now {name}')
+        self._arm_posture = name
+
+    def _set_leg_speed(self, fast, label):
+        """Nav2's speed limit for this leg.
+
+        Full speed in the open, slow through a doorway and onto a dock, where the
+        margins are centimetres (user, 16. 9.: fast when it is safe, slower
+        through doors and up to tables). A warning, not an abort: driving at the
+        speed it already has is safe, just slower.
+        """
+        vel_x = self.get_parameter('fast_vel_x' if fast else 'slow_vel_x').value
+        speed_xy = self.get_parameter('fast_speed_xy' if fast else 'slow_speed_xy').value
+        if not self._speed.wait_for_service(timeout_sec=5.0):
+            self.get_logger().warn(
+                f'{label}: controller_server parameters unavailable; speed unchanged')
+            return
+        request = SetParameters.Request()
+        for name, value in (('FollowPath.max_vel_x', vel_x),
+                            ('FollowPath.max_speed_xy', speed_xy)):
+            request.parameters.append(Parameter(
+                name=name,
+                value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE,
+                                     double_value=float(value))))
+        future = self._speed.call_async(request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+        response = future.result() if future.done() else None
+        if response is None or not all(r.successful for r in response.results):
+            self.get_logger().warn(f'{label}: could not set the speed limit')
+            return
+        self.get_logger().info(
+            f'{label}: {"full" if fast else "reduced"} speed ({vel_x:.2f} m/s)')
 
     def _on_goal_pose(self, msg):
         x = float(msg.pose.position.x)
@@ -228,26 +289,40 @@ class RoomNavigator(Node):
 
     # ------------------------------------------------------------------ gates
     def arms_ok(self):
-        """Every ARM_DRIVE joint within tolerance, or a reason why not."""
+        """Every joint of the REFERENCE posture within tolerance, or why not.
+
+        The reference is DRIVE_V4 when the robot travels empty and CARRY_V4 once
+        it has the cube: with the cube in the hands the arms are nowhere near the
+        drive posture, and a gate that only knew DRIVE_V4 aborted the mission at
+        the doorway (P-45). Both postures are measured and both fit the opening -
+        which posture is held is the question, not whether the arms may move.
+        """
         if not self.get_parameter('require_arms').value:
             return True, 'arm check disabled'
         if self._joints is None:
             return False, 'no /joint_states yet'
+        posture = self._arm_posture
+        if posture not in POSTURES:
+            return False, f'unknown arm reference posture "{posture}"'
         tolerance = self.get_parameter('arm_tolerance').value
         worst_name, worst = None, 0.0
-        for side, targets in POSTURES[ARM_DRIVE].items():
+        for side, targets in POSTURES[posture].items():
             for index, target in targets.items():
                 name = f'{side}_joint_{index}'
                 if name not in self._joints:
                     return False, f'{name} missing from /joint_states'
-                error = abs(self._joints[name] - target)
+                # Joints 1/3/5/7 are continuous: 2 pi apart is the SAME pose, so
+                # the raw difference can read as a huge error on an arm that is
+                # exactly where it should be.
+                delta = self._joints[name] - target
+                error = abs(math.atan2(math.sin(delta), math.cos(delta)))
                 if error > worst:
                     worst_name, worst = name, error
         if worst > tolerance:
-            return False, (f'{worst_name} is {worst:.3f} rad off {ARM_DRIVE} '
+            return False, (f'{worst_name} is {worst:.3f} rad off {posture} '
                            f'(limit {tolerance:.2f}); the arms set the width that '
                            f'has to fit the doorway')
-        return True, f'{ARM_DRIVE} held, worst joint {worst:.3f} rad'
+        return True, f'{posture} held, worst joint {worst:.3f} rad'
 
     @staticmethod
     def lane_offset_of(pose, leg):
@@ -527,22 +602,51 @@ class RoomNavigator(Node):
             self.get_logger().error('Nav2 /navigate_to_pose is not up')
             return
 
-        for index, leg in enumerate(legs, start=1):
-            label = f'leg {index}/{len(legs)} - {leg.label}'
+        # Consecutive legs that need no gate are driven as ONE goal, so the robot
+        # flows through the corners instead of stopping on each. Two kinds of leg
+        # always stand alone, and neither is negotiable:
+        #   transit  gated before it starts and watched while it runs (P-39)
+        #   dock     entered straight along the table's own axis with no rotation
+        #            at the end of it, 15 cm from the table top (D-20). A pose
+        #            that is only passed through does not settle its heading, and
+        #            this is the one place where a few degrees is the whole
+        #            budget.
+        groups, run_of = [], []
+        for leg in legs:
+            if leg.transit or getattr(leg, 'dock', False):
+                if run_of:
+                    groups.append(run_of)
+                    run_of = []
+                groups.append([leg])
+            else:
+                run_of.append(leg)
+        if run_of:
+            groups.append(run_of)
+
+        for index, group in enumerate(groups, start=1):
+            first, last = group[0], group[-1]
+            label = f'leg {index}/{len(groups)} - {first.label}' if len(group) == 1 else \
+                f'leg {index}/{len(groups)} - {first.label} -> {last.label} ' \
+                f'({len(group)} poses, without stopping)'
             if self._cancel:
                 self._status('cancelled', f'cancelled before {label}', destination=dest)
                 return
-            if leg.transit and not self._gate(leg, label, dest):
+            if first.transit and not self._gate(first, label, dest):
                 return
             self._status('driving', label, destination=dest,
-                         goal=[leg.x, leg.y, leg.yaw])
+                         goal=[last.x, last.y, last.yaw])
             self.get_logger().info(
-                f'{label} -> ({leg.x:+.2f}, {leg.y:+.2f}, {math.degrees(leg.yaw):+.1f} deg)')
-            if not self._drive(leg, label, dest):
+                f'{label} -> ({last.x:+.2f}, {last.y:+.2f}, '
+                f'{math.degrees(last.yaw):+.1f} deg)')
+            gentle = any(leg.transit or getattr(leg, 'dock', False) for leg in group)
+            self._set_leg_speed(not gentle, label)
+            driven = (self._drive(first, label, dest) if len(group) == 1
+                      else self._drive_through(group, label, dest))
+            if not driven:
                 return
-            self._report_arrival(leg, label)
-            if getattr(leg, 'dock', False):
-                table = self._table_by_pose((leg.x, leg.y))
+            self._report_arrival(last, label)
+            if getattr(last, 'dock', False):
+                table = self._table_by_pose((last.x, last.y))
                 self._docked = table['id'] if table is not None else dest.split(':')[0]
             else:
                 self._docked = None
@@ -565,6 +669,64 @@ class RoomNavigator(Node):
             self._status('aborted', f'alignment: {detail}', destination=destination)
             return False
         self.get_logger().info(f'alignment: {detail}')
+        return True
+
+    def _drive_through(self, group, label, destination):
+        """Drive several poses as ONE goal, passing through the intermediate ones.
+
+        A route used to be one Nav2 goal per leg, so the robot parked on every
+        corner to 5 cm and 1.4 deg and set off again - the stop-start motion the
+        user objected to on 16. 9. Nav2 can already do better: with
+        `navigate_through_poses` all but the last pose are waypoints it only has
+        to pass, and the field of D-20 still shapes every metre of the path.
+
+        Doorways are deliberately NOT merged into a group: a transit is gated
+        before it starts and watched while it runs, and that stays exactly as it
+        was (P-39). This only removes the stops that were never load-bearing.
+        """
+        goal = NavigateThroughPoses.Goal()
+        for leg in group:
+            pose = PoseStamped()
+            pose.header.frame_id = 'map'
+            pose.header.stamp = self.get_clock().now().to_msg()
+            pose.pose.position.x = float(leg.x)
+            pose.pose.position.y = float(leg.y)
+            pose.pose.orientation = yaw_to_quaternion(leg.yaw)
+            goal.poses.append(pose)
+
+        send = self._nav_through.send_goal_async(goal)
+        rclpy.spin_until_future_complete(self, send, timeout_sec=10.0)
+        handle = send.result()
+        if handle is None or not handle.accepted:
+            self.get_logger().error(f'{label}: Nav2 rejected the route')
+            self._status('failed', f'{label}: Nav2 rejected the route',
+                         destination=destination)
+            return False
+
+        result = handle.get_result_async()
+        deadline = time.monotonic() + self.get_parameter('leg_timeout').value * len(group)
+        tightest = float('inf')
+        while not result.done():
+            rclpy.spin_once(self, timeout_sec=0.05)
+            if time.monotonic() > deadline:
+                self._abort(handle, f'{label}: timed out', destination)
+                return False
+            if self._cancel:
+                self._abort(handle, f'{label}: cancelled', destination, level='cancelled')
+                return False
+            clearance = self.side_clearance()
+            if clearance is not None:
+                tightest = min(tightest, min(clearance) - HALF_WIDTH)
+
+        status = result.result().status
+        if status != GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().error(f'{label}: Nav2 finished with status {status}')
+            self._status('failed', f'{label}: Nav2 status {status}',
+                         destination=destination)
+            return False
+        if math.isfinite(tightest):
+            self.get_logger().info(
+                f'{label}: tightest gap beside the robot {tightest * 100:.1f} cm')
         return True
 
     def _drive(self, leg, label, destination):

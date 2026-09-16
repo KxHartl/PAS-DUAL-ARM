@@ -18,8 +18,31 @@
 > zadnjeg dana: `notes/07_predaja/danas.md`. Sadržaj ispod je povijesni zapis sesija; kod
 > kontradikcije vrijede bilješke.
 
-**Trenutna faza**: HVAT PREKO V4 POZA — headless prolazi do kraja (run V2: kocka podignuta 15 cm i odnesena 0.40 m, provjereno u Gazebu); čeka korisnikovu GUI potvrdu. Navigacija s `DRIVE_V4` nije ponovno provjerena.
-**Datum zadnje izmjene**: 2026-09-15
+**Trenutna faza**: KONAČNI SIM **RADI** — jedna naredba vozi cijelu misiju: home → plava soba → hvat → kroz vrata → crvena soba → odlaganje na marker. Potvrđeno u korisnikovom GUI-ju 16. 9. (run M4): `PLACE VERIFIED: 5 mm od centra markera`, `MISSION COMPLETE`.
+**Datum zadnje izmjene**: 2026-09-16
+
+## Dodatak 2026-09-16 (2): spajanje vožnje i hvata u konačni sim
+
+Korisnik: robot se stvara u home sobi **s raširenim rukama**, sam ih složi u `DRIVE_V4`, **čeka
+naredbu** da ga se pošalje u sobu s kutijom, locira je, uzme, ode u crvenu sobu i odloži je na stol
+— na **marker** (umjesto sadašnjeg crvenog X-a), i to tako da **centar donje plohe kocke** sjedne na
+centar markera. Karta: spremljena + AMCL. Pokretanje: jedna naredba.
+
+Napisano (build prolazi, `--show-args` i import čisti, **ništa nije voženo i ništa nije commitano**):
+- `main_task`: `mission` / `pick_room` / `place_room` / `goto_timeout`; `_wait_for_start` (čeka
+  `/mission/start`) i `_goto` (vozi preko `room_navigator`-a, ne preko `/navigate_to_pose`).
+  `_goto` prihvaća `arrived` tek nakon viđenog `driving` za isti cilj — status je latched.
+- `launch/mission.launch.py`: sim (`carry_arms:=false`, spawn (0,0,0) = AMCL `initial_pose`) + nav2
+  (lokalizacija) + task (`auto_start:=true`, `mission:=true`).
+- `nav_gui`: zeleni gumb **„MISIJA: po kutiju"** → `/mission/start`.
+- Bilješke: [[P-45_mission_integration]], upute `notes/00_run/00_testing/misija.md` (M1–M5),
+  parametri u `notes/06_parametri.md`.
+
+Offline provjereno: `check_doors.py` i `check_zones.py` daju `PASS`; sobe `home`/`blue`/`red`,
+stolovi u `blue` i `red` sa `approach` (1.55 m) i dock pozama → `red:dock` za odlaganje postoji.
+
+**Nenapisano (svjesno, čeka runove):** gate ruku pri nošenju (M3) i cijela faza odlaganja s
+markerom (M4) — da se ne slaže sloj na sloj bez ijedne vožnje ([[D-18_verified_baseline_first]]).
 
 ## Dodatak 2026-09-16: hvat preko korisnikovih V4 poza
 

@@ -194,13 +194,13 @@ controller_server:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: False
       min_vel_x: -0.30
-      max_vel_x: 0.30
+      max_vel_x: 0.45
       # Controlled lateral correction: strafe without crabbing or yawing
       min_vel_y: -0.15
       max_vel_y: 0.15
-      max_vel_theta: 0.30
+      max_vel_theta: 0.40
       min_speed_xy: 0.0
-      max_speed_xy: 0.35
+      max_speed_xy: 0.50
       min_speed_theta: 0.0
       acc_lim_x: 1.5
       acc_lim_y: 1.5
@@ -208,7 +208,7 @@ controller_server:
       decel_lim_x: -1.5
       decel_lim_y: -1.5
       decel_lim_theta: -3.0
-      vx_samples: 25
+      vx_samples: 15
       vy_samples: 25
       vtheta_samples: 25
       sim_time: 1.2
@@ -224,7 +224,12 @@ controller_server:
       ObstacleFootprint.scale: 2.0
       PathDist.scale: 96.0
       GoalDist.scale: 24.0
-      Twirling.scale: 20.0
+      # Twirling penalises turning while translating. On a diff-drive that is
+      # wasted motion; on this mecanum base it is exactly what the user asked
+      # for on 16. 9. - translate and rotate at once, rather than stop, turn,
+      # set off. Kept above zero so the robot still has no reason to spin for
+      # its own sake.
+      Twirling.scale: 2.0
       RotateToGoal.scale: 64.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
@@ -432,7 +437,7 @@ velocity_smoother:
     scale_velocities: False
     feedback: "OPEN_LOOP"
     # Matches the omni DWB limits with controlled lateral and reverse support.
-    max_velocity: [0.30, 0.30, 0.60]
+    max_velocity: [0.50, 0.30, 0.60]
     min_velocity: [-0.30, -0.30, -0.60]
     max_accel: [1.5, 1.5, 3.0]
     max_decel: [-1.5, -1.5, -3.0]

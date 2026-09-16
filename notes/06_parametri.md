@@ -27,7 +27,7 @@ updated: 2026-09-15
 | ploča markera | 0.22 m (-X ploha, x = -0.1505) | `WORLD` model `aruco_box` | [[P-08_marker_not_detected_texture]] |
 | `pick_table` | (0, **-6.5**), 4 noge, ploča 0.8 × 0.8 na **z = 0.75 m** | `WORLD` | plava soba; 4 noge na z=0..0.71 |
 | `place_table` | (**6.5**, 0), 4 noge, ploča 0.8 × 0.8 na **z = 0.75 m** | `WORLD` | crvena soba, odredište ([[R-13_destination_place]]) |
-| točka odlaganja / vizualni X | središte kocke (**6.32**, 0, 0.90), X na z=0.751 | `WORLD` model `place_target_x` | 0.22 m od bližeg ruba; kocka ima 0.07 m rezerve do ruba |
+| točka odlaganja / **ArUco marker** | ploča **0.40 × 0.40** na (**6.32**, 0, **0.7515**), marker **id 3**, **0.36 m** (quiet zone **5 %**, ne 12.5 % kao na kutiji) | `WORLD` model `place_marker`, tekstura `aruco_marker_3.png` (`scripts/make_marker.py`) | 16. 9.: zamijenio crveni X, kojeg robot nije mogao vidjeti. Marker je **veći od kocke** (0.36 > 0.30) namjerno: kocka od 0.30 m prekrila bi marker od 0.30 m u cijelosti, a ovako oko nje ostaje **3 cm** markera sa svake strane — i za oko i za provjeru. 0.22 m od bližeg ruba, kocki ostaje 0.07 m rezerve |
 
 ## Robot
 | trenje kotača mu1 / mu2 | **0.80 / 0.20** (anizotropno, fdir1 ±45° u `base_footprint`) | `src/pas_dual_arm_bringup/urdf/base/wheel.urdf.xacro` | [[P-09_omni_drive_on_fortress]], [[R-08_omni_controller]] |
@@ -101,7 +101,7 @@ updated: 2026-09-15
 | **`field_width` / `field_peak` / `field_core`** (novo 14. 9., [[D-20_single_potential_field_costmap]]) | **0.30 m / 35 / 0.427 m** (`furrow_margin` **0.10 m**, `table_dock_safety` **0.10 m**; `global_costmap.inflation_layer enabled: false`) | `nav_zones.py` `Zones.field`, `/keepout_filter_mask` i `..._planner` | **Jedinstveno potencijalno polje za cijelu navigaciju (D-20).** Zamijenilo stari `table_field` i ugasilo globalni `inflation_layer` koji je stvarao dvostruko brojanje i "djetelinu" (run 68). Rampa sa širinom 0.30 m i vrhom 35 (cijena 89 u Costmap2D) drži putanju na razmaku 0.715 m od stvarnih prepreka (optimalno unutar 0.60–0.90 m). Kroz vrata i prilaz stolu izrezane su brazde nulte cijene (`_furrows`) kako bi NavFn gradijentni spust ostao nezasićen. |
 | **polje (`field_width` / `field_peak` / `furrow_margin`)** (novo 14. 9.) | **0.40 m / 50 / 0.10 m**; jezgra = `planner_inflation` 0.427 m | `nav_zones.py` `Zones.field`, u obje maske | **Jedno potencijalno polje umjesto tri izvora odbijanja** ([[D-20_single_potential_field_costmap]]). Udaljenost se mjeri od **oboda ploče** (0.80 m), ne od nogu koje lidar vidi. Vrijednosti odabrane mjerenjem: razmak putanje određuje širina rampe (putanja sjedne tik izvan nje), pa 0.25/0.30/0.35/0.40 daje 0.659/0.715/0.756/0.800 m, a konačnih 0.40/50 daje **0.835 m** — iznad praga 0.52 m (deadlock `collision_monitor`-a) i ispod 0.90 m (ljubljenje suprotnog zida) |
 | **brazde (`_furrows`)** (novo 14. 9.) | vrata: polušírina 0.640 m, doseg ±1.45 m; stol: polušírina 0.527 m niz prilaznu os. U brazdi rampa = **0**, jezgra ostaje | `nav_zones.py` `Zones._furrows` | Tako se na costmapu bez negativnih brojeva izvodi **privlačenje**: prolaz se ne privlači, nego se sve pokraj njega odbija. Nulta cijena u brazdi je **uvjet**, ne ugađanje — NavFn potencijal vadi gradijentnim spustom i zasićena brazda ga ruši (run 65) |
-| **dock poza (`table_dock_safety`)** (novo 14. 9.) | **0.10 m**; dock = ploča 0.401 + pola duljine 0.52 + 0.10 = **1.021 m** od centra stola | `nav_zones.py` `_build_poses`, `room_navigator._undock_leg` | Najbliža poza koju Nav2 smije držati: čelo **10.0 cm** od ploče. **Na njoj se ne smije okretati** (opisani radijus 0.673 m bi zakačio stol), pa se s nje izlazi isključivo unatrag po istoj osi do `approach` poze (1.55 m). Zahtjev `/room_navigator/goto "<soba>:dock"`, izlaz `"undock"` |
+| **dock poza (`table_dock_safety`)** (16. 9.: 0.10 → 0.15) | **0.15 m**; dock = ploča 0.401 + pola duljine 0.52 + 0.15 = **1.071 m** od centra stola | `nav_zones.py` `_build_poses`, `room_navigator._undock_leg` | Najbliža poza koju Nav2 smije držati: čelo **15.0 cm** od ploče. **Na njoj se ne smije okretati** (opisani radijus 0.673 m bi zakačio stol), pa se s nje izlazi isključivo unatrag po istoj osi do `approach` poze (1.35 m). Zahtjev `/room_navigator/goto "<soba>:dock"`, izlaz `"undock"` |
 | **`inflation_layer` (globalni)** | **`enabled: false`** (blok i vrijednosti ostaju) | `NAV` `global_costmap.inflation_layer` | Izotropan je, a robot 1.04 × 0.854 m nije: čeono je puštao centar na 0.803 m gdje je fizički minimum 0.921 m (12 cm **u** ploču), bočno prestrog. Uz to je neizbježan u vratima. Ostavljen ugašen da se usporedba može vratiti jednom riječi; `/global_costmap/costmap` objavljuje neovisno o tome, pa RViz prikazi rade |
 
 ## Percepcija
@@ -180,6 +180,53 @@ Izmjerene dimenzije svake poze su u [[08_poze]] (snima ih `scripts/capture_postu
 | `detection_widen` | 0.05 m (šake van po y) | `main_task` | korisnik: malo šire; kamere 0.35 m od markera, 20 cm od kocke pri primicanju |
 | vodilice + ruke istodobno | ruke kreću na **30 %** hoda vodilica (`arm_start_delay`), kroz točku **12 cm** iznad DETECTION (`detection_via_rise`), pa ravno dolje | `main_task._torso_and_arms_together` | korisnik; offline ≥ 10.3 cm od stola (izravna interpolacija bez međutočke: 1.8 cm) |
 | `together_min_range` | 0.85 m | `main_task` | put provjeren s kockom na docku; bliže → vodilice pa MoveIt |
+
+## Misija — konačni sim (`main_task`, 16. 9. 2026.)
+| Parametar | Vrijednost | Gdje | Zašto / veza |
+|---|---|---|---|
+| `mission` | **false** (uključuje ga `mission.launch.py`) | `main_task` | misijski način: ruke u `DRIVE_V4` → čekanje korisnika → vožnja kroz `room_navigator` → hvat. Isključen, ponašanje je točno kao u runovima V2–V5 (spawn na docku) |
+| `pick_room` / `place_room` | **`blue`** / **`red`** | `main_task` | imena soba dolaze iz `nav_zones` `room_labels` (`home:0,0`, `blue:0,-6`, `red:6,0`); stol u sobi daje `approach` i `dock` poze |
+| `goto_timeout` | **600 s** | `main_task._goto` | gornja granica čekanja na navigator; `failed`/`aborted`/`cancelled` prekidaju odmah, bez čekanja isteka |
+| naredba korisnika | tema **`/mission/start`** (`std_msgs/String`, ime sobe; prazno = `pick_room`) | `nav_gui` gumb „MISIJA: po kutiju", ili `ros2 topic pub` | ništa se ne vozi prije te poruke (zahtjev korisnika, 16. 9.) |
+| spawn za misiju | `carry_arms:=false` → `ARM_ZERO` (raširene ruke), poza (0, 0, 0°) | `mission.launch.py` | korisnik želi vidjeti kako se ruke slože u `DRIVE_V4`; (0,0,0) je i AMCL `initial_pose` u `NAV`, pa se poza ne postavlja ručno |
+| referentna poza ruku za gate | tema **`/room_navigator/arm_posture`** (latched): `DRIVE_V4` prazan, **`CARRY_V4`** s kutijom | `main_task` → `room_navigator.arms_ok` | 16. 9.: misija je pala na vratima jer je gate znao samo `DRIVE_V4`. Usporedba sada omotava kut (2π), inače kontinuirani zglobovi lažno ispadaju daleko ([[P-45_mission_integration]]) |
+
+## Odlaganje na marker (`main_task._place_on_marker`, 16. 9. 2026.)
+| Parametar | Vrijednost | Gdje | Zašto / veza |
+|---|---|---|---|
+| `place_clearance` | **0.20 m** (bilo 0.05) | `main_task` | korisnikovo pravilo (16. 9.): **visina ruku = visina markera + 20 cm + pola kocke**, tj. donja ploha kocke lebdi 20 cm iznad markera dok se baza primiče |
+| `place_max_advance` | **0.24 m** | `main_task` | primicanje stolu ide po tome **koliko robot može**, ne koliko marker traži. Izračunato iz runa 16. 9.: marker 0.915 m ispred, rub ploče 0.22 m bliže = 0.695 m, a baza završava 0.41 m ispred `base_link` → **0.285 m** zazora; ostaje 4.5 cm rezerve |
+| ostatak do markera | preuzimaju **ruke** (`_push_cube_out`), jer baza dalje ne smije | `main_task` P4 | s dockom i hvatom kakvi jesu kocka je ~28 cm iza markera: baza pokrije 24 cm, ruke ostatak. Ako ni ruke ne mogu, log **kaže koliko kratko** kocka sjeda umjesto da se pretvara da je centrirana ([[D-12_honesty_abort_over_fake]]) |
+| `place_touch` | **0.002 m** | `main_task` | kocka se **spušta**, ne pritišće; isti red veličine kao `touch_depth` pri hvatu |
+| `place_lower_speed` | **0.01 m/s** | `main_task.move_torso_guarded` | zadnjih 5 cm; guard prekida ako kocka napusti jastučiće |
+| izvor pozicije kocke pri odlaganju | **kamere na zapešću** (`_cube_in_hands`), ne mrtvi račun od attacha | `main_task` | dok je kocka u rukama, njezini bočni markeri se gibaju s rukama — isto očitanje koje je vodilo hvat (STEP5a) |
+| dokaz | `PLACE VERIFIED: … mm od centra markera` (glavna kamera + dubina, usporedba u `odom`) | `main_task` | bez tog ispisa run nije uspjeh ([[D-12_honesty_abort_over_fake]]) |
+
+## Pripremne poze i finoća gibanja (16. 9. 2026., korisnikov run M2/M3)
+| Parametar | Vrijednost | Gdje | Zašto / veza |
+|---|---|---|---|
+| `portal_standoff` | **0.65 m** (bilo 0.95) | `nav_zones` | korisnik: pripremne točke pred vratima su predaleko. Prilaz je sada **1.15 m** od vrata (bio 1.45) |
+| `table_standoff` | **0.95 m** (bilo 1.15) | `nav_zones` | prilaz stolu **1.35 m** od centra (bio 1.55). **0.90 m ne prolazi** `check_zones`: na toj pozi opisani krug od 0.673 m dodiruje keepout, pa se robot ne bi mogao okrenuti |
+| `table_dock_safety` | **0.15 m** (bilo 0.10) | `nav_zones` | korisnik: pred stolom u crvenoj sobi stao je premalo blizu. Čelo je sada **15 cm** od ploče |
+| finoća vožnje | zadnji centimetri: brzina `min(zadana, max(0.02, ostatak/1.5))`, rampa najviše ⅓ pokreta, tolerancija **1 cm** (vožnja) / **0.8 cm** (strafe) | `base_drive.drive/drive_distance/strafe_distance` | korisnik: „do finoće kontrole gibanja" — kod korekcije od 2 cm najkraći nalet pri punoj brzini prijeđe 4–5 cm, pa je robot **pretjerao** pri centriranju |
+| kutija u obrisu robota | tema **`/mission/carried_points`** (latched, kutovi kutije u `base_link`) | `main_task` → `footprint_publisher` | korisnik: dok nosi kutiju, u zonu robota mora ulaziti i kutija, ne samo ruke. URDF za kutiju ne zna, pa je obris inače završavao na šakama |
+| kutija u RViz-u | tema `/mission/cube_marker` (`visualization_msgs/Marker`, `base_link`), prikaz „Kutija (izmjerena)" u `nav2.rviz` | `main_task._show_cube` | crta se **izmjerena** kutija (kamere), ne poza iz simulatora — inače provjera ne vrijedi ništa ([[P-40_amcl_pose_disagrees_with_lidar]]) |
+
+## Glatko gibanje (16. 9. 2026., korisnik: „ne sviđa mi se cjepkano gibanje")
+| Parametar | Vrijednost | Gdje | Zašto / veza |
+|---|---|---|---|
+| ruta se vozi u **skupinama** | uzastopne dionice bez gatea = **jedan** cilj (`navigate_through_poses`); **prolaz i dock uvijek sami** | `room_navigator.run` / `_drive_through` | Izmjereno: `blue:dock → red:dock` 7 dionica → **6 ciljeva (1 kontinuiran)**, `home → blue:dock` 4 → **4 (nijedan kontinuiran)**. Dobitak je dakle **malen**: preostala stajanja su upravo ona nosiva — poravnanje pred oboja vrata ([[P-39_nav2_enters_doorway_at_an_angle]]) i pred stolom prije docka ([[D-20_single_potential_field_costmap]]). Glatkoću *unutar* dionice daje `Twirling.scale` |
+| `Twirling.scale` | **2.0** (bilo 20.0) | `NAV` `FollowPath` | kritika kažnjava okretanje u vožnji; na diff-driveu to je smisleno, na mecanumu je upravo ono što korisnik traži (translacija i rotacija istovremeno). Ostaje iznad nule da se robot ne vrti bez razloga |
+
+## Brzine (16. 9. 2026., korisnik: „kada je sigurno robot se treba brzo gibati")
+| Parametar | Vrijednost | Gdje | Zašto / veza |
+|---|---|---|---|
+| Nav2 `max_vel_x` / `max_speed_xy` / `max_vel_theta` | **0.45** / **0.50** / **0.40** (bilo 0.30 / 0.35 / 0.30) | `NAV` `FollowPath` | vožnja po otvorenoj sobi; `velocity_smoother.max_velocity` podignut na **[0.50, 0.30, 0.60]** jer bi inače rezao |
+| brzina po dionici | `fast_vel_x` **0.45** / `slow_vel_x` **0.18** (+ `fast/slow_speed_xy` 0.50 / 0.22) | `room_navigator._set_leg_speed` | **sporo kroz vrata i na dock**, brzo drugdje; postavlja se na `controller_server` prije svake dionice. `collision_monitor` i dalje dodatno usporava uz prepreku |
+| `vx_samples` | **15** (bilo 25) | `NAV` `FollowPath` | run M2 je imao **624 ×** `Control loop missed its desired rate of 20 Hz`; manje uzoraka = upravljač stiže u takt |
+| skaliranje ruku (MoveIt) | **0.7** brzina i ubrzanje (bilo 0.2) | `postures.move_to_posture`, `main_task` planovi | samo **slobodni** pokreti; prilaz kutiji (`grasp_approach_speed` 0.01 m/s), privlačenje (`pull_speed` 0.02 m/s) i spuštanje ostaju spori |
+| vodilice | `move_torso` 2 s, `_torso_to` 3 s (bilo 4 i 8), smirivanje **1.2 s** (bilo 3.0) | `main_task` | isto: slobodni hod brzo, vođeno spuštanje na stol i dalje polako |
+| kašnjenja pri pokretanju | nav2 **8 s**, RViz 10 s, task 14 s, `main_task` +5 s (bilo 12 / 22 / +12) | `mission.launch.py`, `task.launch.py` | mrtvo vrijeme prije nego se išta dogodi |
 | RViz „Oblak - glava" | `Color Transformer: RGB8` (bio FlatColor) | `rviz/cube.rviz` | korisnik |
 | dizanje | +0.15 m (0.40 → 0.55), najviše 0.64 m | `main_task` STEP6 | 0.65 m je graničnik (P-13) |
 
