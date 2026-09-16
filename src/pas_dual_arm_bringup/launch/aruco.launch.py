@@ -1,5 +1,6 @@
 from launch import LaunchDescription
-from launch.actions import SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
@@ -8,13 +9,19 @@ def generate_launch_description():
     rmw_env = SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')
     zenoh_env = SetEnvironmentVariable('ZENOH_CONFIG_OVERRIDE', '')
 
+    quiet = LaunchConfiguration('quiet', default='false')
+    quiet_arg = DeclareLaunchArgument(
+        'quiet', default_value='false',
+        description='Log aruco detectors to file instead of screen')
+    aruco_output = PythonExpression(["'log' if '", quiet, "'=='true' else 'screen'"])
+
     # Custom OpenCV-based detector: the bundled aruco_ros library has no OpenCV
     # DICT_4X4_50 dictionary, so it can never decode the marker chosen for this
     # assignment (see pas_dual_arm_scripts/aruco_detector.py).
     detector = Node(
         package='pas_dual_arm_scripts',
         executable='aruco_detector',
-        output='screen',
+        output=aruco_output,
         parameters=[{
             'marker_id': 0,
             'marker_size': 0.165,  # 0.22 m plate on the box, marker fills 75% -> 0.165 m
@@ -35,7 +42,7 @@ def generate_launch_description():
             package='pas_dual_arm_scripts',
             executable='aruco_detector',
             name=f'aruco_detector_{side}_wrist',
-            output='screen',
+            output=aruco_output,
             parameters=[{
                 'marker_id': marker_id,
                 # 0.12 m plate on the face, marker fills 75% -> 0.09 m.
@@ -59,7 +66,7 @@ def generate_launch_description():
         package='pas_dual_arm_scripts',
         executable='aruco_detector',
         name='aruco_detector_place',
-        output='screen',
+        output=aruco_output,
         parameters=[{
             'marker_id': 3,
             # 0.40 m plate with a 5% quiet zone -> 0.36 m of marker. Bigger than
@@ -75,5 +82,5 @@ def generate_launch_description():
         }],
     )
 
-    return LaunchDescription([rmw_env, zenoh_env, detector, *wrist_detectors,
+    return LaunchDescription([rmw_env, zenoh_env, quiet_arg, detector, *wrist_detectors,
                               place_detector])

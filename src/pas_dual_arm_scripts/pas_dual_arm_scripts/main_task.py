@@ -27,6 +27,7 @@ Run order (separate terminals, all with Fast DDS):
 import json
 import math
 import subprocess
+import sys
 import time
 
 import numpy as np
@@ -460,6 +461,11 @@ class MainTask(BaseDriver, Node):
         self.carried_pub = self.create_publisher(
             Polygon, '/mission/carried_points',
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.task_status_pub = self.create_publisher(
+            String, '/mission/task_status',
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self._current_step = 0
+        self._total_steps = 8
         # How the cube sits in the hand, recorded at the moment of the attach:
         # {'offset', 'normal', 'half'} in the left_tool_tip frame. The wrist
         # cameras CANNOT be used once the cube is held - the pads end up 2 cm
@@ -2594,6 +2600,8 @@ class MainTask(BaseDriver, Node):
 
         # P1. Read the marker from the dock: far enough not to foreshorten it
         #     (P-19) and with nothing of the robot over it.
+        self._report_mission_step(7, 8, 'Detekcija markera za odlaganje',
+                                  'Glavna kamera traži ciljni marker na stolu (ID 3), robot i ruke se pozicioniraju...')
         self.look_down(0.65, 'PLACE look at the table')
         mark = self._place_marker_in_base()
         if mark is None:
@@ -2704,6 +2712,8 @@ class MainTask(BaseDriver, Node):
 
         # P5. Down until the cube rests on the table: slowly, and stopping if the
         #     cube leaves the pads on the way.
+        self._report_mission_step(8, 8, 'Odlaganje kocke na marker',
+                                  'Spuštanje kocke na stol, otpuštanje hvata (detach) i povlačenje robota...')
         mark = self._marker_in_base(mark_odom, mark_height)
         cube, half, normal = self._cube_in_hands()
         if mark is None or cube is None:
@@ -2799,21 +2809,34 @@ class MainTask(BaseDriver, Node):
             self.get_logger().warn(
                 'PLACE: the cube is down but the camera cannot see it again; '
                 'landing position UNVERIFIED')
+            self._report_mission_step(8, 8, 'MISIJA ZAVRŠENA',
+                                      'Kocka je odložena, ali pozicija nije ponovno verificirana kamerom.',
+                                      state='success')
             return True
         meas = self.measure_box(Point(x=face.x, y=face.y, z=face.z))
         if meas is None:
             self.get_logger().warn(
                 'PLACE: the cube is down but depth could not measure it; '
                 'landing position UNVERIFIED')
+            self._report_mission_step(8, 8, 'MISIJA ZAVRŠENA',
+                                      'Kocka je odložena, ali dubinski senzor nije izmjerio centar.',
+                                      state='success')
             return True
         landed = self._to_odom((meas[0].x, meas[0].y))
         if landed is None:
             self.get_logger().warn('PLACE: no odometry for the landing check')
+            self._report_mission_step(8, 8, 'MISIJA ZAVRŠENA',
+                                      'Kocka je odložena na stol (nedostaje odometrija za provjeru).',
+                                      state='success')
             return True
         dx, dy = landed[0] - mark_odom[0], landed[1] - mark_odom[1]
+        err_mm = math.hypot(dx, dy) * 1000
         self.get_logger().info(
-            f'PLACE VERIFIED: the centre of the cube is {math.hypot(dx, dy) * 1000:.0f} mm '
+            f'PLACE VERIFIED: the centre of the cube is {err_mm:.0f} mm '
             f'from the marker centre (dx {dx * 1000:+.0f}, dy {dy * 1000:+.0f} mm)')
+        self._report_mission_step(8, 8, 'MISIJA USPJEŠNO ZAVRŠENA',
+                                  f'Kocka je točno na markeru! Odstupanje od centra: {err_mm:.0f} mm (dx: {dx * 1000:+.0f} mm, dy: {dy * 1000:+.0f} mm).',
+                                  state='success')
         return True
 
     def _posture_goals(self, name):
@@ -2889,12 +2912,19 @@ class MainTask(BaseDriver, Node):
             # A. The arms leave the spawn posture (ARM_ZERO, 2.28 m wide) before
             #    the base moves at all. In the mission the robot spawns with them
             #    spread, exactly as the user asked to see it.
+            self._report_mission_step(1, 8, 'Priprema ruku (DRIVE_V4)',
+                                      'Sklapanje ruku iz početnog položaja u transportnu pozu za vožnju.')
             if not move_to_posture(self, ARM_DRIVE, label='mission: drive posture'):
                 return self._fail('arms did not reach the drive posture')
             self.arm_posture_pub.publish(String(data=ARM_DRIVE))
             # B. Nothing drives until the user says so.
+            self._report_mission_step(2, 8, 'Čekanje naredbe korisnika',
+                                      'Ruke su sklopljene. Pritisnite "MISIJA: po kutiju" u GUI panelu.',
+                                      state='waiting')
             room = self._wait_for_start(str(self.get_parameter('pick_room').value))
             # C. To the table in that room: approach pose, then the dock pose.
+            self._report_mission_step(3, 8, 'Navigacija do sobe s kockom',
+                                      f'Autonomna vožnja kroz vrata do stola ({room}:dock)...')
             if not self._goto(f'{room}:dock'):
                 return self._fail(f'room_navigator did not reach {room}:dock')
 
@@ -2909,6 +2939,8 @@ class MainTask(BaseDriver, Node):
                 return self._fail('Nav2 did not reach the requested region')
 
         # 1. SCAN: pan the camera (base still) until the marker is found.
+        self._report_mission_step(4, 8, 'Percepcija i prilaz kocki',
+                                  'Traženje ArUco markera kamerom na glavi i vizualni prilaz stolu...')
         found = self.scan_for_marker()
         if found is None:
             return self._fail('scan: marker not found')
@@ -2939,6 +2971,8 @@ class MainTask(BaseDriver, Node):
             u = vt
 
         # 3b/3c. CARRIAGES UP and ARMS INTO DETECTION_V4 (a little wider).
+        self._report_mission_step(5, 8, 'Dvoručni hvat i podizanje kocke',
+                                  f'Kocka izmjerena na ({center.x:.2f}, {center.y:.2f}) m. Priprema šaka za zahvat...')
         try:
             kin, hulls, jog = self._grasp_tools()
         except RuntimeError as exc:
@@ -3252,14 +3286,56 @@ class MainTask(BaseDriver, Node):
         # 8. MISSION: carry it to the other room and put it down on the marker.
         if bool(self.get_parameter('mission').value):
             room = str(self.get_parameter('place_room').value)
+            self._report_mission_step(6, 8, 'Prijenos u sobu za odlaganje',
+                                      f'Nošenje kocke kroz prolaze prema sobi "{room}" ({room}:dock)...')
             if not self._goto(f'{room}:dock'):
                 return self._fail(f'room_navigator did not reach {room}:dock')
             if not self._place_on_marker():
                 return None
             self.get_logger().info('MISSION COMPLETE: the cube is on the marker.')
 
+    def _report_mission_step(self, step, total_steps, phase, detail, state='running'):
+        """Report mission progress to /mission/task_status topic and print a clean banner."""
+        self._current_step = step
+        self._total_steps = total_steps
+        payload = {
+            'step': step,
+            'total_steps': total_steps,
+            'phase': phase,
+            'detail': detail,
+            'state': state,
+            'time': time.time(),
+        }
+        if hasattr(self, 'task_status_pub'):
+            self.task_status_pub.publish(String(data=json.dumps(payload)))
+
+        prefix = f"[{step}/{total_steps}]" if (step and total_steps) else "[ZADATAK]"
+        color = "\033[1;32m" if state == 'success' else (
+            "\033[1;31m" if state == 'aborted' else (
+                "\033[1;33m" if state == 'waiting' else "\033[1;36m"
+            )
+        )
+        reset = "\033[0m"
+        banner = (
+            f"\n{color}"
+            f"======================================================================\n"
+            f">>> {prefix} {phase}\n"
+            f"    {detail}\n"
+            f"======================================================================{reset}\n"
+        )
+        sys.stdout.write(banner)
+        sys.stdout.flush()
+        self.get_logger().info(f"{prefix} {phase}: {detail}")
+
     def _fail(self, where):
         self.get_logger().error(f'Task aborted during: {where}')
+        self._report_mission_step(
+            getattr(self, '_current_step', 0),
+            getattr(self, '_total_steps', 8),
+            'PREKID ZADATKA',
+            f'Misija prekinuta: {where}',
+            state='aborted'
+        )
 
 
 def main(args=None):

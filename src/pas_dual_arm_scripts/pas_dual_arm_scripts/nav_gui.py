@@ -18,6 +18,7 @@ so what the robot is deciding is visible while it decides it.
 import json
 import math
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk
 
@@ -34,6 +35,7 @@ from pas_dual_arm_scripts.room_navigator import HALF_LENGTH, HALF_WIDTH
 COLOURS = {
     'idle': '#4a5568', 'driving': '#2b6cb0', 'arrived': '#276749',
     'aborted': '#9b2c2c', 'failed': '#9b2c2c', 'cancelled': '#975a16',
+    'waiting': '#b7791f', 'running': '#2b6cb0', 'success': '#276749',
 }
 
 
@@ -49,9 +51,15 @@ class NavGuiNode(Node):
         # run over to main_task, which drives through the navigator itself.
         self.mission = self.create_publisher(String, '/mission/start', 10)
         self.status = {'state': 'idle', 'detail': 'waiting for the navigator'}
+        self.task_status = {
+            'step': 0, 'total_steps': 8, 'phase': 'Pripravan',
+            'detail': 'Čeka se pokretanje misije.', 'state': 'idle'
+        }
+        self.task_history = []
         self.graph = None
         self.scan = None
         self.create_subscription(String, '/room_navigator/status', self._on_status, latched)
+        self.create_subscription(String, '/mission/task_status', self._on_task_status, latched)
         self.create_subscription(String, '/nav_graph', self._on_graph, latched)
         self.create_subscription(LaserScan, '/scan_filtered', self._on_scan,
                                  qos_profile_sensor_data)
@@ -63,6 +71,24 @@ class NavGuiNode(Node):
             self.status = json.loads(msg.data)
         except json.JSONDecodeError:
             self.status = {'state': 'idle', 'detail': msg.data}
+
+    def _on_task_status(self, msg):
+        try:
+            data = json.loads(msg.data)
+            self.task_status = data
+            t_str = time.strftime('%H:%M:%S')
+            step = data.get('step', 0)
+            total = data.get('total_steps', 8)
+            phase = data.get('phase', '')
+            state = data.get('state', 'running')
+            detail = data.get('detail', '')
+            step_tag = f"[{step}/{total}] " if (step and total) else ""
+            log_line = f"[{t_str}] {step_tag}{phase} - {detail}\n"
+            self.task_history.append((log_line, state))
+            if len(self.task_history) > 100:
+                self.task_history.pop(0)
+        except Exception:
+            pass
 
     def _on_graph(self, msg):
         self.graph = json.loads(msg.data)
@@ -110,21 +136,21 @@ class NavGui:
     def __init__(self, node):
         self.node = node
         self.root = tk.Tk()
-        self.root.title('PAS dual arm - room navigation')
-        self.root.geometry('560x490')
-        pad = {'padx': 8, 'pady': 5}
+        self.root.title('PAS dual arm - Upravljanje i status misije')
+        self.root.geometry('620x720')
+        pad = {'padx': 8, 'pady': 3}
 
         frame = ttk.Frame(self.root, padding=12)
         frame.pack(fill='both', expand=True)
 
-        ttk.Label(frame, text='Pošalji robota', font=('TkDefaultFont', 12, 'bold')) \
+        ttk.Label(frame, text='Pošalji robota', font=('TkDefaultFont', 11, 'bold')) \
             .grid(row=0, column=0, columnspan=3, sticky='w', **pad)
 
         self.buttons = {}
         for column, (room, text) in enumerate((('blue', 'PLAVA soba\n(pred stol)'),
                                                ('red', 'CRVENA soba\n(pred stol)'),
                                                ('home', 'HOME\n(sredina sobe)'))):
-            button = tk.Button(frame, text=text, height=3, width=16,
+            button = tk.Button(frame, text=text, height=2, width=16,
                                command=lambda r=room: self.node.send(r))
             button.grid(row=1, column=column, **pad)
             self.buttons[room] = button
@@ -138,23 +164,57 @@ class NavGui:
                             command=lambda: self.node.start_mission('blue'))
         mission.grid(row=2, column=0, columnspan=3, sticky='ew', **pad)
 
-        stop = tk.Button(frame, text='STOP', height=2, bg='#c53030', fg='white',
-                         font=('TkDefaultFont', 11, 'bold'),
+        stop = tk.Button(frame, text='STOP', height=1, bg='#c53030', fg='white',
+                         font=('TkDefaultFont', 10, 'bold'),
                          command=lambda: self.node.send('stop'))
         stop.grid(row=3, column=0, columnspan=3, sticky='ew', **pad)
 
-        self.state = tk.Label(frame, text='idle', font=('TkDefaultFont', 11, 'bold'),
-                              fg='white', bg=COLOURS['idle'], anchor='w', padx=10, pady=6)
+        self.state = tk.Label(frame, text='idle', font=('TkDefaultFont', 10, 'bold'),
+                              fg='white', bg=COLOURS['idle'], anchor='w', padx=10, pady=4)
         self.state.grid(row=4, column=0, columnspan=3, sticky='ew', **pad)
 
-        self.detail = ttk.Label(frame, text='', wraplength=510, justify='left')
+        self.detail = ttk.Label(frame, text='', wraplength=580, justify='left')
         self.detail.grid(row=5, column=0, columnspan=3, sticky='w', **pad)
 
+        # --- Task / Mission section ---
         ttk.Separator(frame, orient='horizontal').grid(row=6, column=0, columnspan=3,
-                                                       sticky='ew', pady=6)
+                                                       sticky='ew', pady=5)
+        ttk.Label(frame, text='Trenutni zadatak / Misija', font=('TkDefaultFont', 11, 'bold')) \
+            .grid(row=7, column=0, columnspan=3, sticky='w', **pad)
+
+        self.task_phase = tk.Label(frame, text='ČEKA POKRETANJE', font=('TkDefaultFont', 10, 'bold'),
+                                   fg='white', bg=COLOURS['idle'], anchor='w', padx=10, pady=4)
+        self.task_phase.grid(row=8, column=0, columnspan=3, sticky='ew', **pad)
+
+        self.task_detail = ttk.Label(frame, text='Pripravan za rad.', wraplength=580, justify='left')
+        self.task_detail.grid(row=9, column=0, columnspan=3, sticky='w', **pad)
+
+        # Mini console / log
+        ttk.Label(frame, text='Dnevnik koraka misije:', font=('TkDefaultFont', 9, 'italic')) \
+            .grid(row=10, column=0, columnspan=3, sticky='w', padx=8, pady=(3, 0))
+
+        log_frame = ttk.Frame(frame)
+        log_frame.grid(row=11, column=0, columnspan=3, sticky='nsew', padx=8, pady=2)
+        self.task_log_text = tk.Text(log_frame, height=5, bg='#1a202c', fg='#e2e8f0',
+                                     font=('TkFixedFont', 8), wrap='word', state='disabled')
+        log_scroll = ttk.Scrollbar(log_frame, orient='vertical', command=self.task_log_text.yview)
+        self.task_log_text.configure(yscrollcommand=log_scroll.set)
+        self.task_log_text.pack(side='left', fill='both', expand=True)
+        log_scroll.pack(side='right', fill='y')
+
+        self.task_log_text.tag_config('success', foreground='#68d391')
+        self.task_log_text.tag_config('aborted', foreground='#fc8181')
+        self.task_log_text.tag_config('waiting', foreground='#f6e05e')
+        self.task_log_text.tag_config('running', foreground='#63b3ed')
+        self.task_log_text.tag_config('idle', foreground='#a0aec0')
+        self._rendered_history_count = 0
+
+        # --- Navigation / Readout section ---
+        ttk.Separator(frame, orient='horizontal').grid(row=12, column=0, columnspan=3,
+                                                       sticky='ew', pady=5)
         self.readout = ttk.Label(frame, text='', justify='left',
                                  font=('TkFixedFont', 9))
-        self.readout.grid(row=7, column=0, columnspan=3, sticky='w', **pad)
+        self.readout.grid(row=13, column=0, columnspan=3, sticky='w', **pad)
 
         for column in range(3):
             frame.columnconfigure(column, weight=1)
@@ -163,8 +223,31 @@ class NavGui:
     def refresh(self):
         status = self.node.status
         state = status.get('state', 'idle')
-        self.state.configure(text=state.upper(), bg=COLOURS.get(state, '#4a5568'))
+        self.state.configure(text=f"NAV: {state.upper()}", bg=COLOURS.get(state, '#4a5568'))
         self.detail.configure(text=status.get('detail', ''))
+
+        # Update mission task status
+        task = self.node.task_status
+        task_state = task.get('state', 'idle')
+        step = task.get('step', 0)
+        total = task.get('total_steps', 8)
+        step_prefix = f"[{step}/{total}] " if (step and total) else ""
+        phase_text = f"{step_prefix}{task.get('phase', '')}".strip() or "ČEKA POKRETANJE"
+        self.task_phase.configure(
+            text=phase_text,
+            bg=COLOURS.get(task_state, '#4a5568')
+        )
+        self.task_detail.configure(text=task.get('detail', ''))
+
+        # Append new history lines to log text widget
+        if len(self.node.task_history) > self._rendered_history_count:
+            self.task_log_text.configure(state='normal')
+            for line, l_state in self.node.task_history[self._rendered_history_count:]:
+                tag = l_state if l_state in ('success', 'aborted', 'waiting', 'running') else 'idle'
+                self.task_log_text.insert(tk.END, line, tag)
+            self.task_log_text.see(tk.END)
+            self.task_log_text.configure(state='disabled')
+            self._rendered_history_count = len(self.node.task_history)
 
         lines = []
         pose = self.node.pose()

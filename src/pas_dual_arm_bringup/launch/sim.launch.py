@@ -47,6 +47,11 @@ def generate_launch_description():
     # automated runs.
     headless = LaunchConfiguration('headless', default='false')
     headless_arg = DeclareLaunchArgument('headless', default_value='false')
+    quiet = LaunchConfiguration('quiet', default='false')
+    quiet_arg = DeclareLaunchArgument(
+        'quiet', default_value='false',
+        description='Log background nodes to file instead of screen')
+    bg_output = PythonExpression(["'log' if '", quiet, "'=='true' else 'both'"])
     # Default TRUE: the robot spawns with every arm joint at zero, which is
     # 2.28 m wide - the arms stick straight out from the side-mounted carriages,
     # nothing can drive anywhere, and it looks wrong in the GUI. Folding into
@@ -155,7 +160,7 @@ def generate_launch_description():
     node_robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        output='both',
+        output=bg_output,
         parameters=[robot_description, {'use_sim_time': use_sim_time}]
     )
     
@@ -169,7 +174,7 @@ def generate_launch_description():
                    '-y', LaunchConfiguration('robot_spawn_y'),
                    '-Y', LaunchConfiguration('robot_spawn_yaw'),
                    '-z', '0.0'],
-        output='both'
+        output=bg_output
     )
     
     # 4. ROS-GZ Bridge (Clock, Joint States, Cmd Vel, Odom, TF)
@@ -182,7 +187,7 @@ def generate_launch_description():
             'config_file': bridge_config,
             'qos_overrides./tf_static.publisher.durability': 'transient_local',
         }],
-        output='both'
+        output=bg_output
     )
 
     # 4b. Ground-truth bridge, off unless debug_truth:=true. Feeds `loc_error`,
@@ -194,14 +199,14 @@ def generate_launch_description():
         name='parameter_bridge_debug',
         parameters=[{'config_file': bridge_debug_config}],
         condition=IfCondition(debug_truth),
-        output='both'
+        output=bg_output
     )
     node_loc_error = Node(
         package='pas_dual_arm_scripts',
         executable='loc_error',
         condition=IfCondition(debug_truth),
         parameters=[{'use_sim_time': True}],
-        output='both',
+        output=bg_output,
     )
 
     # 5. Controller Spawners
@@ -214,7 +219,7 @@ def generate_launch_description():
             # Large CM timeout: Gazebo Fortress needs ~50-60 s to load this big model,
             # so a short default makes spawners retry and double-load ("already loaded").
             arguments=[name, '--controller-manager-timeout', '120'],
-            output='both',
+            output=bg_output,
         )
 
     controller_names = [
@@ -234,12 +239,12 @@ def generate_launch_description():
     cmd_vel_relay = Node(
         package='pas_dual_arm_scripts',
         executable='cmd_vel_relay',
-        output='both',
+        output=bg_output,
     )
     scan_filter = Node(
         package='pas_dual_arm_scripts',
         executable='scan_filter',
-        output='both',
+        output=bg_output,
         parameters=[{'use_sim_time': True}],
     )
     # Publishes the robot's real outline to both costmaps' footprint topics.
@@ -250,7 +255,7 @@ def generate_launch_description():
         package='pas_dual_arm_scripts',
         executable='footprint_publisher',
         name='footprint_publisher',
-        output='both',
+        output=bg_output,
         parameters=[{'use_sim_time': True}],
     )
 
@@ -344,6 +349,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         headless_arg,
+        quiet_arg,
         carry_arms_arg,
         table_arms_arg,
         DeclareLaunchArgument('force_grasp', default_value='false'),

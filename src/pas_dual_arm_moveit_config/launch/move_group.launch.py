@@ -5,7 +5,8 @@ import subprocess
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 PKG = 'pas_dual_arm_moveit_config'
@@ -30,6 +31,12 @@ def generate_launch_description():
     # Force Fast DDS locally (see pas_dual_arm_bringup/sim.launch.py for rationale).
     rmw_env = SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')
     zenoh_env = SetEnvironmentVariable('ZENOH_CONFIG_OVERRIDE', '')
+
+    quiet = LaunchConfiguration('quiet', default='false')
+    quiet_arg = DeclareLaunchArgument(
+        'quiet', default_value='false',
+        description='Log move_group to file instead of screen')
+    move_output = PythonExpression(["'log' if '", quiet, "'=='true' else 'screen'"])
 
     share = get_package_share_directory(PKG)
     with open(os.path.join(share, 'config', 'pas_dual_arm.srdf')) as f:
@@ -66,7 +73,7 @@ def generate_launch_description():
     move_group_node = Node(
         package='moveit_ros_move_group',
         executable='move_group',
-        output='screen',
+        output=move_output,
         parameters=[
             robot_description,
             robot_description_semantic,
@@ -80,4 +87,4 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([rmw_env, zenoh_env, move_group_node])
+    return LaunchDescription([rmw_env, zenoh_env, quiet_arg, move_group_node])

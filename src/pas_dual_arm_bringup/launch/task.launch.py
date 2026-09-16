@@ -45,15 +45,22 @@ def generate_launch_description():
     pick_room = LaunchConfiguration('pick_room')
     place_room = LaunchConfiguration('place_room')
 
+    quiet = LaunchConfiguration('quiet', default='false')
+    quiet_arg = DeclareLaunchArgument(
+        'quiet', default_value='false',
+        description='Log background nodes to file instead of screen')
+
     moveit_dir = get_package_share_directory('pas_dual_arm_moveit_config')
     move_group = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(moveit_dir, 'launch', 'move_group.launch.py')))
+            os.path.join(moveit_dir, 'launch', 'move_group.launch.py')),
+        launch_arguments={'quiet': quiet}.items())
 
     aruco_dir = get_package_share_directory('pas_dual_arm_bringup')
     aruco = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(aruco_dir, 'launch', 'aruco.launch.py')))
+            os.path.join(aruco_dir, 'launch', 'aruco.launch.py')),
+        launch_arguments={'quiet': quiet}.items())
 
     main_task = Node(
         package='pas_dual_arm_scripts',
@@ -82,6 +89,7 @@ def generate_launch_description():
         rmw_env,
         zenoh_env,
         auto_start_arg,
+        quiet_arg,
         DeclareLaunchArgument('navigate_region', default_value='false'),
         DeclareLaunchArgument('mission', default_value='false'),
         DeclareLaunchArgument('pick_room', default_value='blue'),

@@ -19,6 +19,13 @@ def generate_launch_description():
     rmw_env = SetEnvironmentVariable('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')
     zenoh_env = SetEnvironmentVariable('ZENOH_CONFIG_OVERRIDE', '')
 
+    quiet = LaunchConfiguration('quiet', default='false')
+    quiet_arg = DeclareLaunchArgument(
+        'quiet', default_value='false',
+        description='Log background nodes to file instead of screen')
+    bg_output = PythonExpression(["'log' if '", quiet, "'=='true' else 'both'"])
+    nav2_log_level = PythonExpression(["'warn' if '", quiet, "'=='true' else 'info'"])
+
     mode = LaunchConfiguration('mode')
     map_file = LaunchConfiguration('map')
     # Mapping has its own launch (mapping.launch.py, which deliberately leaves
@@ -32,7 +39,7 @@ def generate_launch_description():
         description='Saved occupancy map for AMCL localization')
     mapping = Node(
         package='slam_toolbox', executable='async_slam_toolbox_node',
-        name='slam_toolbox', output='both',
+        name='slam_toolbox', output=bg_output,
         parameters=[os.path.join(pkg_bringup, 'config', 'slam_params.yaml'),
                     {'use_sim_time': True}],
         condition=IfCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
@@ -41,7 +48,8 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(nav2_bringup_dir, 'launch', 'localization_launch.py')),
         launch_arguments={'use_sim_time': 'true', 'map': map_file,
-                          'params_file': params_file}.items(),
+                          'params_file': params_file,
+                          'log_level': nav2_log_level}.items(),
         condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
     )
 
@@ -53,6 +61,7 @@ def generate_launch_description():
         launch_arguments={
             'use_sim_time': 'true',
             'params_file': params_file,
+            'log_level': nav2_log_level,
         }.items(),
     )
 
@@ -72,7 +81,7 @@ def generate_launch_description():
                     'Set false to compare against plain Nav2.')
     nav_zones = Node(
         package='pas_dual_arm_scripts', executable='nav_zones',
-        name='nav_zones', output='both',
+        name='nav_zones', output=bg_output,
         parameters=[{'use_sim_time': True}],
         condition=IfCondition(zones),
     )
@@ -80,7 +89,7 @@ def generate_launch_description():
         package='nav2_map_server',
         executable='costmap_filter_info_server',
         name='costmap_filter_info_server',
-        output='both',
+        output=bg_output,
         parameters=[{
             'use_sim_time': True,
             'type': 0,
@@ -97,7 +106,7 @@ def generate_launch_description():
         package='nav2_map_server',
         executable='costmap_filter_info_server',
         name='costmap_filter_info_server_planner',
-        output='both',
+        output=bg_output,
         parameters=[{
             'use_sim_time': True,
             'type': 0,
@@ -112,7 +121,7 @@ def generate_launch_description():
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='lifecycle_manager_costmap_filters',
-        output='both',
+        output=bg_output,
         parameters=[{
             'use_sim_time': True,
             'autostart': True,
@@ -135,7 +144,7 @@ def generate_launch_description():
         package='nav2_collision_monitor',
         executable='collision_monitor',
         name='collision_monitor',
-        output='both',
+        output=bg_output,
         parameters=[os.path.join(pkg_bringup, 'config', 'collision_monitor.yaml')],
         condition=IfCondition(safety),
     )
@@ -143,7 +152,7 @@ def generate_launch_description():
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='lifecycle_manager_safety',
-        output='both',
+        output=bg_output,
         parameters=[{
             'use_sim_time': True,
             'autostart': True,
@@ -165,13 +174,13 @@ def generate_launch_description():
     delayed_nav2 = TimerAction(period=7.0, actions=[nav2_group])
     features = Node(
         package='pas_dual_arm_scripts', executable='feature_registry',
-        output='both', parameters=[{'use_sim_time': True}],
+        output=bg_output, parameters=[{'use_sim_time': True}],
     )
     # Drives room-to-room legs off the zone graph. Started with Nav2 so the
     # GUI has something to talk to; it does nothing until asked.
     room_navigator = Node(
         package='pas_dual_arm_scripts', executable='room_navigator',
-        name='room_navigator', output='both',
+        name='room_navigator', output=bg_output,
         parameters=[{'use_sim_time': True}],
         condition=IfCondition(zones),
     )
@@ -205,6 +214,7 @@ def generate_launch_description():
     return LaunchDescription([
         rmw_env,
         zenoh_env,
+        quiet_arg,
         mode_arg,
         map_arg,
         rviz_arg,

@@ -36,6 +36,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(os.path.join(bringup, 'launch', 'sim.launch.py')),
         launch_arguments={
             'headless': LaunchConfiguration('headless'),
+            'quiet': LaunchConfiguration('quiet'),
             # One RViz for the run, started by this launch (see `rviz` below).
             # Two views cost frames the controllers need (P-32).
             'rviz': 'false',
@@ -51,6 +52,7 @@ def generate_launch_description():
         launch_arguments={
             'mode': 'localization',
             'map': LaunchConfiguration('map'),
+            'quiet': LaunchConfiguration('quiet'),
             # This launch starts RViz itself (below). Handing the job down to
             # nav2.launch.py left the run with no RViz at all on 16. 9. - not one
             # mention of it in launch.log - so the mission owns it directly.
@@ -76,12 +78,15 @@ def generate_launch_description():
         launch_arguments={
             'auto_start': 'true',
             'mission': 'true',
+            'quiet': LaunchConfiguration('quiet'),
             'pick_room': LaunchConfiguration('pick_room'),
             'place_room': LaunchConfiguration('place_room'),
         }.items())
 
     return LaunchDescription([
         DeclareLaunchArgument('headless', default_value='false'),
+        DeclareLaunchArgument('quiet', default_value='true',
+                              description='Suppress noisy background node output from terminal (logs still saved)'),
         DeclareLaunchArgument('open_rviz', default_value='true',
                               description='Open RViz for the run'),
         DeclareLaunchArgument('gui', default_value='true'),
