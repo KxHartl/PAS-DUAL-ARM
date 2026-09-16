@@ -133,7 +133,6 @@ def generate_launch_description():
     # to wheel_link_reflected.stl in version 2.18.0 (8. 9. 2026). If the installed package
     # is <= 2.17.0, map reflected back to reverted so Ogre2 loads the mesh on older installs.
     try:
-        from ament_index_python.packages import get_package_share_directory
         omni_share = get_package_share_directory('omni_base_description')
         mesh_wheels = os.path.join(omni_share, 'meshes', 'wheels')
         if not os.path.exists(os.path.join(mesh_wheels, 'wheel_link_reflected.stl')) and \
