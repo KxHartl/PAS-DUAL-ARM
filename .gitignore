@@ -49,6 +49,40 @@ src/pas_dual_arm_bringup/maps/map_2*
 /data/processed/
 /dist/
 
+# Napušteni pokus hvata silom (D-21): misija radi na `position` sučelju i ovo
+# ne uvozi. force_model.py je zadržan - koristi ga scripts/grasp_width.py.
+/src/pas_dual_arm_scripts/pas_dual_arm_scripts/force_grasp.py
+/src/pas_dual_arm_scripts/pas_dual_arm_scripts/wrench_estimator.py
+/src/pas_dual_arm_scripts/pas_dual_arm_scripts/grasp_force_diagnostics.py
+/src/pas_dual_arm_bringup/launch/force_estimation.launch.py
+/src/pas_dual_arm_scripts/test/test_force_estimation.py
+# Učitava scripts/grasp_cube.py po putanji, a ta je skripta izašla s pokusom.
+/src/pas_dual_arm_scripts/test/test_grasp_contact_policy.py
+/scripts/grasp_cube.py
+/scripts/qualify_force_log.py
+/scripts/apply_measured_arm_gains.py
+/scripts/new_force_run.sh
+/scripts/run_force_isolated.sh
+/scripts/stop_force_isolated.sh
+/scripts/run_cube_isolated.sh
+
+# Interaktivni studiji za definiranje poza: poze su snimljene i žive u
+# postures.py; sam alat nije dio gotove simulacije.
+/scripts/joint_gui.py
+/src/pas_dual_arm_bringup/launch/pose_studio.launch.py
+/src/pas_dual_arm_bringup/launch/grasp_stage.launch.py
+/src/pas_dual_arm_scripts/pas_dual_arm_scripts/grasp_stage.py
+
+# Jednokratne sonde i čvor koji se nigdje ne poziva
+/src/pas_dual_arm_scripts/pas_dual_arm_scripts/set_camera.py
+/scripts/probe_arm_posture_height.py
+/scripts/probe_spawn_clearance.py
+/scripts/probe_wrist_markers.py
+/scripts/probe_cube_ik_variants.py
+/scripts/probe_cube_perception.py
+/scripts/probe_torso.py
+/scripts/make_marker.py
+
 # Vanjski paketi: skidaju se od autora preko `vcs import src < ros2.repos`.
 # Repo nosi samo manifest, ne i njihov kod (ni gitlink pointere).
 /src/aruco_ros/

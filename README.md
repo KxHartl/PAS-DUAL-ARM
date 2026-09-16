@@ -1,5 +1,9 @@
 # PAS-DUAL-ARM — simulacijski model dual-arm robota (ROS 2 Humble + Gazebo Fortress)
 
+> **Seminarski zadatak iz kolegija Projektiranje autonomnih sustava**
+> Fakultet strojarstva i brodogradnje, Sveučilište u Zagrebu
+> Izradili: **Krešimir Hartl** i **Ivan Noršić**
+
 Mobilni robot s **dvije Kinova Gen3 ruke** na **vertikalnim linearnim vodilicama**,
 **omnidirekcijskom bazom** i **pan-tilt kamerom**. Cijela misija ide iz **jedne naredbe**:
 

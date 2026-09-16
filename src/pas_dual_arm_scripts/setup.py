@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='khartl',
     maintainer_email='kh239762@fsb.hr',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Mission nodes: orchestration, perception, navigation zones and helpers.',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',
@@ -24,20 +24,16 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'wrench_estimator = pas_dual_arm_scripts.wrench_estimator:main',
-            'grasp_force_diagnostics = pas_dual_arm_scripts.grasp_force_diagnostics:main',
             'aruco_detector = pas_dual_arm_scripts.aruco_detector:main',
             'cmd_vel_relay = pas_dual_arm_scripts.cmd_vel_relay:main',
             'main_task = pas_dual_arm_scripts.main_task:main',
             'mapping_tour = pas_dual_arm_scripts.mapping_tour:main',
             'set_posture = pas_dual_arm_scripts.set_posture:main',
             'table_ready = pas_dual_arm_scripts.table_ready:main',
-            'grasp_stage = pas_dual_arm_scripts.grasp_stage:main',
             'cloud_restamp = pas_dual_arm_scripts.cloud_restamp:main',
             'scan_filter = pas_dual_arm_scripts.scan_filter:main',
             'footprint_publisher = pas_dual_arm_scripts.footprint_publisher:main',
             'feature_registry = pas_dual_arm_scripts.feature_registry:main',
-            'set_camera = pas_dual_arm_scripts.set_camera:main',
             'nav_zones = pas_dual_arm_scripts.nav_zones:main',
             'room_navigator = pas_dual_arm_scripts.room_navigator:main',
             'nav_gui = pas_dual_arm_scripts.nav_gui:main',

@@ -13,6 +13,12 @@ Jedan launch postavi scenu, a poze se zadaju u stupnjevima i šalju **pravim** k
 simulacije. Veza: [[P-43_grasp_pose_wider_than_door]], [[R-17_dual_arm_lift]],
 [[R-19_door_pass_with_box]].
 
+> [!warning] Alati iz ovog postupka nisu više u repozitoriju (16. 9. 2026.)
+> `scripts/joint_gui.py`, `pose_studio.launch.py`, `grasp_stage.launch.py` i čvor `grasp_stage`
+> ostali su **lokalno na disku**, ali su izašli iz repoa jer nisu dio gotove simulacije.
+> Ovaj zapis ostaje kao dokumentacija **kako su nastale poze V4** koje misija danas koristi;
+> same poze žive u `postures.py` i [[08_poze]]. Za pokretanje misije vidi `README.md`.
+
 | što | vrijednost |
 |---|---|
 | spawn | dock poza `(0, −5.479)`, `yaw −90°` — ista kao misija i mapiranje, kocka 0.87 m ispred |

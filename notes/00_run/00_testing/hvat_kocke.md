@@ -16,6 +16,15 @@ Slijed testa, kako ga je korisnik zadao:
 Bez pritiska, bez attacha, bez gate-ova. To je **prvi test** — gleda se u GUI-ju što se dogodi,
 pa se tek onda odlučuje dalje. Vidi [[R-17_dual_arm_lift]].
 
+> [!warning] Pokus sa silom nije više u repozitoriju (16. 9. 2026.)
+> Čvorovi `force_grasp`, `wrench_estimator`, `grasp_force_diagnostics`, `force_estimation.launch.py`
+> te skripte `grasp_cube.py`, `run_force_isolated.sh`, `stop_force_isolated.sh`, `new_force_run.sh`,
+> `qualify_force_log.py`, `apply_measured_arm_gains.py` i `run_cube_isolated.sh` ostali su
+> **lokalno na disku**, ali su izašli iz repoa: pokus je napušten ([[D-21_effort_pid_actuator_profile]])
+> i nije dio gotove misije, koja radi na običnom `position` sučelju.
+> Biblioteka `force_model.py` je zadržana jer je koristi `scripts/grasp_width.py`.
+> Izmjerene brojke iz pokusa ostaju u [[P-41]], [[P-42]] i [[06_parametri]].
+
 > [!important] Zadani profil i dalje ide na `position` sučelje
 > Bez zastavice `force_grasp:=true` ni ruke ni vodilice nemaju regulator. Ako nešto ne stigne na
 > cilj, to se **izmjeri i zapiše**, ne zaobiđe se PID-om.
