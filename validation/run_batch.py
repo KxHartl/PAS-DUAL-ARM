@@ -94,7 +94,12 @@ PATTERNS = {
     'tip': re.compile(r'STEP5d (left|right) tool tip ([\d.]+) mm'),
     'lift': re.compile(r'CARRIAGE LIFT MEASURED left=([\d.]+) right=([\d.]+)'),
     'arrived': re.compile(r'NAV: arrived at "([^"]+)"'),
+    'controller_up': re.compile(r'Configured and activated'),
 }
+
+# Eight controllers have to be active before anything can drive: the base one
+# publishes the wheel odometry the whole localisation chain hangs off.
+CONTROLLERS = 8
 
 FIELDS = ['run', 'started', 'outcome', 'reason', 'duration_s', 'last_step',
           'last_phase', 'place_error_mm', 'tip_left_mm', 'tip_right_mm',
@@ -175,25 +180,69 @@ def parse(log_path):
     return found
 
 
-def wait_for_tf(timeout):
-    """Block until map -> odom actually resolves.
+def wait_for_tf(timeout, frame='base_footprint'):
+    """Block until map -> base_footprint actually resolves.
 
     Reaching "WAITING for the user" is not the same as being ready to drive. A
     person takes tens of seconds to read the line and press the button, and by
     then the localiser has warmed up; a harness presses it instantly, and the
-    first navigation goal then dies on `Transform data too old when converting
-    from map to odom` - the run aborts on its first leg having never moved.
-    That failure is an artefact of how fast the harness is, not of the robot,
-    and counting it as a failed mission would be wrong.
+    first navigation goal then dies - the run aborts on its first leg having
+    never moved. That failure is an artefact of how fast the harness is, not of
+    the robot, and counting it as a failed mission would be wrong.
+
+    The frame is the one `room_navigator` demands before it accepts a
+    destination, not `odom`: map -> odom can exist while the robot itself is
+    still missing from the tree, and the earlier check passed in exactly that
+    state.
     """
     try:
-        result = subprocess.run(['ros2', 'run', 'tf2_ros', 'tf2_echo', 'map', 'odom'],
+        result = subprocess.run(['ros2', 'run', 'tf2_ros', 'tf2_echo', 'map', frame],
                                 capture_output=True, text=True, timeout=timeout)
         output = result.stdout
     except subprocess.TimeoutExpired as expired:
         output = (expired.stdout or b'').decode(errors='replace') \
             if isinstance(expired.stdout, bytes) else (expired.stdout or '')
     return 'Translation' in output
+
+
+def wait_for_controllers(log_path, timeout, proc):
+    """All eight controllers active, or the stack is not the robot we measure.
+
+    Run 1 of batch 2026-09-18_0143 came up with seven: `base_controller` never
+    loaded, so there was no wheel odometry, so AMCL never localised and the
+    navigator refused the first destination. Recording that as a failed mission
+    would put a startup race into the success rate.
+    """
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if proc.poll() is not None:
+            return 0
+        if os.path.exists(log_path):
+            with open(log_path, errors='replace') as handle:
+                found = len(PATTERNS['controller_up'].findall(handle.read()))
+            if found >= CONTROLLERS:
+                return found
+        time.sleep(2.0)
+    with open(log_path, errors='replace') as handle:
+        return len(PATTERNS['controller_up'].findall(handle.read()))
+
+
+def wait_for_quiet(timeout=60.0):
+    """No simulator left running before the next one starts.
+
+    clean_ros.sh sends the kill and waits a second; Gazebo takes longer than
+    that to go, and a run that starts on top of a dying one meets two
+    controller managers. Polling until the process is actually gone is the
+    difference between independent runs and a batch that poisons itself.
+    """
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        alive = subprocess.run(['pgrep', '-f', r'ign gazebo|gz sim'],
+                               capture_output=True, text=True).stdout.split()
+        if not alive:
+            return True
+        time.sleep(2.0)
+    return False
 
 
 def wait_for(log_path, pattern, timeout, proc):
@@ -257,6 +306,12 @@ def run_once(index, args, batch):
 
     sh(['bash', os.path.join(REPO, 'scripts', 'clean_ros.sh')],
        capture_output=True)
+    if not wait_for_quiet():
+        print('    a simulator is still running after clean_ros.sh; '
+              'not starting a run on top of it')
+        return {'run': index, 'started': started.isoformat(timespec='seconds'),
+                'outcome': 'not_ready', 'reason': 'previous simulator still alive',
+                'duration_s': 0, 'dir': os.path.basename(folder), 'bag': ''}
 
     command = ['ros2', 'launch', 'pas_dual_arm_bringup', 'scenario_mission.launch.py',
                'headless:=true', 'open_rviz:=false', 'gui:=false', 'quiet:=true',
@@ -270,9 +325,16 @@ def run_once(index, args, batch):
 
         # The mission waits for a person; here the harness is the person - but
         # a much faster one, so it has to wait for the stack as well as the line.
+        not_ready = ''
         if wait_for(log_path, PATTERNS['waiting'], args.startup_timeout, proc):
+            active = wait_for_controllers(log_path, args.settle, proc)
+            if active < CONTROLLERS:
+                not_ready = f'only {active}/{CONTROLLERS} controllers active'
+                print(f'    {not_ready}')
             if not wait_for_tf(args.settle):
-                print(f'    map -> odom never resolved within {args.settle:.0f} s')
+                not_ready = not_ready or 'map -> base_footprint never resolved'
+                print(f'    map -> base_footprint never resolved within '
+                      f'{args.settle:.0f} s')
             time.sleep(args.settle_extra)
             # `--once` publishes and exits, which can happen before discovery
             # has matched the mission node - the message is then simply lost and
@@ -282,7 +344,8 @@ def run_once(index, args, batch):
                 '/mission/start', 'std_msgs/String', '{data: blue}'],
                capture_output=True, timeout=120)
         else:
-            print('    never reached "WAITING for the user"')
+            not_ready = 'never reached "WAITING for the user"'
+            print(f'    {not_ready}')
 
         end = time.monotonic() + args.run_timeout
         while time.monotonic() < end and proc.poll() is None:
@@ -312,6 +375,11 @@ def run_once(index, args, batch):
            'duration_s': round(time.monotonic() - began, 1),
            'dir': os.path.basename(folder), 'bag': 'yes' if bag_path else ''}
     row.update(parse(log_path))
+    # A stack that never came up is not a mission that failed. Keeping the two
+    # apart is the whole point of a success rate.
+    if not_ready and row['outcome'] != 'success':
+        row['outcome'] = 'not_ready'
+        row['reason'] = not_ready
     print(f'    -> {row["outcome"]}'
           + (f' at {row["last_phase"]}' if row['outcome'] != 'success' else
              f', {row["place_error_mm"]} mm from the marker')

@@ -72,6 +72,7 @@ itself printed:
 | `aborted` | the mission stopped itself and recorded a reason |
 | `stalled` | it started but reached neither an abort nor a completion before the timeout |
 | `never_started` | the stack never came up far enough to wait for a command |
+| `not_ready` | the stack came up wrong - fewer than eight controllers active, no `map -> base_footprint`, or a previous simulator still running. **Not counted against the mission**: it says nothing about the robot |
 
 `PLACE VERIFIED` is required for a success, not just `MISSION COMPLETE`: that
 line is the independent re-measurement of where the box actually ended up.

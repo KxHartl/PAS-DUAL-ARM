@@ -108,6 +108,11 @@ validation/results/
 Ništa od toga ne ide u git (`validation/results/` je u `.gitignore`); u seminar idu brojke iz
 `results.csv` i `metrics.csv`, ne prepričani pojedinačni runovi.
 
+> [!warning] Prekid serije ne gasi simulaciju
+> `run_batch.py` pokreće launch u **vlastitoj sesiji**, pa Ctrl-C stigne samo do skripte, a Gazebo
+> i svi čvorovi ostaju živi. Poslije svakog prekida: `bash scripts/clean_ros.sh`, pa provjeri
+> `pgrep -af "ign gazebo|gz sim"` (mora biti prazno) prije nove serije ([[P-50_base_controller_missing_no_localisation]]).
+
 ## Poznati rizik prije prvog pokretanja
 [[P-47_headless_batch_map_odom_stale]]: jedini dosad odvoženi run sklopa pao je s
 `room_navigator did not reach blue:dock` jer je `map → odom` bio ustajao. Sklop sad čeka da se

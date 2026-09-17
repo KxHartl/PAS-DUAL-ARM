@@ -92,14 +92,24 @@ def main():
     total = len(rows)
     outcomes = Counter(row.get('outcome', '?') for row in rows)
     ok = outcomes.get('success', 0)
+    # A run whose stack never came up, or whose world could not be generated,
+    # says nothing about the robot. It is reported, but it is not counted
+    # against the mission - and it is not quietly dropped either.
+    invalid = outcomes.get('not_ready', 0) + outcomes.get('world_failed', 0)
+    valid = total - invalid
 
     print(f'\nRuns: {total}')
-    print(f'Successful: {ok}/{total} ({100.0 * ok / total:.0f} %)' if total else 'no runs')
+    if valid:
+        print(f'Successful: {ok}/{valid} ({100.0 * ok / valid:.0f} %) '
+              f'of runs that actually started')
+    if invalid:
+        print(f'Not counted: {invalid} (stack never came up / world not generated)')
     print('\nIshodi:')
     for name, count in outcomes.most_common():
         print(f'  {name:<14} {count:3d}')
 
-    failed = [r for r in rows if r.get('outcome') != 'success']
+    failed = [r for r in rows
+              if r.get('outcome') not in ('success', 'not_ready', 'world_failed')]
     if failed:
         print('\nGdje su neuspjesi stali:')
         for phase, count in Counter(
@@ -134,7 +144,7 @@ def main():
             handle.write('    \\begin{tabularx}{\\textwidth}{@{}X l l l@{}}\n        \\toprule\n')
             handle.write('        \\textbf{Mjera} & \\textbf{Medijan} & '
                          '\\textbf{Raspon} & \\textbf{$N$} \\\\\n        \\midrule\n')
-            handle.write(f'        Uspje\\v{{s}}nost & {ok}/{total} & --- & {total} \\\\\n')
+            handle.write(f'        Uspje\\v{{s}}nost & {ok}/{valid} & --- & {valid} \\\\\n')
             for label, unit, stats in summary:
                 handle.write(f'        {label} & {stats["median"]} {unit} & '
                              f'{stats["lo"]}--{stats["hi"]} {unit} & {stats["n"]} \\\\\n')
