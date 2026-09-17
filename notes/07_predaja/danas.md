@@ -10,15 +10,34 @@ updated: 2026-09-17
 > [[00_MAPA]], a preostala odstupanja u [[odstupanja]]. Tablica se čuva jer pokazuje
 > redoslijed rada, ne trenutno stanje.
 
-## Aktualno otvoreno (17. 9. 2026.)
+## Aktualno otvoreno (stanje 18. 9. 2026.)
 Nakon profesorovih smjernica na objavljeni repo i seminar:
-1. **Video cijelog sustava** — nužno, ne postoji.
-2. **README na engleskom, samostalan, sa slikama** — ne smije upućivati u `notes/`.
-3. **Razdvajanje radnog i release repozitorija.**
-4. **Uskladiti seminar**: broj zahtjeva, kontaktni senzori, zazor kroz vrata, 0,835 m,
-   mapiranje vs. spremljena karta, formalniji izrazi, literatura.
-5. **Ponavljanja misije i statistika** — bez toga tvrdnje o robusnosti ne stoje.
-6. Slajdovi.
+1. **Video cijelog sustava** — ❌ ne postoji. `scripts/record_demo.sh` snima GUI run.
+2. **README na engleskom, samostalan, sa slikama** — ✅ 17. 9.; upute u `docs/`, slike u
+   `docs/img/`, nijedne poveznice u `notes/`.
+3. **Razdvajanje radnog i release repozitorija** — ⚠ `.gitignore` drži radni materijal vani, ali
+   `notes/` je i dalje u indeksu; drugi repozitorij ne postoji.
+4. **Uskladiti seminar** — ✅ 17. 9.: 20 zahtjeva dosljedno, tablica triju zazora, 0,835 m
+   objašnjeno, ručno mapiranje izrijekom, kontaktni senzor kao uvjet a ne mjerenje sile,
+   literatura s citatima.
+5. **Ponavljanja misije i statistika** — ⚠ sklop postoji, **podataka nema** (1 run, `aborted`).
+6. Slajdovi — ❌.
+
+### Profesorovi komentari, doslovno (seminar)
+> - provjeriti tvrdnju o udaljenosti 0,835 m od prepreka jer iz trenutnog opisa nije jasno na što
+>   se točno odnosi
+> - rezultati bi bili uvjerljiviji kada bi se prikazalo nekoliko ponavljanja kompletne završne
+>   misije i osnovna statistika uspješnosti
+> - ublažiti izraze poput geometrijski egzaktna karta, milimetarska točnost i determinističko i
+>   robusno izvršavanje ako nisu potkrijepljeni dovoljnim brojem ponavljanja
+> - smanjiti količinu detalja i opisa pojedinih pokretanja, fokusirati tekst na konačno rješenje,
+>   algoritam i rezultate
+> - provjeriti terminologiju i literaturu te ujednačiti stil rada; izraze poput „no fake grasp“ i
+>   „pravilo poštenja“ u tekstu zamijeniti formalnijim izrazima
+
+Prva tri se **zatvaraju istim podacima**: serijom runova sa snimljenim bagovima
+([[D-24_measure_from_recordings_not_logs]]). 0,835 m postaje izmjerena veličina umjesto offline
+izračuna, statistika dolazi iz `metrics.csv`, a jačina izraza se veže uz N koji stvarno imamo.
 
 ## Gap analiza (13. 9. 2026., arhiva)
 

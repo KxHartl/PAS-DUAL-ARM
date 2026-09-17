@@ -47,6 +47,10 @@ def generate_launch_description():
             'robot_spawn_y': '0.0',
             'robot_spawn_yaw': '0.0',
             'world': LaunchConfiguration('world'),
+            # Ground truth on /debug/gz_dynamic_pose. Nothing steers on it; it
+            # exists so a recorded run can be measured against where the robot
+            # actually was, instead of against what it believed and printed.
+            'debug_truth': LaunchConfiguration('debug_truth'),
         }.items())
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup, 'launch', 'nav2.launch.py')),
@@ -98,6 +102,10 @@ def generate_launch_description():
             description='SDF world; a generated layout needs its own map too'),
         DeclareLaunchArgument('pick_room', default_value='blue'),
         DeclareLaunchArgument('place_room', default_value='red'),
+        DeclareLaunchArgument(
+            'debug_truth', default_value='false',
+            description='Bridge Gazebo ground truth and run loc_error; '
+                        'diagnostics and measurement only'),
         DeclareLaunchArgument(
             'rviz_config', default_value=os.path.join(bringup, 'rviz', 'nav2.rviz'),
             description='RViz view for the run; rviz/cube.rviz shows the grasp poses'),

@@ -69,6 +69,10 @@ updated: 2026-09-16
   vrata nije prošao nijednom**: Nav2 vraća `ABORTED` na pozi poravnanja, bez ijedne poruke u logu.
   Kod ostaje, ali je **izvan README-a**: predaja navodi samo **ručno mapiranje**
   ([[D-23_coverage_sweep_instead_of_frontier]]).
+- **Novo 18. 9. (mjerenje umjesto ispisa):** svaki run ispitnog sklopa snima **rosbag s ground
+  truthom** (`debug_truth:=true`), a `validation/analyze_runs.py` ga mjeri protiv svijeta tog runa
+  → `metrics.csv`. Time se profesorova tri komentara (0,835 m, statistika, jačina izraza) zatvaraju
+  istim podacima ([[D-24_measure_from_recordings_not_logs]]). **Runovi još nisu odvoženi.**
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
   → odloži u crvenoj sobi. Plan dana: [[danas]]. Iskrena odstupanja: [[odstupanja]].
 

@@ -8,13 +8,28 @@ such a number, the worse the problem gets. This harness produces the thing that
 does distinguish them - repeats, and the spread across them.
 
 Each run is a full, isolated mission: a fresh simulator, headless, on its own
-generated world so the repeats are not identical to each other. The harness
-never talks to the mission node; it reads the run's log, which is what a person
-would read, so the harness cannot accidentally judge a run by something the
-robot does not itself report.
+generated world so the repeats are not identical to each other.
+
+Two independent records come out of every run, and they answer different
+questions:
+
+  * the run's log, parsed here. It says what the robot BELIEVED and reported,
+    which is the right basis for "did the mission succeed" - a success has to be
+    something the system itself claims, not something the analysis grants it.
+  * a rosbag of the run's topics, including Gazebo ground truth. It says what
+    actually happened, in numbers, and it is recorded whether or not anyone has
+    thought of the question yet. validation/analyze_runs.py turns it into
+    measurements: real clearance to the table edge, localisation error against
+    ground truth, where the box physically ended up.
+
+The log alone was the earlier design and it was too thin: it can only ever
+report quantities someone had already decided to print, in a format meant to be
+read on the fly rather than processed.
 
     ./scripts/run_native.sh python3 validation/run_batch.py --n 20
     ./scripts/run_native.sh python3 validation/run_batch.py --n 5 --jitter 0.0
+    ./scripts/run_native.sh python3 validation/run_batch.py --n 20 --no-bag
+    ./scripts/run_native.sh python3 validation/analyze_runs.py
     ./scripts/run_native.sh python3 validation/summarize.py
 
 Rows land in validation/results/results.csv; summarize.py turns them into the
@@ -33,6 +48,28 @@ from datetime import datetime
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS = os.path.join(REPO, 'validation', 'results')
 WORLD_OUT = os.path.join(REPO, 'validation', 'results', 'worlds')
+BAGS = os.path.join(REPO, 'validation', 'results', 'bags')
+
+# Recorded per run. Cameras and point clouds are left out on purpose: they are
+# the bulk of the data and nothing in the analysis reads them, while everything
+# below is either a measurement or the state needed to interpret one.
+BAG_TOPICS = [
+    '/debug/gz_dynamic_pose',       # ground truth: robot, box, anything that moves
+    '/debug/loc_error',             # its comparison against TF, as computed live
+    '/amcl_pose', '/particle_cloud',
+    '/tf', '/tf_static',
+    '/base_controller/odom',
+    '/scan', '/scan_filtered',
+    '/joint_states',
+    '/cmd_vel', '/cmd_vel_safe',
+    '/plan', '/local_plan',
+    '/map', '/nav_graph',
+    '/room_navigator/status', '/room_navigator/goto',
+    '/mission/task_status', '/mission/start', '/mission/carried_points',
+    '/aruco_box/state',
+    '/contact/left_left_tip', '/contact/left_right_tip',
+    '/contact/right_left_tip', '/contact/right_right_tip',
+]
 
 # What the mission itself prints. Anything not in this list is not evidence.
 PATTERNS = {
@@ -48,7 +85,7 @@ PATTERNS = {
 
 FIELDS = ['run', 'started', 'outcome', 'reason', 'duration_s', 'last_step',
           'last_phase', 'place_error_mm', 'tip_left_mm', 'tip_right_mm',
-          'lift_left_m', 'lift_right_m', 'arrivals', 'world', 'log']
+          'lift_left_m', 'lift_right_m', 'arrivals', 'world', 'log', 'bag']
 
 
 def sh(command, **kwargs):
@@ -144,6 +181,35 @@ def wait_for(log_path, pattern, timeout, proc):
     return False
 
 
+def start_bag(index):
+    """Record the run's topics.
+
+    rosbag2 keeps looking for the listed topics while it runs, so this starts
+    with the launch rather than after it: the arms fold and the localiser
+    converges before anyone presses the button, and those are measurements too.
+    """
+    os.makedirs(BAGS, exist_ok=True)
+    out = os.path.join(BAGS, f'run_{index:03d}')
+    if os.path.exists(out):
+        subprocess.run(['rm', '-rf', out])
+    proc = subprocess.Popen(['ros2', 'bag', 'record', '-o', out] + BAG_TOPICS,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            start_new_session=True)
+    return proc, out
+
+
+def stop_bag(proc):
+    """SIGINT, because anything harder loses the metadata and the last chunk."""
+    if proc is None or proc.poll() is not None:
+        return
+    os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        proc.wait(timeout=10)
+
+
 def run_once(index, args):
     started = datetime.now()
     os.makedirs(RESULTS, exist_ok=True)
@@ -163,12 +229,13 @@ def run_once(index, args):
 
     command = ['ros2', 'launch', 'pas_dual_arm_bringup', 'scenario_mission.launch.py',
                'headless:=true', 'open_rviz:=false', 'gui:=false', 'quiet:=true',
-               f'world:={world}']
+               f'debug_truth:={str(args.truth).lower()}', f'world:={world}']
     print(f'--- run {index}: {" ".join(command[-4:])}')
     began = time.monotonic()
     with open(log_path, 'w') as log:
         proc = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                 start_new_session=True)
+        bag_proc, bag_path = start_bag(index) if args.bag else (None, '')
 
         # The mission waits for a person; here the harness is the person - but
         # a much faster one, so it has to wait for the stack as well as the line.
@@ -195,6 +262,10 @@ def run_once(index, args):
                 break
             time.sleep(2.0)
 
+        # The recorder goes first: it is the thing that must see the last
+        # message, and it cannot once its publishers are gone.
+        stop_bag(bag_proc)
+
         # The launch owns a process group; killing the leader alone leaves
         # Gazebo running and the next run would meet two simulators.
         if proc.poll() is None:
@@ -208,7 +279,8 @@ def run_once(index, args):
     sh(['bash', os.path.join(REPO, 'scripts', 'clean_ros.sh')], capture_output=True)
     row = {'run': index, 'started': started.isoformat(timespec='seconds'),
            'duration_s': round(time.monotonic() - began, 1),
-           'world': os.path.basename(world), 'log': os.path.basename(log_path)}
+           'world': os.path.basename(world), 'log': os.path.basename(log_path),
+           'bag': os.path.basename(bag_path) if bag_path else ''}
     row.update(parse(log_path))
     print(f'    -> {row["outcome"]}'
           + (f' at {row["last_phase"]}' if row['outcome'] != 'success' else
@@ -234,6 +306,13 @@ def main():
                         help='further settling once the transform exists')
     parser.add_argument('--run-timeout', type=float, default=900.0)
     parser.add_argument('--out', default=os.path.join(RESULTS, 'results.csv'))
+    parser.add_argument('--no-bag', dest='bag', action='store_false',
+                        help='do not record a rosbag; the run is then judged only '
+                             'by what it printed, and nothing can be re-measured '
+                             'from it afterwards')
+    parser.add_argument('--no-truth', dest='truth', action='store_false',
+                        help='do not bridge Gazebo ground truth; measurements '
+                             'against where the robot actually was are then lost')
     parser.add_argument('--append', action='store_true',
                         help='add to an existing results.csv instead of replacing it')
     args = parser.parse_args()
@@ -255,6 +334,9 @@ def main():
             handle.flush()          # a killed batch still leaves usable results
 
     print(f'\nWrote {args.out}')
+    if args.bag:
+        print(f'Bags in {BAGS}')
+        print('Measure with:    ./scripts/run_native.sh python3 validation/analyze_runs.py')
     print('Summarise with:  ./scripts/run_native.sh python3 validation/summarize.py')
     return 0
 
