@@ -45,7 +45,8 @@ cd /home/khartl/FSB/PAS-DUAL-ARM
 
 Što se događa po runu (~5–20 min): generira se vlastiti svijet s kockom pomaknutom do ±3 cm →
 `clean_ros.sh` → misija bez GUI-ja i RViz-a, s ground truthom → čeka `WAITING for the user`
-(najviše 240 s) → čeka da `map → odom` proradi (najviše 45 s, +10 s) → objavi `/mission/start` →
+(najviše 240 s) → čeka **8/8 kontrolera** i transformaciju `map → base_footprint` (svaka najviše
+45 s, +10 s) → objavi `/mission/start` →
 čeka `MISSION COMPLETE` ili `Task aborted during:` (najviše 900 s) → ugasi snimanje, pa stack.
 
 Prati uživo iz drugog terminala:
@@ -55,7 +56,8 @@ tail -f validation/results/latest/run_001/run.log
 ```
 
 **Dovoljno dobro za nastavak:** barem jedan run `success`, a neuspjesi se ne ponavljaju u istoj
-fazi. Inače: stani, pročitaj `last_phase` i `reason` iz `results.csv`, pa u [[03_problemi]].
+fazi. Ishod `not_ready` znači da se stack nije digao (npr. 7/8 kontrolera) — to nije neuspjeh
+misije i ne ulazi u uspješnost ([[P-50_base_controller_missing_no_localisation]]). Inače: stani, pročitaj `last_phase` i `reason` iz `results.csv`, pa u [[03_problemi]].
 
 ---
 
