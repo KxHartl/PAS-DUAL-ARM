@@ -14,7 +14,8 @@ a pravila rada u [[AGENT_GUIDE]].
 - `00_testing/` — **postupci testiranja po podsustavu**: koje naredbe, u kojem terminalu,
   što gledati i što zabilježiti: [[navigacija]], [[hvat_kocke]],
   [[definiranje_poza_hvata]] (robot pred stolom, ruke u skenirajućoj pozi, poze se
-  zadaju u `joint_gui.py --sim` i šalju simulaciji).
+  zadaju u `joint_gui.py --sim` i šalju simulaciji), [[misija]], [[automated_mapping]],
+  [[validacija]] — **ponavljanje misije i mjerenje iz snimki** (statistika za seminar).
 
 Projektni okoliš je `scripts/run_native.sh`, a brza dijagnostika
 `bash scripts/verify_environment.sh` (ili `--live` uz pokrenutu simulaciju).

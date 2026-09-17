@@ -81,6 +81,9 @@ provjera pada na prelasku sobe i ne može biti uljepšana prilazom.
 - Tvrdnja **0,835 m** prestaje biti offline izračun i postaje izmjerena veličina s rasponom preko
   N runova — ili se, ako mjerenje to ne potvrdi, u seminaru mijenja u ono što mjerenje kaže.
 
+## Pokretanje
+[[validacija]] — V0 priprema, V1 tri runa, V2 mjerenje, V3 puna serija.
+
 ## Odnos prema zahtjevima
 Ispunjava [[R-21_deliverables]] (statistika uspješnosti) i daje nezavisnu potvrdu za
 [[R-15_region_goal_nav2]] i [[R-20_place_at_destination]], koje su dosad stajale na robotovoj
