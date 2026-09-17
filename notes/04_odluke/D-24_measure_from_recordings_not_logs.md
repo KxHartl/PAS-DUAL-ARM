@@ -40,8 +40,29 @@ Prigovor drži uz profesorove komentare, jer se **nijedan** od njih ne može zat
   (`/debug/gz_dynamic_pose`, `debug_truth:=true`, nitko na njemu ne upravlja), pa se run može
   mjeriti protiv toga **gdje je robot bio**, a ne protiv onoga što je mislio da jest.
 
-`validation/analyze_runs.py` mjeri svaki bag protiv **svijeta tog runa** (`worlds/run_NNN.sdf`),
-ne protiv konstanti u skripti, i piše `validation/results/metrics.csv`.
+`validation/analyze_runs.py` mjeri svaki bag protiv **svijeta tog runa** (`run_NNN/world.sdf`),
+ne protiv konstanti u skripti, i piše `metrics.csv` u istu mapu serije.
+
+Zapis je složen tako da se svaki broj može vratiti do runa iz kojeg je došao — jedna mapa po
+seriji, jedna po runu:
+
+```
+validation/results/
+    latest -> 2026-09-18_0132/
+    2026-09-18_0132/
+        results.csv        ishod po runu (iz loga)
+        metrics.csv        izmjereno iz bagova
+        results_table.tex  results.png
+        run_001/
+            run.log        sve što je run ispisao
+            world.sdf      točan svijet u kojem je vožen
+            bag/           snimljene teme
+            metrics.json   mjere tog runa
+```
+
+Svijet se u mapu runa **kopira**, ne referencira (i uz `--stock-world`): mapa runa koja ne sadrži
+svijet u kojem je vožen prestaje biti mjerljiva čim se taj svijet promijeni. Serija se imenuje
+vremenom početka ili `--batch <ime>`; ponovno imenovanje postojeće serije nastavlja numeraciju.
 
 Mjeri se, među ostalim: najmanji razmak do **ruba ploče** stola pri prelasku sobe, isti razmak na
 namjernom prilazu stolu (odvojeno), razmak do zidova, prolaz kroz svaka vrata, greška AMCL-a

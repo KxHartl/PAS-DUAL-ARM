@@ -21,12 +21,15 @@ It produces the numbers the report needs:
 
     ./scripts/run_native.sh python3 validation/analyze_runs.py
     ./scripts/run_native.sh python3 validation/analyze_runs.py --runs 3 4 5
+    ./scripts/run_native.sh python3 validation/analyze_runs.py --batch 2026-09-18_0132
 
-Rows land in validation/results/metrics.csv, one per run, alongside the
-results.csv that run_batch.py writes.
+It works on a batch directory, `validation/results/latest` unless told
+otherwise, and writes `metrics.csv` next to that batch's `results.csv` plus a
+`metrics.json` inside each run's own folder.
 """
 import argparse
 import csv
+import glob
 import json
 import math
 import os
@@ -36,10 +39,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS = os.path.join(REPO, 'validation', 'results')
-BAGS = os.path.join(RESULTS, 'bags')
-WORLDS = os.path.join(RESULTS, 'worlds')
-STOCK_WORLD = os.path.join(REPO, 'src', 'pas_dual_arm_bringup', 'worlds',
-                           'seminar_world.sdf')
+LATEST = os.path.join(RESULTS, 'latest')
 
 # The Gazebo model names, as spawned. Ground truth arrives as a TFMessage whose
 # child_frame_id is the model (Fortress names links `<model>::<link>`).
@@ -384,35 +384,47 @@ def summarise(rows):
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--bags', default=BAGS)
+    parser.add_argument('--batch', default=LATEST,
+                        help='batch directory to measure (default: results/latest)')
     parser.add_argument('--runs', type=int, nargs='*',
-                        help='run numbers to measure (default: every recorded bag)')
-    parser.add_argument('--out', default=os.path.join(RESULTS, 'metrics.csv'))
+                        help='run numbers to measure (default: every recorded run)')
+    parser.add_argument('--out', default=None,
+                        help='where to write metrics.csv (default: inside the batch)')
     args = parser.parse_args()
 
-    if not os.path.isdir(args.bags):
-        print(f'No bags in {args.bags}. Record some first:\n'
+    batch = args.batch if os.path.isabs(args.batch) else os.path.join(RESULTS, args.batch)
+    if not os.path.isdir(batch):
+        print(f'No batch at {batch}. Record one first:\n'
               '  ./scripts/run_native.sh python3 validation/run_batch.py --n 3',
               file=sys.stderr)
         return 1
 
-    found = sorted(name for name in os.listdir(args.bags)
-                   if re.fullmatch(r'run_\d+', name))
     rows = []
-    for name in found:
+    for folder in sorted(glob.glob(os.path.join(batch, 'run_*'))):
+        name = os.path.basename(folder)
+        if not re.fullmatch(r'run_\d+', name):
+            continue
         run = int(name.split('_')[1])
         if args.runs and run not in args.runs:
             continue
-        world = os.path.join(WORLDS, f'run_{run:03d}.sdf')
+        bag, world = os.path.join(folder, 'bag'), os.path.join(folder, 'world.sdf')
+        if not os.path.isdir(bag):
+            print(f'{name}: no recording, nothing to measure', file=sys.stderr)
+            continue
         if not os.path.exists(world):
-            world = STOCK_WORLD
+            print(f'{name}: no world.sdf, cannot measure against geometry',
+                  file=sys.stderr)
+            continue
         try:
-            row = analyse(run, os.path.join(args.bags, name), world)
+            row = analyse(run, bag, world)
         except Exception as error:                      # one bad bag is not the batch
-            print(f'run {run}: {type(error).__name__}: {error}', file=sys.stderr)
+            print(f'{name}: {type(error).__name__}: {error}', file=sys.stderr)
             continue
         rows.append(row)
-        print(f'run {run}: {row.get("truth_samples", 0)} truth samples, '
+        # Each run keeps its own numbers, next to the recording they came from.
+        with open(os.path.join(folder, 'metrics.json'), 'w') as handle:
+            json.dump(row, handle, indent=2, sort_keys=True)
+        print(f'{name}: {row.get("truth_samples", 0)} truth samples, '
               f'transit clearance {row.get("table_clear_transit_min_m", "-")} m, '
               f'door {row.get("door_clear_min_m", "-")} m, '
               f'placed {row.get("place_err_truth_mm", "-")} mm from the marker')
@@ -421,12 +433,13 @@ def main():
         print('Nothing measured.', file=sys.stderr)
         return 1
 
-    with open(args.out, 'w', newline='') as handle:
+    out = args.out or os.path.join(batch, 'metrics.csv')
+    with open(out, 'w', newline='') as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(rows)
     summarise(rows)
-    print(f'\nWrote {args.out}')
+    print(f'\nWrote {out}')
     return 0
 
 

@@ -29,16 +29,30 @@ read on the fly rather than processed.
     ./scripts/run_native.sh python3 validation/run_batch.py --n 20
     ./scripts/run_native.sh python3 validation/run_batch.py --n 5 --jitter 0.0
     ./scripts/run_native.sh python3 validation/run_batch.py --n 20 --no-bag
+    ./scripts/run_native.sh python3 validation/run_batch.py --n 5 --batch 2026-09-18_0132
     ./scripts/run_native.sh python3 validation/analyze_runs.py
     ./scripts/run_native.sh python3 validation/summarize.py
 
-Rows land in validation/results/results.csv; summarize.py turns them into the
-table and the chart.
+Every batch gets its own dated directory, and every run its own folder inside
+it, so a number can always be traced back to the exact world, log and recording
+it came from:
+
+    validation/results/
+        latest -> 2026-09-18_0132/
+        2026-09-18_0132/
+            results.csv          one row per run (this file's output)
+            metrics.csv          measured from the bags (analyze_runs.py)
+            run_001/
+                run.log          everything the run printed
+                world.sdf        the exact world it was driven in
+                bag/             the recorded topics
+                metrics.json     that run's measurements
 """
 import argparse
 import csv
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -47,8 +61,7 @@ from datetime import datetime
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS = os.path.join(REPO, 'validation', 'results')
-WORLD_OUT = os.path.join(REPO, 'validation', 'results', 'worlds')
-BAGS = os.path.join(REPO, 'validation', 'results', 'bags')
+LATEST = os.path.join(RESULTS, 'latest')
 
 # Recorded per run. Cameras and point clouds are left out on purpose: they are
 # the bulk of the data and nothing in the analysis reads them, while everything
@@ -85,17 +98,33 @@ PATTERNS = {
 
 FIELDS = ['run', 'started', 'outcome', 'reason', 'duration_s', 'last_step',
           'last_phase', 'place_error_mm', 'tip_left_mm', 'tip_right_mm',
-          'lift_left_m', 'lift_right_m', 'arrivals', 'world', 'log', 'bag']
+          'lift_left_m', 'lift_right_m', 'arrivals', 'dir', 'bag']
 
 
 def sh(command, **kwargs):
     return subprocess.run(command, shell=isinstance(command, str), **kwargs)
 
 
-def make_world(index, jitter, seed):
+def run_dir(batch, index):
+    """One folder per run: its world, its log, its recording, its numbers."""
+    path = os.path.join(batch, f'run_{index:03d}')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def point_latest_at(batch):
+    """`latest` is how every other script finds the batch just recorded."""
+    try:
+        if os.path.islink(LATEST) or os.path.exists(LATEST):
+            os.remove(LATEST)
+        os.symlink(os.path.basename(batch), LATEST)
+    except OSError as error:
+        print(f'could not update {LATEST}: {error}', file=sys.stderr)
+
+
+def make_world(folder, jitter, seed):
     """A per-run world, so repeats differ in the one thing that matters."""
-    os.makedirs(WORLD_OUT, exist_ok=True)
-    out = os.path.join(WORLD_OUT, f'run_{index:03d}.sdf')
+    out = os.path.join(folder, 'world.sdf')
     command = [sys.executable, os.path.join(REPO, 'scripts', 'gen_world.py'),
                '--out', out, '--cube-jitter', str(jitter), '--seed', str(seed)]
     result = sh(command, capture_output=True, text=True)
@@ -181,15 +210,14 @@ def wait_for(log_path, pattern, timeout, proc):
     return False
 
 
-def start_bag(index):
+def start_bag(folder):
     """Record the run's topics.
 
     rosbag2 keeps looking for the listed topics while it runs, so this starts
     with the launch rather than after it: the arms fold and the localiser
     converges before anyone presses the button, and those are measurements too.
     """
-    os.makedirs(BAGS, exist_ok=True)
-    out = os.path.join(BAGS, f'run_{index:03d}')
+    out = os.path.join(folder, 'bag')
     if os.path.exists(out):
         subprocess.run(['rm', '-rf', out])
     proc = subprocess.Popen(['ros2', 'bag', 'record', '-o', out] + BAG_TOPICS,
@@ -210,19 +238,22 @@ def stop_bag(proc):
         proc.wait(timeout=10)
 
 
-def run_once(index, args):
+def run_once(index, args, batch):
     started = datetime.now()
-    os.makedirs(RESULTS, exist_ok=True)
-    log_path = os.path.join(RESULTS, f'run_{index:03d}.log')
+    folder = run_dir(batch, index)
+    log_path = os.path.join(folder, 'run.log')
     if args.stock_world:
-        world = os.path.join(REPO, 'src', 'pas_dual_arm_bringup',
-                             'worlds', 'seminar_world.sdf')
+        # Copied in, not referenced: a run folder that does not contain the
+        # world it used cannot be re-measured once the checked-in world changes.
+        world = os.path.join(folder, 'world.sdf')
+        shutil.copyfile(os.path.join(REPO, 'src', 'pas_dual_arm_bringup',
+                                     'worlds', 'seminar_world.sdf'), world)
     else:
-        world = make_world(index, args.jitter, args.seed + index)
+        world = make_world(folder, args.jitter, args.seed + index)
     if world is None:
         return {'run': index, 'started': started.isoformat(timespec='seconds'),
                 'outcome': 'world_failed', 'reason': 'gen_world.py failed',
-                'duration_s': 0, 'world': '', 'log': ''}
+                'duration_s': 0, 'dir': os.path.basename(folder), 'bag': ''}
 
     sh(['bash', os.path.join(REPO, 'scripts', 'clean_ros.sh')],
        capture_output=True)
@@ -235,7 +266,7 @@ def run_once(index, args):
     with open(log_path, 'w') as log:
         proc = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                 start_new_session=True)
-        bag_proc, bag_path = start_bag(index) if args.bag else (None, '')
+        bag_proc, bag_path = start_bag(folder) if args.bag else (None, '')
 
         # The mission waits for a person; here the harness is the person - but
         # a much faster one, so it has to wait for the stack as well as the line.
@@ -279,8 +310,7 @@ def run_once(index, args):
     sh(['bash', os.path.join(REPO, 'scripts', 'clean_ros.sh')], capture_output=True)
     row = {'run': index, 'started': started.isoformat(timespec='seconds'),
            'duration_s': round(time.monotonic() - began, 1),
-           'world': os.path.basename(world), 'log': os.path.basename(log_path),
-           'bag': os.path.basename(bag_path) if bag_path else ''}
+           'dir': os.path.basename(folder), 'bag': 'yes' if bag_path else ''}
     row.update(parse(log_path))
     print(f'    -> {row["outcome"]}'
           + (f' at {row["last_phase"]}' if row['outcome'] != 'success' else
@@ -305,7 +335,10 @@ def main():
     parser.add_argument('--settle-extra', type=float, default=10.0,
                         help='further settling once the transform exists')
     parser.add_argument('--run-timeout', type=float, default=900.0)
-    parser.add_argument('--out', default=os.path.join(RESULTS, 'results.csv'))
+    parser.add_argument('--batch', default=None,
+                        help='name of the batch directory under validation/results '
+                             '(default: the date and time it was started). Naming an '
+                             'existing batch adds to it')
     parser.add_argument('--no-bag', dest='bag', action='store_false',
                         help='do not record a rosbag; the run is then judged only '
                              'by what it printed, and nothing can be re-measured '
@@ -313,29 +346,36 @@ def main():
     parser.add_argument('--no-truth', dest='truth', action='store_false',
                         help='do not bridge Gazebo ground truth; measurements '
                              'against where the robot actually was are then lost')
-    parser.add_argument('--append', action='store_true',
-                        help='add to an existing results.csv instead of replacing it')
     args = parser.parse_args()
 
-    os.makedirs(RESULTS, exist_ok=True)
-    exists = os.path.exists(args.out) and args.append
-    start_at = 1
-    if exists:
-        with open(args.out) as handle:
-            start_at = sum(1 for _ in csv.DictReader(handle)) + 1
+    name = args.batch or datetime.now().strftime('%Y-%m-%d_%H%M')
+    batch = name if os.path.isabs(name) else os.path.join(RESULTS, name)
+    os.makedirs(batch, exist_ok=True)
+    point_latest_at(batch)
 
-    with open(args.out, 'a' if exists else 'w', newline='') as handle:
+    # Numbering continues within a batch, so run_007 is the seventh run of this
+    # batch and nothing else. Starting a new batch starts the count again.
+    out = os.path.join(batch, 'results.csv')
+    resuming = os.path.exists(out)
+    start_at = 1
+    if resuming:
+        with open(out) as handle:
+            start_at = sum(1 for _ in csv.DictReader(handle)) + 1
+        print(f'Adding to {batch} (continuing at run {start_at})')
+    else:
+        print(f'Batch {batch}')
+
+    with open(out, 'a' if resuming else 'w', newline='') as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS, extrasaction='ignore')
-        if not exists:
+        if not resuming:
             writer.writeheader()
         for offset in range(args.n):
-            row = run_once(start_at + offset, args)
+            row = run_once(start_at + offset, args, batch)
             writer.writerow(row)
             handle.flush()          # a killed batch still leaves usable results
 
-    print(f'\nWrote {args.out}')
+    print(f'\nWrote {out}')
     if args.bag:
-        print(f'Bags in {BAGS}')
         print('Measure with:    ./scripts/run_native.sh python3 validation/analyze_runs.py')
     print('Summarise with:  ./scripts/run_native.sh python3 validation/summarize.py')
     return 0

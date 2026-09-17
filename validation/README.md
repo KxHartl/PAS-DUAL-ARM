@@ -84,21 +84,43 @@ box by a few centimetres per run via `scripts/gen_world.py`, so the perception
 and the grasp are solving a slightly different problem each time. `--jitter 0`
 turns that off when the point is to isolate something else.
 
-## Output
+## Where it all lands
 
-`validation/results/` (not committed — it is measurement data, regenerated on
-demand):
+One directory per batch, one folder per run inside it, so any number can be
+traced back to the exact world, log and recording it came from. Nothing is
+committed — it is measurement data, regenerated on demand.
 
-- `results.csv` — one row per run: outcome, duration, place error, tool-tip
-  errors, carriage lift, which phase it ended in, and the abort reason
-- `metrics.csv` — one row per run, measured from the bag (table above)
-- `run_NNN.log` — the full log of each run, kept so any row can be traced back
-- `bags/run_NNN/` — the recorded topics of that run
-- `worlds/run_NNN.sdf` — the exact world that run used
-- `results_table.tex`, `results.png` — with `--latex` / `--chart`
+```
+validation/results/
+    latest -> 2026-09-18_0132/          symlink to the most recent batch
+    2026-09-18_0132/
+        results.csv                     one row per run: outcome, duration,
+                                        place error, tool-tip errors, carriage
+                                        lift, phase it ended in, abort reason
+        metrics.csv                     one row per run, measured from the bags
+        results_table.tex               with --latex
+        results.png                     with --chart
+        run_001/
+            run.log                     everything that run printed
+            world.sdf                   the exact world it was driven in
+            bag/                        the recorded topics
+            metrics.json                that run's measurements
+        run_002/
+            ...
+```
 
-The numbers quoted in the report should come from `results.csv`, so the text and
-the measurements cannot drift apart.
+A batch is named after the time it started, or by `--batch <name>`. Naming an
+existing batch adds to it and the run numbering continues, so `run_007` is
+always the seventh run of that batch and nothing else. `analyze_runs.py` and
+`summarize.py` both read `latest` unless given `--batch`, and both write their
+output **inside** the batch, where the next batch cannot overwrite it.
+
+The world is copied into the run folder rather than referenced, including with
+`--stock-world`: a run folder that does not contain the world it used stops
+being measurable the moment that world changes.
+
+The numbers quoted in the report should come from a batch's `results.csv` and
+`metrics.csv`, so the text and the measurements cannot drift apart.
 
 ## Cost
 
