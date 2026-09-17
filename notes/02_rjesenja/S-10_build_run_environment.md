@@ -38,10 +38,10 @@ Reproducibilan build i izoliran ROS okoliš, bez ovisnosti o globalnom `~/.bashr
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 10. 9. | čisti rebuild | 25/25 paketa na `/opt/ros/humble` | `31df80e`, `eeefb28` |
-| 10. 9. | vcs import | provenance + zakrpa | `f046e98` |
-| 16. 9. | **svjež klon s GitHuba** | ❌ 0 paketa — pin na lokalni commit odveo na ROS 1 granu | `91fcbbf` ([[P-46_pinned_commit_not_on_upstream]]) |
-| 16. 9. | svjež klon, nakon popravka | ✅ 25 paketa, 0 neuspjelih; `verify_environment` 17/17; gate-ovi `PASS` | `9663b3b` |
+| 10. 9. | čisti rebuild | 25/25 paketa na `/opt/ros/humble` | — |
+| 10. 9. | vcs import | provenance + zakrpa | |
+| 16. 9. | **svjež klon s GitHuba** | ❌ 0 paketa — pin na lokalni commit odveo na ROS 1 granu | ([[P-46_pinned_commit_not_on_upstream]]) |
+| 16. 9. | svjež klon, nakon popravka | ✅ 25 paketa, 0 neuspjelih; `verify_environment` 17/17; gate-ovi `PASS` | |
 
 ## Otvoreno
 - Repozitorij se prije predaje testira **iz svježeg klona**, ne iz radnog workspacea: kvar iz

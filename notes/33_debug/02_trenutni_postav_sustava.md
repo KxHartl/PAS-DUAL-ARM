@@ -6,6 +6,11 @@ izvor: čitanje koda + git diff radnog stabla (necommitano) 13. 9. 2026.
 ---
 # Trenutni postav sustava (13. 9. 2026., radno stablo s necommitanim izmjenama)
 
+> [!warning] Snimka stanja od 13. 9. 2026. — **ne opisuje gotov sustav**
+> Ovo je povijesni presjek i namjerno se ne ažurira. Sustav je dovršen 16. 9.: misija se pokreće
+> jednom naredbom (`mission.launch.py`), hvat radi na V4 pozama, a vodilice dižu pun teret. Za
+> aktualno stanje vidi [[00_MAPA]], [[06_parametri]] i `README.md`.
+
 > [!info] Što je ovo
 > Točan opis **kako je sustav sada složen**, onako kako leži na disku (uključujući necommitane
 > izmjene Claude i Codex sesije od 13. 9.). Svaka vrijednost ima izvor `datoteka:linija`.
@@ -87,7 +92,7 @@ Argumenti l.5–7: `use_sim_time` (true), `sim_ignition` (true), **`carry_arms` 
 
 **Torzo** ([dual_arm_torso.urdf.xacro](../../src/dual_arm_torso/urdf/dual_arm_torso.urdf.xacro))
 - Vezan za **`base_footprint`** na (0.026, −0.143, 0.31) (robot.urdf.xacro l.38–40).
-- Dva prizmatična klizača (os z), **limit 0.05–0.65 m** (smanjeno s 0.8, `7f24fbd`), effort 1000 N, v 0.5.
+- Dva prizmatična klizača (os z), **limit 0.05–0.65 m** (smanjeno s 0.8), effort 1000 N, v 0.5.
 - Klizači se pod teretom ruke ne dižu ([[P-13_torso_prismatic_no_lift]], [[D-09_lift_with_arms_not_torso]]).
 
 **Ruke** (l.43–94): `kortex_robot.xacro` / `load_robot`, gen3, 7 DOF, `vision=true`, hvataljka `robotiq_2f_85`.

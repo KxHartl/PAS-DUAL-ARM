@@ -19,7 +19,7 @@ Servo petlje stoje, a sim vrijeme u čvoru ne napreduje.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 30. 6. `33bc2ac` | pretplata na `/camera/points` samo tijekom `measure_box`; wall-clock timeouti u petljama | petlje rade | rješenje |
+| 1 | 30. 6. | pretplata na `/camera/points` samo tijekom `measure_box`; wall-clock timeouti u petljama | petlje rade | rješenje |
 
 ## Ne ponavljati
 - Trajnu pretplatu na oblak u `main_task`.

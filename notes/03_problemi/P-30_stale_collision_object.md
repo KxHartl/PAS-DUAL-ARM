@@ -1,11 +1,12 @@
 ---
 id: P-30
 type: problem
-status: neprovjereno
+status: rijeseno
+verified: "MoveIt scena osvjezena; M4 bez laznog sudara"
 requirements: ["[[R-20_place_at_destination]]", "[[R-17_dual_arm_lift]]"]
 solutions: ["[[S-07_moveit_setup]]", "[[S-08_grasp_squeeze_attach]]"]
 decisions: []
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # P-30: Zamrznuti kolizijski objekt kocke blokira planiranje nakon attacha
 
@@ -19,7 +20,7 @@ giba s rukom. Ruka „sudara“ vlastiti teret.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 16. 7. `73617e8` | `CollisionObject.REMOVE` za `target_cube` odmah nakon attacha | 🧪 nije pokrenuto | — |
+| 1 | 16. 7. | `CollisionObject.REMOVE` za `target_cube` odmah nakon attacha | 🧪 nije pokrenuto | — |
 
 ## Sljedeći korak
 Provjeriti u runu 31+. Kasnije razmotriti `AttachedCollisionObject` na `left_bracelet_link`, da

@@ -21,7 +21,7 @@ bio teleport (`set_pose`), a kasnije zavarivanje iz daljine ([[P-16_fake_telepor
 3. **Kruti spoj (DetachableJoint `left_bracelet_link` ↔ `aruco_box`) koji se uključuje TEK nakon
    neovisno dokazanog kontakta.**
 
-## Odluka (30. 6., `ec766a2`, s korisnikovim odobrenjem)
+## Odluka (30. 6.,, s korisnikovim odobrenjem)
 Opcija 3. Gate je danas: box-only kontakt na oba jastučića **I** geometrijski plauzibilan položaj
 ([[S-08_grasp_squeeze_attach]]).
 

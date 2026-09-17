@@ -46,6 +46,7 @@ def generate_launch_description():
             'robot_spawn_x': '0.0',
             'robot_spawn_y': '0.0',
             'robot_spawn_yaw': '0.0',
+            'world': LaunchConfiguration('world'),
         }.items())
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup, 'launch', 'nav2.launch.py')),
@@ -92,6 +93,9 @@ def generate_launch_description():
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument(
             'map', default_value=os.path.join(bringup, 'maps', 'seminar_map.yaml')),
+        DeclareLaunchArgument(
+            'world', default_value=os.path.join(bringup, 'worlds', 'seminar_world.sdf'),
+            description='SDF world; a generated layout needs its own map too'),
         DeclareLaunchArgument('pick_room', default_value='blue'),
         DeclareLaunchArgument('place_room', default_value='red'),
         DeclareLaunchArgument(

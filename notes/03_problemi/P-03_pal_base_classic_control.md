@@ -20,8 +20,8 @@ Uključivanje `omni_base_description/robots/omni_base.urdf.xacro` vuče `gazebo_
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `7aaab94` | preskočiti PAL ros2_control, bazu voziti Ignition `MecanumDrive` system pluginom preko `/cmd_vel` | kontroleri ruku aktivni; gibanje baze nije provjereno | kasnije utvrđeno da se plugin ne instancira ([[P-09_omni_drive_on_fortress]]) |
-| 2 | 23. 6. `6eb7487` | uključiti **samo** `base/base_sensors.urdf.xacro` + vlastiti `base_wheels_system` (4 velocity interfacea) + `diff_drive_controller` | baza vozi, odometrija + TF | radi, ali nije omni ([[D-03_diff_drive_base_temporary]]) |
+| 1 | 12. 6. | preskočiti PAL ros2_control, bazu voziti Ignition `MecanumDrive` system pluginom preko `/cmd_vel` | kontroleri ruku aktivni; gibanje baze nije provjereno | kasnije utvrđeno da se plugin ne instancira ([[P-09_omni_drive_on_fortress]]) |
+| 2 | 23. 6. | uključiti **samo** `base/base_sensors.urdf.xacro` + vlastiti `base_wheels_system` (4 velocity interfacea) + `diff_drive_controller` | baza vozi, odometrija + TF | radi, ali nije omni ([[D-03_diff_drive_base_temporary]]) |
 
 ## Trenutno rješenje
 `robot.urdf.xacro` l. 9–22 (samo strukturni dio baze) + l. 257–290 (ros2_control kotača).

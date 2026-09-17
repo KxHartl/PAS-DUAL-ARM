@@ -19,9 +19,9 @@ mu1 = mu2 = 0 (kinematski Classic), a naš prvi override mu2 = 1.5 je klizanje b
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 23. 6. `6eb7487` | override trenja kotača (visok mu2) | vozi ravno, ne okreće | bočno trenje blokira skid |
-| 2 | 30. 6. `f62ebbd` | mu2 = 0 | okreće (yaw 0 → 2.36 uz ω = 0.8) | okret moguć |
-| 3 | 30. 6. `33bc2ac` | mu1 = 0.4 | čist okret u mjestu, drift ~4 mm | okret moguć |
+| 1 | 23. 6. | override trenja kotača (visok mu2) | vozi ravno, ne okreće | bočno trenje blokira skid |
+| 2 | 30. 6. | mu2 = 0 | okreće (yaw 0 → 2.36 uz ω = 0.8) | okret moguć |
+| 3 | 30. 6. | mu1 = 0.4 | čist okret u mjestu, drift ~4 mm | okret moguć |
 | 4 | 13. 9. | mu2 = 0.2 | minimalni bočni otpor umjesto nule | sprječava rubne numeričke greške nule uz zadržan okret |
 
 ## Trenutno rješenje

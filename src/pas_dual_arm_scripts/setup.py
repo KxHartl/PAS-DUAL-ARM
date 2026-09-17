@@ -38,6 +38,13 @@ setup(
             'room_navigator = pas_dual_arm_scripts.room_navigator:main',
             'nav_gui = pas_dual_arm_scripts.nav_gui:main',
             'loc_error = pas_dual_arm_scripts.loc_error:main',
+            'map_handoff = pas_dual_arm_scripts.map_handoff:main',
+            'seed_pose = pas_dual_arm_scripts.seed_pose:main',
+            'frontier_explorer = pas_dual_arm_scripts.frontier_explorer:main',
+            'room_sweeper = pas_dual_arm_scripts.room_sweeper:main',
+            # Friction-grasp experiment (not used by the mission).
+            'wrench_estimator = pas_dual_arm_scripts.wrench_estimator:main',
+            'grasp_force_diagnostics = pas_dual_arm_scripts.grasp_force_diagnostics:main',
         ],
     },
 )

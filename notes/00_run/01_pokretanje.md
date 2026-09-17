@@ -43,7 +43,7 @@ Robot se pojavi sa širokim početnim položajem ruku; **ne šalji ga kroz vrata
 ## 3. Mapiranje — terminal 2
 
 > [!important] Kartu treba snimiti **iznova** (14. 9.)
-> `maps/seminar_map.*` je snimljena 13. 9., **prije** commita `bd61802` koji je
+> `maps/seminar_map.*` je snimljena 13. 9., **prije** commita koji je
 > postavio lidar na 1080 zraka / 1 mm / 25 Hz — nikad nije vidjela novi senzor.
 > Uz to je bila na rešetki od 0.05 m, pa je `scripts/check_map_geometry.py` na njoj
 > izmjerio: zid od 0.10 m nacrtan **0.15 m** debelo (+2.5 cm po licu), otvor od

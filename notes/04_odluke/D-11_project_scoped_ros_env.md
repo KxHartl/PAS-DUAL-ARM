@@ -15,7 +15,7 @@ Globalni `~/.bashrc` je učitavao više workspaceova (`~/ws_moveit2` itd.), fors
 `ROS_DOMAIN_ID=5`. Posljedice: čvorovi su se rušili (router nedostupan) i ABI se nije slagao
 (`libgeometric_shapes`, [[P-31_apt_upgrade_breakage]]).
 
-## Odluka (10. 9., `31df80e`, `eeefb28`, `ebd392e`)
+## Odluka (10. 9.)
 Globalni shell je neutralan. `scripts/run_native.sh` učitava samo `/opt/ros/humble` + lokalni
 overlay; Fast DDS, domena 5, localhost-only; čisti naslijeđene putanje. Launch datoteke i dalje
 forsiraju `rmw_fastrtps_cpp` (dvostruka zaštita).

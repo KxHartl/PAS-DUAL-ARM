@@ -15,7 +15,7 @@ S kutijom kruto spojenom na lijevi zglob, desna ruka koja je i dalje stiskala i 
 putanjom „gurala“ je fiksiranu kutiju. DetachableJoint solver je eksplodirao i kutija je odletjela
 (nedeterministički, i u GUI-ju i headless).
 
-## Odluka (30. 6., `5c9e201`)
+## Odluka (30. 6.)
 Nakon attacha **desna** ruka otvori/odmakne se **prva** (danas linearno 0.10 m po −v, s RRT
 fallbackom). Dizanje i spuštanje radi samo **lijeva** ruka. Pravilo: **nikad dvije krute veze na
 kutiji istovremeno.**

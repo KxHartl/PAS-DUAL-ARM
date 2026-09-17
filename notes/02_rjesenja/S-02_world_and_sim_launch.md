@@ -77,8 +77,8 @@ gz putanje kontakata mapiraju se na `/contact/<ruka>_<prst>_tip`
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 12. 6. | headless | 7 kontrolera aktivno, senzori | `7aaab94`, `ae60d9b` |
-| 16. 7. | GUI | cijela misija do lifta (stari svijet) | `c504720` |
+| 12. 6. | headless | 7 kontrolera aktivno, senzori | — |
+| 16. 7. | GUI | cijela misija do lifta (stari svijet) | |
 | 13. 9. | GUI + korisnik | novi svijet s tri sobe potvrđen; `ign sdf -k` valjan; 8/8 kontrolera aktivno | (commit svijeta) |
 
 ## Otvoreno

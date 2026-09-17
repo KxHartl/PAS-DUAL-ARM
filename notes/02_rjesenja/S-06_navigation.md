@@ -94,10 +94,10 @@ dok SLAM gradi kartu. Detalji su u [[P-11_nav2_slam_drift]] → „Sljedeći kor
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 14. 9. | offline | detekcija vrata iz `seminar_map`: (0.00, −3.00) i (3.00, −0.01), širina 0.95 m | `497a69a` |
-| 14. 9. | offline | zone, graf 3 soba, portali i prilazne poze; sve provjere prolaze | `497a69a` |
-| 14. 9. | headless | stack se digne, keepout filter aktivan na **oba** costmapa, 14/14 sondi costmapa | `497a69a` |
-| 14. 9. | headless | planirane putanje sijeku prag vrata pod 0.00–1.07° i 2.5 cm od osi (5 slučajeva) | `497a69a` |
-| 23. 6. | headless | SLAM + Nav2 goal → baza vozi | `6eb7487` |
-| 23. 6. | headless | prolaz kroz 1.2 m vrata | `45c32f1` |
-| 30. 6. | GUI | visual servo do kutije | `33bc2ac` |
+| 14. 9. | offline | detekcija vrata iz `seminar_map`: (0.00, −3.00) i (3.00, −0.01), širina 0.95 m | |
+| 14. 9. | offline | zone, graf 3 soba, portali i prilazne poze; sve provjere prolaze | |
+| 14. 9. | headless | stack se digne, keepout filter aktivan na **oba** costmapa, 14/14 sondi costmapa | |
+| 14. 9. | headless | planirane putanje sijeku prag vrata pod 0.00–1.07° i 2.5 cm od osi (5 slučajeva) | |
+| 23. 6. | headless | SLAM + Nav2 goal → baza vozi | |
+| 23. 6. | headless | prolaz kroz 1.2 m vrata | |
+| 30. 6. | GUI | visual servo do kutije | |

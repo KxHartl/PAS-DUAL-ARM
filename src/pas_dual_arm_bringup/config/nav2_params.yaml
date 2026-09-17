@@ -163,8 +163,12 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
-    controller_plugins: ["FollowPath"]
+    # Two profiles, selected per goal through the behaviour tree: the mission
+    # drives on FollowPath/general_goal_checker, mapping on the explore pair.
+    # They differ only in what they are allowed to do to build a map that the
+    # mission will later trust - see explore_goal_checker below.
+    goal_checker_plugins: ["general_goal_checker", "explore_goal_checker"]
+    controller_plugins: ["FollowPath", "FollowPathExplore"]
 
     # Progress checker parameters
     progress_checker:
@@ -188,6 +192,18 @@ controller_server:
       # so the gate is not the part that can move.
       xy_goal_tolerance: 0.05
       yaw_goal_tolerance: 0.025
+    # Mapping only. A frontier goal's heading is an artefact of how the goal was
+    # computed (atan2 from wherever the robot stood), and the lidar sees 360
+    # degrees, so holding it carries no information at all. Demanding 1.4 deg of
+    # it made the robot pirouette at the end of every leg - on a base that
+    # slides when it turns in place (mu2 = 0, P-10), which is precisely how yaw
+    # error gets into the scan matcher. The position tolerance is loose for the
+    # same reason: a frontier is a region to go and look at, not a spot to hit.
+    explore_goal_checker:
+      stateful: True
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 3.15      # any heading; pi rounded up
     # DWB Local Planner configured for omnidirectional (mecanum) base.
     # Evaluates 15,625 trajectories (25x25x25) at 20 Hz with 1 cm linear granularity.
     FollowPath:
@@ -233,6 +249,79 @@ controller_server:
       RotateToGoal.scale: 64.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
+
+    # The mapping profile.
+    #
+    # The critic list is the part that matters, and the first attempt got it
+    # wrong in an instructive way. The mission's list has no PathAlign and no
+    # GoalAlign - nothing at all that rewards *facing* the way the path goes. On
+    # an omni base that still works, because reverse and strafe are allowed and
+    # PathDist/GoalDist only score where a trajectory ends: to reach a goal
+    # behind it the robot simply drives backwards. That is the whole explanation
+    # for "why does it reverse" - not a decision, an absence.
+    #
+    # Removing reverse without filling that absence deadlocked it (17 Sep, 28 s
+    # motionless with no error anywhere): forward scored worse, turning in place
+    # scored the same as standing still, so standing still won. So the fix is to
+    # add the missing idea rather than to ban a motion:
+    #
+    #   PathAlign/GoalAlign  turning to face the path is now worth something, so
+    #                        the robot turns onto its path and drives it forwards
+    #   min_vel_x: -0.10     reverse stays - it is how an omni base gets out of a
+    #                        corner - but at a third of forward speed it stops
+    #                        being the cheapest way to travel
+    #   no RotateToGoal      nothing left to force the end-of-leg pirouette; the
+    #                        goal checker does not care about the final heading
+    #   max_vel_theta 0.25   the rate the manual tour already turns at, because
+    #                        above it the wheels lie about how far (P-11)
+    #
+    # Turning in place is therefore not banned: it happens once at the start of a
+    # leg, to face the path. It is the end-of-leg turn - the one that bought
+    # nothing and cost yaw drift - that is gone.
+    FollowPathExplore:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: False
+      min_vel_x: -0.10
+      max_vel_x: 0.45
+      min_vel_y: -0.15
+      max_vel_y: 0.15
+      max_vel_theta: 0.25
+      min_speed_xy: 0.0
+      max_speed_xy: 0.50
+      min_speed_theta: 0.0
+      acc_lim_x: 1.5
+      acc_lim_y: 1.5
+      acc_lim_theta: 3.0
+      decel_lim_x: -1.5
+      decel_lim_y: -1.5
+      decel_lim_theta: -3.0
+      vx_samples: 15
+      vy_samples: 25
+      vtheta_samples: 25
+      sim_time: 1.2
+      linear_granularity: 0.01
+      angular_granularity: 0.01
+      transform_tolerance: 0.2
+      # Must equal explore_goal_checker's, as above.
+      xy_goal_tolerance: 0.25
+      trans_stopped_velocity: 0.05
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+      critics: ["Oscillation", "ObstacleFootprint", "PathAlign", "PathDist", "GoalAlign", "GoalDist", "Twirling"]
+      ObstacleFootprint.scale: 2.0
+      PathDist.scale: 96.0
+      GoalDist.scale: 24.0
+      # The two that the mission profile does without. They score a point held
+      # ahead of the robot, so "facing along the path" becomes cheaper than
+      # crabbing along it sideways or backwards.
+      PathAlign.scale: 32.0
+      PathAlign.forward_point_distance: 0.325
+      GoalAlign.scale: 8.0
+      GoalAlign.forward_point_distance: 0.325
+      # Left at the mission's value, and dominated by PathAlign: it still
+      # discourages spinning for its own sake without preventing the turn onto
+      # the path.
+      Twirling.scale: 2.0
 
 local_costmap:
   local_costmap:

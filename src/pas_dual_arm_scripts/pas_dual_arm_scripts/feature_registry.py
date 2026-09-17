@@ -32,12 +32,30 @@ def rotation_matrix(q):
     ])
 
 
-def door_candidates(msg):
-    """Find ~1 m breaks between long, collinear occupied wall segments."""
+def door_candidates(msg, both_sides=True):
+    """Find ~1 m breaks between long, collinear occupied wall segments.
+
+    `both_sides` is what makes this usable *while* mapping. With it True (the
+    default, and what the mission uses) an opening only counts once free space
+    has been observed on either side of it - which is right for a finished map
+    and useless on a growing one, because the far side of a door the robot has
+    not driven through yet is unknown by definition. That is why nav_zones
+    logged "no doorways detected" for a whole exploration run.
+
+    With it False the far side may be unknown: the gap has to be a door-width
+    break in a wall with free space on *one* side, which is exactly what a
+    doorway looks like from the room you are standing in. The near-side test is
+    kept, so a break in a wall with nothing observed on either side - the far
+    edge of the map - is still not a door.
+    """
     info = msg.info
     grid = np.asarray(msg.data, dtype=np.int16).reshape(info.height, info.width)
     occupied = grid >= 65
     free = grid == 0
+    # What may sit inside the opening. Seen-through doorways are free; a doorway
+    # seen from one side only is unknown in the middle, and unknown is not a
+    # wall, so it may not be excluded when we are still mapping.
+    passable = free if both_sides else (grid < 65)
     resolution = info.resolution
     min_wall = max(8, round(0.8 / resolution))
     min_gap = max(2, round(0.7 / resolution))
@@ -46,6 +64,7 @@ def door_candidates(msg):
     for axis in (0, 1):
         lines = occupied if axis == 0 else occupied.T
         frees = free if axis == 0 else free.T
+        passables = passable if axis == 0 else passable.T
         for line_index, line in enumerate(lines):
             changes = np.diff(np.pad(line.astype(np.int8), 1))
             starts = np.flatnonzero(changes == 1)
@@ -56,13 +75,15 @@ def door_candidates(msg):
                 if (first_end - first_start < min_wall or
                         second_end - second_start < min_wall or
                         not min_gap <= gap <= max_gap or
-                        np.mean(frees[line_index, first_end:second_start]) < 0.6):
+                        np.mean(passables[line_index, first_end:second_start]) < 0.6):
                     continue
-                # Both sides of the opening must be observed free space.
+                # Observed free space beside the opening: on both sides for a
+                # finished map, on at least one while still mapping.
                 mid = (first_end + second_start) // 2
                 side_a = max(0, line_index - round(0.3 / resolution))
                 side_b = min(lines.shape[0] - 1, line_index + round(0.3 / resolution))
-                if not (frees[side_a, mid] and frees[side_b, mid]):
+                near, far = frees[side_a, mid], frees[side_b, mid]
+                if not (near and far) if both_sides else not (near or far):
                     continue
                 ix, iy = (mid, line_index) if axis == 0 else (line_index, mid)
                 x = info.origin.position.x + (ix + 0.5) * resolution
@@ -85,7 +106,7 @@ def door_candidates(msg):
             for key in ('x', 'y', 'width'):
                 match[key] = (match[key] * n + candidate[key]) / (n + 1)
             match['observations'] += 1
-    doors = [d for d in merged if d['observations'] >= 2]
+    doors = [d for d in merged if d['observations'] >= (2 if both_sides else 1)]
     for door in doors:
         door['normal'] = [0.0, 1.0] if door['wall_axis'] == 'x' else [1.0, 0.0]
     return doors

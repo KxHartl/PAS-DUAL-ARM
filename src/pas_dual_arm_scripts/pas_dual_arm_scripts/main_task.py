@@ -855,7 +855,12 @@ class MainTask(BaseDriver, Node):
                    for finger in ('left', 'right'))
 
     def box_contact_snapshot(self, max_age=0.12):
-        """Return the fresh box-only state of every fingertip sensor.
+        """
+        NOT USED BY THE MISSION. Kept because the force-grasp experiment
+        needs this primitive; the delivered mission never calls it, so the
+        contact sensors do not close a loop here. See docs/SENSORS.md.
+
+        Return the fresh box-only state of every fingertip sensor.
 
         The contact sensors publish at 50 Hz.  A short freshness window filters
         old contacts without treating one delayed bridge sample as a new grasp.
@@ -949,7 +954,12 @@ class MainTask(BaseDriver, Node):
 
     def approach_both_until_contact(self, targets, label, duration,
                                     contact_max_age=0.4):
-        """Approach with both arms and independently stop each on first contact.
+        """
+        NOT USED BY THE MISSION. Kept because the force-grasp experiment
+        needs this primitive; the delivered mission never calls it, so the
+        contact sensors do not close a loop here. See docs/SENSORS.md.
+
+        Approach with both arms and independently stop each on first contact.
 
         MoveIt computes the straight Cartesian paths, but the two trajectories
         are sent directly to their JTCs.  Cancelling a JTC goal installs its
@@ -1057,7 +1067,7 @@ class MainTask(BaseDriver, Node):
     def press_both_linear(self, lp, rp, pre_l, pre_r):
         """Compute straight press lines for BOTH arms, then execute them
         SIMULTANEOUSLY by sending the trajectories directly to the two arm
-        controllers. A lone press bulldozes the 1 kg cube across the table
+        controllers. A lone press bulldozes the 0.3 kg cube across the table
         (~0.3 m, seen live) - only opposed simultaneous presses balance out.
         Per arm: if the line is IK-infeasible from the current configuration,
         re-roll the pre-squeeze pose (new RRT configuration) and retry."""
@@ -1512,7 +1522,12 @@ class MainTask(BaseDriver, Node):
         return self._send_and_wait(self.torso, goal, label)
 
     def move_torso_guarded(self, targets, label, speed, guard):
-        """Move both carriages while polling a safety predicate.
+        """
+        NOT USED BY THE MISSION. Kept because the force-grasp experiment
+        needs this primitive; the delivered mission never calls it, so the
+        contact sensors do not close a loop here. See docs/SENSORS.md.
+
+        Move both carriages while polling a safety predicate.
 
         ``targets`` contains the independent left/right absolute heights.  If
         ``guard`` becomes false, cancel the trajectory immediately and leave
@@ -2073,7 +2088,12 @@ class MainTask(BaseDriver, Node):
 
     def close_until_contact(self, side, client, target=0.7, max_effort=20.0,
                             settle=2.5):
-        """Command the gripper closed and watch for a genuine stop signal while it
+        """
+        NOT USED BY THE MISSION. Kept because the force-grasp experiment
+        needs this primitive; the delivered mission never calls it, so the
+        contact sensors do not close a loop here. See docs/SENSORS.md.
+
+        Command the gripper closed and watch for a genuine stop signal while it
         moves: (1) fingertip contact sensors firing, (2) the knuckle stalling short
         of the commanded close (an object is between the pads). Returns a dict of
         the signals observed, for fusion in the caller."""
@@ -2962,10 +2982,10 @@ class MainTask(BaseDriver, Node):
         seed = Point(x=face.x, y=face.y, z=face.z)
         meas = self.measure_box(seed)
         if meas is None:
-            return self._fail('depth measurement of the box failed (no fake grasp)')
+            return self._fail('depth measurement of the box failed; grasp not confirmed')
         center, length, height, u = meas
         if abs(center.x - face.x) > 0.15 or abs(center.y - face.y) > 0.15:
-            return self._fail('depth centre disagrees with the marker (no fake grasp)')
+            return self._fail('depth centre disagrees with the marker; grasp not confirmed')
         vt = self.marker_tangent()
         if vt is not None:
             u = vt
@@ -3139,7 +3159,7 @@ class MainTask(BaseDriver, Node):
         if not (contact_l and contact_r and placed['left'] and placed['right']):
             self._interpolate_both(grasp_goals, 'release back to GRASP_V4', seconds=3.0)
             return self._fail('grasp not confirmed (need contact AND tool tips on target on '
-                              'BOTH hands; no fake lift)')
+                              'BOTH hands)')
 
         # 6. ATTACH (contact-verified), then LIFT. DART cannot hold the cube by
         #    pad friction alone, so the rigid attach - engaged only after the

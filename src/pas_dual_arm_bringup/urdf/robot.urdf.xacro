@@ -129,7 +129,7 @@
   <!-- The 85 mm Robotiq grippers cannot enclose the 300 mm box, so it is held
        by a two-arm friction squeeze: each gripper's finger tips press a side
        face and the carriages lift. Give those tip links high friction and a
-       stiff contact so the squeeze actually carries the 1 kg box. -->
+       stiff contact so the pads do not slide on the 0.3 kg box. -->
   <xacro:macro name="tip_friction" params="link">
     <gazebo reference="${link}">
       <mu1>5.0</mu1>

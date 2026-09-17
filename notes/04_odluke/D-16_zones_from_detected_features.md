@@ -26,7 +26,7 @@ zone **ne budu ručno upisane**, nego da ih SLAM prepozna i da se postave na pre
 3. **Zone iz detektiranih značajki, Nav2 i dalje vozi** (izabrano).
 
 ## Odluka
-Izabrana opcija 3, 14. 9. 2026. (`497a69a`).
+Izabrana opcija 3, 14. 9. 2026. ().
 
 - `feature_registry` iz karte daje **vrata** (centar, normala zida, širina) i **stolove**
   (klasteri slobodnostojećih nogu; ravnina skena na 0.209 m siječe noge, pa je stol u karti

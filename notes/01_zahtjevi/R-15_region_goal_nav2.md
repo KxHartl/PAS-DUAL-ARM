@@ -1,13 +1,14 @@
 ---
 id: R-15
 type: zahtjev
-status: otvoreno
+status: ispunjeno
+verified: "voznja u GUI-ju (run 70); greska AMCL-a 3.0/2.9 cm"
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-06_navigation]]", "[[S-09_task_orchestration]]"]
 problems: ["[[P-11_nav2_slam_drift]]", "[[P-33_nav2_undershoot_base_shift]]"]
 decisions: ["[[D-04_visual_servo_instead_nav2]]"]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # R-15: Korisnik zada približnu regiju, robot tamo ode (Nav2)
 
@@ -27,7 +28,7 @@ bazu do regije. Tek tamo počinje traženje kutije ([[R-16_find_box]]).
 ## Trenutno stanje
 ❌ Trenutno robot **ne dobiva regiju**. `main_task` odmah skenira pan-tilt kamerom s mjesta i
 visual-servoa do markera ([[D-04_visual_servo_instead_nav2]]). Nav2 `NavigateToPose` je radio u M6
-(23. 6., `45c32f1`: nav do kutije, staging ispred vrata, prolaz). Parametri `pregrasp_xy`,
+(23. 6.,: nav do kutije, staging ispred vrata, prolaz). Parametri `pregrasp_xy`,
 `door_xy`, `preplace_xy` su ostaci toga u `main_task.py`.
 
 ## Kako se rješava

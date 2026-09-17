@@ -1,11 +1,12 @@
 ---
 id: P-44
 type: problem
-status: u tijeku
+status: rijeseno
+verified: "V4 slijed prosao u punoj misiji (M4)"
 requirements: ["[[R-17_dual_arm_lift]]", "[[R-19_door_pass_with_box]]", "[[R-03_linear_rails_torso]]"]
 solutions: ["[[S-08_grasp_squeeze_attach]]"]
 decisions: ["[[D-05_contact_verified_attach]]", "[[D-12_honesty_abort_over_fake]]"]
-updated: 2026-09-15
+updated: 2026-09-17
 ---
 # P-44 — Hvat preko korisnikovih poza (V3 → V4)
 

@@ -1,11 +1,12 @@
 ---
 id: P-12
 type: problem
-status: neprovjereno
+status: rijeseno
+verified: "prolaz potvrdjen 5/5 (runovi 62, 70) i s kutijom (M4)"
 requirements: ["[[R-11_door_80cm]]", "[[R-18_door_pass_empty]]", "[[R-19_door_pass_with_box]]"]
 solutions: ["[[S-02_world_and_sim_launch]]", "[[S-06_navigation]]"]
 decisions: ["[[D-13_three_room_world]]", "[[D-08_door_widened]]"]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # P-12: Prolaz kroz uska vrata (0.8/0.9 m) s Nav2
 
@@ -19,8 +20,8 @@ zatvara otvor. Ispružene ruke su šire od baze.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 23. 6. `45c32f1` | vrata 1.2 m + inflation 0.35 → 0.15 + `ARM_CARRY` (laktovi uvučeni, ~0.6 m) + staging ispred vrata | prolaz headless, x 0.45 → 3.07 | radi, ali nije standardna širina |
-| 2 | 29. 6. `e9157e1` | vrata 2.0 m (usput, razlog nije zapisan) | — | 🔁 udaljilo od zahtjeva ([[D-08_door_widened]]) |
+| 1 | 23. 6. | vrata 1.2 m + inflation 0.35 → 0.15 + `ARM_CARRY` (laktovi uvučeni, ~0.6 m) + staging ispred vrata | prolaz headless, x 0.45 → 3.07 | radi, ali nije standardna širina |
+| 2 | 29. 6. | vrata 2.0 m (usput, razlog nije zapisan) | — | 🔁 udaljilo od zahtjeva ([[D-08_door_widened]]) |
 | 3 | kasnije | `inflation_radius` 0.05 (lokalni i globalni costmap) | nije testirano kroz vrata | kandidat |
 | 4 | 13. 9. | novi svijet: dvoja vrata **0.9 m** ([[D-13_three_room_world]]) | 🧪 prolaz nije testiran | — |
 | 6 | 13. 9. | nakon spawna su **svi zglobovi ruku na 0** (ispružena Kinova), pa ruke s bočnih klizača strše u stranu (robot > 2 m širok). Obje ruke u `ARM_CARRY` preko MoveIt-a (`both_arms`, pomoćna skripta kao `main_task.move_arms_joint`) | MoveIt OK, ali TF mjerenje: laktovi (`forearm_link`) na **y = ±0.58**, pa je robot širok ~1.2–1.3 m | **`ARM_CARRY` nije uska poza**; bilješka iz lipnja („~0.6 m“) je netočna → treba posebna poza za vrata (|y| < 0.40), tražena preko `/compute_fk` + `/check_state_validity` |

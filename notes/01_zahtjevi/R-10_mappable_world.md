@@ -26,7 +26,7 @@ složi kartu. Robot ima lidar koji objavljuje `/scan`.
 - [ ] (samo mapiranje je [[R-14_slam_mapping]])
 
 ## Trenutno stanje
-✅ Svijet s tri sobe je napravljen i u GUI-ju potvrđen 13. 9. Lidar postoji od 12. 6. (`ae60d9b`).
+✅ Svijet s tri sobe je napravljen i u GUI-ju potvrđen 13. 9. Lidar postoji od 12. 6. ().
 SLAM je radio 23. 6. (M5) nad starim svijetom.
 
 ## Kako se rješava

@@ -1,32 +1,42 @@
-# PAS-DUAL-ARM — simulacijski model dual-arm robota (ROS 2 Humble + Gazebo Fortress)
+# PAS-DUAL-ARM — dual-arm mobile manipulator simulation (ROS 2 Humble + Gazebo Fortress)
 
-> **Seminarski zadatak iz kolegija Projektiranje autonomnih sustava**
-> Fakultet strojarstva i brodogradnje, Sveučilište u Zagrebu
-> Izradili: **Krešimir Hartl** i **Ivan Noršić**
+> **Course project — Design of Autonomous Systems**
+> Faculty of Mechanical Engineering and Naval Architecture, University of Zagreb
+> Authors: **Krešimir Hartl** and **Ivan Noršić**
 
-Mobilni robot s **dvije Kinova Gen3 ruke** na **vertikalnim linearnim vodilicama**,
-**omnidirekcijskom bazom** i **pan-tilt kamerom**. Cijela misija ide iz **jedne naredbe**:
+A mobile robot with **two Kinova Gen3 arms** mounted on **vertical linear rails**, an
+**omnidirectional base** and a **pan-tilt camera**. The complete mission runs from **a single
+command**:
 
-> robot čeka naredbu → odveze se u sobu s kutijom → nađe je → **podigne objema rukama** →
-> pronese kroz vrata → **odloži na označeno mjesto** u drugoj sobi.
+> the robot waits for a command → drives to the room holding the box → finds it →
+> **lifts it with both arms** → carries it through a doorway → **places it on a marked spot**
+> in another room.
 
-Zadnji potvrđeni run (GUI, 16. 9. 2026.): kutija spuštena **4 mm** iznad ploče i sjela **5 mm**
-od centra markera — `PLACE VERIFIED`, `MISSION COMPLETE`.
+The robot is shown below carrying the box through a doorway, and placing it on the destination
+marker at the end of the mission.
 
-> **Karta je već u repou.** `src/pas_dual_arm_bringup/maps/seminar_map.yaml` je zadana karta i
-> misija se vozi po njoj — **ne moraš mapirati da bi pokrenuo demo**. Ako želiš snimiti vlastitu
-> kartu od nule, cijeli je postupak u [`MAPPING.md`](MAPPING.md).
+| Carrying the box through a doorway | Placing it on the marker |
+|---|---|
+| ![Robot carrying the box through a doorway](docs/img/robot_box_door.png) | ![Box placed on the destination marker](docs/img/drop.png) |
+
+Last verified run (GUI, 16 September 2026): the box was released **4 mm** above the table top and
+settled **5 mm** from the marker centre — `PLACE VERIFIED`, `MISSION COMPLETE`.
+
+> **The map ships with the repository.** `src/pas_dual_arm_bringup/maps/seminar_map.yaml` is the
+> default map and the mission drives on it, so **you do not need to run SLAM to see the demo**.
+> That map was produced by running the mapping mode and driving the robot manually; you can
+> rebuild it for a different room layout — see [`docs/MAPPING.md`](docs/MAPPING.md).
 
 ---
 
-## 1. Preduvjeti
+## 1. Requirements
 
 | | |
 |---|---|
 | OS | Ubuntu 22.04 |
 | ROS 2 | Humble |
 | Simulator | Gazebo **Fortress** (LTS) + `ros-humble-ros-gz` |
-| Ostalo | `python3-vcstool`, `python3-rosdep`, `colcon` |
+| Other | `python3-vcstool`, `python3-rosdep`, `colcon` |
 
 ```bash
 sudo apt update
@@ -38,18 +48,19 @@ sudo apt install ros-humble-desktop ignition-fortress ros-humble-ros-gz \
                  python3-vcstool python3-rosdep python3-colcon-common-extensions
 ```
 
-## 2. Dohvat i instalacija
+## 2. Fetch and install
 
-Pet paketa u `src/` su **tuđi repozitoriji** i namjerno nisu dio ovog repoa — skidaju se izravno
-od autora, na točno pinane commitove iz `ros2.repos` (popis i licence: [§9](#9-vanjski-paketi--nisu-naši)).
+Five packages under `src/` are **third-party repositories** and are deliberately not part of this
+repository. They are fetched straight from their authors at pinned revisions listed in
+`ros2.repos` (attribution and licences: [§12](#12-third-party-packages)).
 
 ```bash
 git clone https://github.com/KxHartl/PAS-DUAL-ARM.git
 cd PAS-DUAL-ARM
 
 vcs import src < ros2.repos     # aruco_ros, omni_base_simulation, pan_tilt_ros,
-                                # realsense-ros, ros2_kortex — s GitHuba autora
-./scripts/apply_patches.sh      # lokalne zakrpe iz patches/ (idempotentno)
+                                # realsense-ros, ros2_kortex — from the authors' GitHub
+./scripts/apply_patches.sh      # local patches from patches/ (idempotent)
 
 rosdep install --from-paths src --ignore-src -y -r
 pip install -r requirements.txt
@@ -57,56 +68,147 @@ pip install -r requirements.txt
 
 ## 3. Build
 
-Sve ide kroz **projektno okruženje** (`scripts/run_native.sh`): učitava samo `/opt/ros/humble` i
-ovaj overlay, Fast DDS, ROS domenu 5 i lokalno otkrivanje čvorova. Globalni `~/.bashrc` namjerno
-ne postavlja ROS varijable.
+Everything runs inside a **project-scoped environment** (`scripts/run_native.sh`): it sources only
+`/opt/ros/humble` and this overlay, selects Fast DDS, ROS domain 5 and localhost-only discovery.
+The global `~/.bashrc` deliberately does not set any ROS variables.
 
 ```bash
 ./scripts/run_native.sh colcon build --symlink-install
-./scripts/run_native.sh bash scripts/verify_environment.sh     # 20/20 provjera
+./scripts/run_native.sh bash scripts/verify_environment.sh     # all environment checks must pass
 ```
 
-> `colcon` će javiti da `realsense2_description` nadjačava apt verziju — **namjerno je**, cijeli
-> `realsense-ros` dolazi iz izvora radi usklađenosti s driverom.
+> `colcon` will warn that `realsense2_description` overrides the apt package — **this is
+> intentional**; the whole `realsense-ros` comes from source to stay consistent with the driver.
 
-## 4. Pokretanje misije — jedna naredba
+## 4. The two scenarios
+
+Each scenario is one command. They differ only in where the map comes from.
+
+| | Command | What happens |
+|---|---|---|
+| **1** | `scenario_manual_map.launch.py` | you drive it around to map, then it runs the mission on that map |
+| **2** | `scenario_mission.launch.py` | the mission only, on the map that ships with the repository |
+
+The mapping scenario is covered first ([§5](#5-mapping-scenarios)), because it is what produces a
+map; scenario 2, which is the demo, then runs on one
+([§6](#6-running-the-mission--one-command)).
+
+In scenario 1 the switch from SLAM to localisation happens **inside the run**: press
+**MAPIRANJE GOTOVO** in the panel, the map is saved, SLAM is stopped, AMCL comes up on the new
+map, and the mission node starts. No rebuild in between.
+
+## 5. Mapping
+
+The mission drives on the map stored in this repository, so **the demo needs no mapping**. Build
+a new one when the room layout has changed, or to watch a SLAM run from start to finish. Mapping
+is done by driving the robot yourself; the same job is spelled out step by step at the end.
+
+### Scenario 1 — map by driving it yourself
 
 ```bash
-bash scripts/clean_ros.sh        # nikad dvije simulacije odjednom
-./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mission.launch.py |& tee log/run-mission.log
+./scripts/run_native.sh ros2 launch pas_dual_arm_bringup scenario_manual_map.launch.py
+# in another terminal:
+./scripts/run_native.sh ros2 run teleop_twist_keyboard teleop_twist_keyboard
+```
+
+Driving rules, the route and the acceptance gates are in
+[`docs/MAPPING.md`](docs/MAPPING.md). This is how the map in the repository was
+made.
+
+### Ending the mapping phase
+
+Press **MAPIRANJE GOTOVO** in the panel when the map looks complete. The map is
+written, SLAM is stopped, AMCL is brought up on the new map and seeded with the
+pose where mapping ended, and the mission node starts and waits for
+**MISIJA: po kutiju**. The map goes to a runtime directory rather than
+into `src/`, which is what removes the rebuild that would otherwise be needed
+between mapping and driving.
+
+| Mapping in progress | The accepted map |
+|---|---|
+| ![SLAM in progress: two rooms mapped, the third still unknown, the robot standing in the doorway between them](docs/img/mapping.png) | ![The saved occupancy map of the three rooms](docs/img/map.png) |
+
+Left: part way through a run. Free space the lidar has swept is light, everything
+not yet observed stays dark, and the walls come up as the orange occupied cells
+the scan matcher is aligning against — the third room is still unmapped because
+the robot has not driven through to it yet. Right: the same building once the
+map is complete and has passed the acceptance checks.
+
+### Doing it by hand, terminal by terminal
+
+The scenarios above wrap these steps; this is the same job spelled out, which is useful when
+something in the middle needs to be inspected or replaced. The one difference is the rebuild at
+the end: here the map is saved into `src/`, and Nav2 loads its default map out of `install/`, so
+the package has to be rebuilt before the new map is driven. The scenarios avoid that by writing
+the map to a runtime directory and handing map_server an absolute path.
+
+```bash
+# Terminal 1 — simulation, arms folded into the narrow ARM_CARRY_V2 posture straight away
+PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py
+
+# Terminal 2 — slam_toolbox + RViz (deliberately without Nav2)
+./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mapping.launch.py
+
+# Terminal 3 — drive manually through all three rooms
+./scripts/run_native.sh ros2 run teleop_twist_keyboard teleop_twist_keyboard
+
+# Terminal 4 — save once the map is complete
+./scripts/save_map.sh my_tour
+./scripts/run_native.sh colcon build --symlink-install --packages-select pas_dual_arm_bringup
+```
+
+`save_map.sh` updates `seminar_map.*` itself, so after the rebuild `mission.launch.py` drives on
+**your** map. Driving rules, the route, the geometric acceptance gates and what to check before
+saving are in **[`docs/MAPPING.md`](docs/MAPPING.md)** — without them a map can pass the coverage
+check and still fail at the doorways.
+
+> Only `.yaml` + `.pgm` are committed; that is all `map_server` and AMCL need. The `.posegraph`
+> and `.data` files (≈ 44 MB) stay out of git because they are only needed to *continue* a SLAM
+> session, not to drive.
+
+## 6. Running the mission — one command
+
+```bash
+bash scripts/clean_ros.sh        # never run two simulations at once
+./scripts/run_native.sh ros2 launch pas_dual_arm_bringup scenario_mission.launch.py |& tee log/run-mission.log
 ```
 
 > [!TIP]
-> **Za prijenosna računala / grafičko opterećenje:** Ako simulator uspori ili RViz hoda sporo
-> (Gazebo Ogre2 GUI izgladnjuje procesor i ruši Real Time Factor), pokreni u **headless** modu:
+> **On laptops or under heavy graphics load:** if the simulator slows down or RViz stutters (the
+> Gazebo Ogre2 GUI starves the CPU and drags down the Real Time Factor), run **headless**:
 > ```bash
-> ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mission.launch.py headless:=true
+> ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup scenario_mission.launch.py headless:=true
 > ```
-> U headless modu Gazebo radi bez teškog GUI prozora, a robot, senzori i kretanje se fluidno
-> prate kroz RViz2 prozor i kontrolni panel.
+> Headless means Gazebo runs without its heavy GUI window; the robot, its sensors and its motion
+> are still fully visible in RViz2 and in the control panel.
 
-Robot se stvori u srednjoj (home) sobi **s raširenim rukama**, sam ih složi u pozu vožnje i
-**čeka**. **Važno:** opcija *Move To* u Gazebo GUI-ju samo pozicionira kameru i **ne pokreće robota**.
-Kad u logu piše `WAITING for the user`, pritisni zeleni gumb **„MISIJA: po kutiju"** u
-navigacijskom panelu (`nav_gui`), ili iz drugog terminala:
+The robot spawns in the middle (home) room **with its arms spread**, folds them into the driving
+posture on its own, and then **waits**. **Note:** *Move To* in the Gazebo GUI only moves the
+camera — it does not move the robot. When the log prints `WAITING for the user`, press the green
+**"MISIJA: po kutiju"** button in the navigation panel (`nav_gui`), or publish from another
+terminal:
 
 ```bash
 ./scripts/run_native.sh ros2 topic pub --once /mission/start std_msgs/String "{data: blue}"
 ```
 
-Dalje ide samo: plava soba → hvat → kroz vrata → crvena soba → odlaganje na marker.
+![Navigation and mission control panel](docs/img/gui.png)
 
-**Argumenti** (`mission.launch.py`):
+Everything after that is autonomous: blue room → grasp → through the doorway → red room → place
+on the marker.
 
-| argument | zadano | značenje |
+**Arguments** (`scenario_mission.launch.py`; it wraps `mission.launch.py`, which takes the same ones):
+
+| argument | default | meaning |
 |---|---|---|
-| `headless` | `false` | Gazebo bez GUI-ja (kad GUI izgladnjuje upravljačku petlju) |
-| `open_rviz` | `true` | RViz; pogled biraš s `rviz_config:=…/cube.rviz` |
-| `gui` | `true` | panel s gumbima (`nav_gui`) |
-| `map` | `src/pas_dual_arm_bringup/maps/seminar_map.yaml` | karta za AMCL (učitava se iz `install/…/share/`) |
-| `pick_room` / `place_room` | `blue` / `red` | odakle se uzima i kamo se odlaže |
+| `headless` | `false` | run Gazebo without its GUI (when the GUI starves the control loop) |
+| `open_rviz` | `true` | start RViz; choose the view with `rviz_config:=…/cube.rviz` |
+| `gui` | `true` | button panel (`nav_gui`) |
+| `quiet` | `true` | suppress per-node console spam; the mission log stays readable |
+| `map` | `src/pas_dual_arm_bringup/maps/seminar_map.yaml` | map for AMCL (loaded from `install/…/share/`) |
+| `pick_room` / `place_room` | `blue` / `red` | where the box is picked up and where it is placed |
 
-## 5. Što se očekuje u logu
+## 7. What the log should show
 
 ```
 mission: drive posture ... verified
@@ -121,109 +223,130 @@ PLACE VERIFIED: the centre of the cube is 5 mm from the marker centre
 MISSION COMPLETE: the cube is on the marker.
 ```
 
-Bez retka `PLACE VERIFIED` run **nije** uspjeh, ma što ostalo pisalo — sve provjere su neovisne o
-naredbi, a neuspjeh se prijavljuje i prekida
-([odluka D-12](notes/04_odluke/D-12_honesty_abort_over_fake.md)).
+Without the `PLACE VERIFIED` line the run is **not** a success, whatever else the log says. Every
+check is independent of the command that was issued: the grasp is confirmed against a *fresh*
+depth and marker reading rather than against the pose the arms were told to reach, and a failed
+check aborts the mission with the reason recorded instead of reporting success.
 
-## 6. Mapiranje od nule (nije potrebno za demo)
+## 8. Changing the world
 
-Misija vozi po spremljenoj karti iz repoa. Ako želiš proći cijeli SLAM sam:
+The layout is generated from [`src/pas_dual_arm_bringup/config/world.yaml`](src/pas_dual_arm_bringup/config/world.yaml)
+— room sizes and positions, which rooms are connected, how wide each opening is,
+and where the tables, the box and the destination marker stand.
 
 ```bash
-# Terminal 1 — simulacija, ruke odmah u uskoj pozi ARM_CARRY_V2
-PAS_SIM_CARRY_ARMS=true ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py
-
-# Terminal 2 — slam_toolbox + RViz (bez Nav2, namjerno)
-./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mapping.launch.py
-
-# Terminal 3 — ručna vožnja kroz sve tri sobe
-./scripts/run_native.sh ros2 run teleop_twist_keyboard teleop_twist_keyboard
-
-# Terminal 4 — spremanje kad je karta potpuna
-./scripts/save_map.sh moja_tura
-./scripts/run_native.sh colcon build --symlink-install --packages-select pas_dual_arm_bringup
+./scripts/run_native.sh python3 scripts/gen_world.py
+./scripts/run_native.sh python3 scripts/gen_world.py --set 'doors.0.width=0.98'
 ```
 
-`save_map.sh` sam ažurira `seminar_map.*`, pa nakon rebuilda `mission.launch.py` vozi po **tvojoj**
-karti. **Pravila vožnje, ruta, geometrijski gate-ovi i što provjeriti prije spremanja:
-[`MAPPING.md`](MAPPING.md)** — bez toga karta prođe pokrivenost, a padne na vratima.
+The generator does not write physics: it loads the checked-in world as a
+template and replaces only the geometry, so the table, box and marker keep their
+friction, inertia and textures exactly. It refuses to write an opening narrower
+than 0.95 m, which the robot could not pass at all.
 
-> U repou su samo `.yaml` + `.pgm` — to je sve što `map_server` i AMCL trebaju. `.posegraph` i
-> `.data` (≈ 44 MB) nisu u gitu jer služe samo za **nastavak** SLAM-a, ne za vožnju.
-
-## 7. Provjere bez simulatora
+A generated layout needs its own map:
 
 ```bash
-./scripts/run_native.sh python3 scripts/check_doors.py    # vrata iz karte
-./scripts/run_native.sh python3 scripts/check_zones.py    # zone, portali, dock poze
+./scripts/run_native.sh ros2 launch pas_dual_arm_bringup scenario_manual_map.launch.py \
+    world:=src/pas_dual_arm_bringup/worlds/generated_world.sdf
+```
+
+## 9. Repeating the mission and measuring it
+
+A single run cannot distinguish "it works" from "it worked once", so the mission
+can be repeated and summarised:
+
+```bash
+./scripts/run_native.sh python3 validation/run_batch.py --n 20
+./scripts/run_native.sh python3 validation/summarize.py --latex --chart
+```
+
+Each run is a fresh headless simulation on its own slightly different world (the
+box is displaced by a few centimetres), judged only by what the robot itself
+printed. The result is a success rate, and the median and range of the placement
+error, the tool-tip errors and the run duration — plus which phase the failures
+stopped in. Details: [`validation/README.md`](validation/README.md).
+
+## 10. Checks that run without the simulator
+
+```bash
+./scripts/run_native.sh python3 scripts/check_doors.py    # doorways recovered from the map
+./scripts/run_native.sh python3 scripts/check_zones.py    # zones, portal poses, dock poses
 ./scripts/run_native.sh python3 scripts/check_map.py src/pas_dual_arm_bringup/maps/seminar_map.yaml
 ```
 
-Ako `check_*` ne prođu, **ne pokreći simulaciju** — zone su krive i vožnja nema smisla.
+If `check_*` does not pass, **do not start the simulation** — the zones are wrong and driving is
+meaningless.
 
-## 8. Arhitektura
+## 11. Architecture
 
-| Dio | Izvor | Upravljanje |
+| Part | Source | Control |
 |---|---|---|
-| Mobilna baza | PAL `omni_base_simulation` (geometrija, kotači, lidar) | `mecanum_drive_controller` (omnidirekcijski, x/y/yaw) |
-| Ruke (2 × Kinova Gen3, 7-DOF) | `ros2_kortex` | `joint_trajectory_controller` + **MoveIt 2** |
-| Hvataljke Robotiq 2F-85 | `ros2_kortex` | `GripperActionController` |
-| Torzo: 2 vertikalne vodilice | STL: **Branimir Ćaran** (prilog zadatka, `dual_arm_torso-main.zip`, 4. 5. 2026.) | `joint_trajectory_controller` (prismatic, 0.05–0.65 m) |
+| Mobile base | PAL `omni_base_simulation` (geometry, wheels, lidar) | `mecanum_drive_controller` (omnidirectional, x/y/yaw) |
+| Arms (2 × Kinova Gen3, 7-DOF) | `ros2_kortex` | `joint_trajectory_controller` + **MoveIt 2** |
+| Robotiq 2F-85 grippers | `ros2_kortex` | `GripperActionController` |
+| Torso: two vertical rails | STL by **Branimir Ćaran** (assignment attachment, 4 May 2026) | `joint_trajectory_controller` (prismatic, 0.05–0.65 m) |
 | Pan-tilt + RealSense D435 | `pan_tilt_ros`, `realsense-ros` | `joint_trajectory_controller` |
-| Senzori | lidar (1080 zraka), RGBD na glavi, **2 × RGBD na zapešćima**, kontaktni senzori na jastučićima, FT na zapešćima | — |
-| Sučelje prema Gazebu | `ign_ros2_control/IgnitionSystem` | — |
-| Mapiranje / navigacija | `slam_toolbox` + `nav2` (AMCL, NavFn, DWB, collision monitor) | — |
-| Percepcija kutije | ArUco `DICT_4X4_50` (vlastiti detektor, `cv2.aruco`) | — |
+| Sensors | lidar (1080 rays), head RGB-D, **2 × wrist RGB-D**, fingertip contact sensors, wrist force-torque | see [`docs/SENSORS.md`](docs/SENSORS.md) |
+| Gazebo interface | `ign_ros2_control/IgnitionSystem` | — |
+| Mapping / navigation | `slam_toolbox` + `nav2` (AMCL, NavFn, DWB, collision monitor) | — |
+| Box perception | ArUco `DICT_4X4_50` (own detector on `cv2.aruco`) | — |
 
-Kutija: **0.30 m, 0.3 kg**, ArUco marker na prednjoj plohi i po jedan na bočnima (za kamere na
-zapešćima). Svijet: tri sobe u obliku slova L, dva otvora od **0.98 m**.
+![Both arms in contact with the box before the lift](docs/img/pickup.png)
 
-## 9. Vanjski paketi — nisu naši
+The box is a **0.30 m cube with a mass of 0.30 kg**, carrying an ArUco marker on its front face
+and one on each side face (for the wrist cameras). The world is three rooms in an L shape,
+connected by two openings that are **1.00 m wide** in the SDF and measure **0.980 m** on the built
+map.
 
-Ovih pet paketa **nije** u repozitoriju: `vcs import` ih skida s GitHuba autora, na pinane
-commitove. Repo sadrži samo manifest `ros2.repos`.
+Which sensor closes a control loop, which one only gates a decision and which is not used at all
+is documented in **[`docs/SENSORS.md`](docs/SENSORS.md)**.
 
-| Paket | Autor | Licenca | Commit | Čemu služi |
+## 12. Third-party packages
+
+These five packages are **not** in the repository: `vcs import` fetches them from the authors'
+GitHub at pinned revisions. The repository carries only the `ros2.repos` manifest, so not a single
+byte of their code is redistributed here. The revisions are listed so that a checkout is
+reproducible.
+
+| Package | Author | Licence | Pinned revision | Used for |
 |---|---|---|---|---|
-| [`omni_base_simulation`](https://github.com/pal-robotics/omni_base_simulation) | PAL Robotics | Apache-2.0 | `77248ac` | mobilna baza: geometrija, kotači, lidar |
-| [`ros2_kortex`](https://github.com/Kinovarobotics/ros2_kortex) | Kinova | BSD | `116d87a` | Kinova Gen3 ruke + Robotiq 2F-85 hvataljke |
-| [`pan_tilt_ros`](https://github.com/I-Quotient-Robotics/pan_tilt_ros) | I-Quotient-Robotics | MIT | `9b08758` | pan-tilt mehanizam na vrhu robota |
-| [`realsense-ros`](https://github.com/realsenseai/realsense-ros) | Intel RealSense | Apache-2.0 | `6d87b07` | opis RealSense D435 kamere |
-| [`aruco_ros`](https://github.com/pal-robotics/aruco_ros) | PAL Robotics | MIT | `86a0bbb` | ArUco (koristi se vlastiti detektor, [D-02](notes/04_odluke/D-02_own_aruco_detector.md)) |
+| [`omni_base_simulation`](https://github.com/pal-robotics/omni_base_simulation) | PAL Robotics | Apache-2.0 | `77248ac` | mobile base: geometry, wheels, lidar |
+| [`ros2_kortex`](https://github.com/Kinovarobotics/ros2_kortex) | Kinova | BSD | `116d87a` | Kinova Gen3 arms + Robotiq 2F-85 grippers |
+| [`pan_tilt_ros`](https://github.com/I-Quotient-Robotics/pan_tilt_ros) | I-Quotient-Robotics | MIT | `9b08758` | pan-tilt mechanism on top of the robot |
+| [`realsense-ros`](https://github.com/IntelRealSense/realsense-ros) | Intel RealSense | Apache-2.0 | `6d87b07` | RealSense D435 description |
+| [`aruco_ros`](https://github.com/pal-robotics/aruco_ros) | PAL Robotics | MIT | `86a0bbb` | ArUco reference (an own detector is used instead) |
 
-**Izmjene tuđeg koda** su dvije, obje kao zakrpe u `patches/`, koje primjenjuje
-`scripts/apply_patches.sh` (idempotentno):
+**Two modifications to third-party code**, both kept as patches under `patches/` and applied by
+`scripts/apply_patches.sh` (idempotent):
 
-| Zakrpa | Što radi |
+| Patch | What it does |
 |---|---|
-| `ros2_kortex-robotiq_2f_85-drop-isaac-args.patch` | miče tri Isaac argumenta iz `robotiq_2f_85_macro.xacro` kojih na Humble grani nema |
-| `pan_tilt_ros-inertials-and-effort-limits.patch` | dodaje inercije pan-tilt linkovima i diže effort limite `0.0 → 10.0`; bez toga `urdf2sdf` izbaci linkove i `ign_ros2_control` se ne digne |
+| `ros2_kortex-robotiq_2f_85-drop-isaac-args.patch` | removes three Isaac arguments from `robotiq_2f_85_macro.xacro` that do not exist on the pinned Humble branch |
+| `pan_tilt_ros-inertials-and-effort-limits.patch` | adds inertials to the pan-tilt links and raises the effort limits `0.0 → 10.0`; without it `urdf2sdf` drops the links and `ign_ros2_control` never starts |
 
-**STL vodilica i torza** isporučuju se **s ovim repoom** (`src/dual_arm_torso/meshes/`) i autor im
-je **Branimir Ćaran** — prilog uz mail od 4. 5. 2026., korišteno uz dopuštenje autora zadatka.
-Vidi [`src/dual_arm_torso/README.md`](src/dual_arm_torso/README.md).
+**The rail and torso STL files are shipped with this repository** (`src/dual_arm_torso/meshes/`)
+and were authored by **Branimir Ćaran** — an attachment to the assignment e-mail of 4 May 2026,
+used with permission. See [`src/dual_arm_torso/README.md`](src/dual_arm_torso/README.md).
 
-Ovaj repo je Apache-2.0 (`LICENSE`); sve gornje licence su s njom kompatibilne.
+This repository is Apache-2.0 (`LICENSE`); all of the licences above are compatible with it.
 
-## 10. Poznata ograničenja (iskreno)
+## 13. Known limitations
 
-| Što | Zašto |
+| What | Why |
 |---|---|
-| Kutija se drži **krutim spojem** (`DetachableJoint`), uključenim tek nakon dokazanog obostranog kontakta | DART je ne drži trenjem — iscrpno probano (`notes/03_problemi/P-15…`) |
-| Mase torza su **procjena** (12 kg vodilica, 2 kg klizač) | nema podataka proizvođača vodilica |
-| Nošenje visi o spoju na **lijevom** zapešću, iako obje ruke drže kutiju | dvije krute veze ruše solver (`P-17`) |
-| Pogon je `mecanum_drive_controller`, ne PAL-ov `omni_drive_controller` | PAL-ov nije dostupan za Humble (`P-09`) |
+| The box is held by a **rigid joint** (`DetachableJoint`), engaged only after contact on both hands has been confirmed | DART does not hold the box by pad friction — tested exhaustively |
+| Torso masses are **estimates** (12 kg per rail, 2 kg per carriage) | the rail manufacturer does not publish them |
+| The rigid joint attaches to the **left** wrist although both hands hold the box | two simultaneous rigid constraints make the box over-constrained and break the physics solver |
+| The base uses `mecanum_drive_controller`, not PAL's `omni_drive_controller` | PAL's controller targets Gazebo Classic and publishes nothing on Fortress |
+| The doorways are **1.00 m** wide, not the 0.80 m mentioned in the assignment | the robot is 0.821 m wide with its arms tucked in, so a 0.80 m opening is impassable. The test was made harder on another axis instead: two doorways, in both directions, empty and carrying the box |
 
-Puni popis s obrazloženjima: [`notes/07_predaja/odstupanja.md`](notes/07_predaja/odstupanja.md).
+## 14. Documentation
 
-## 11. Dokumentacija
-
-| Gdje | Što |
+| Where | What |
 |---|---|
-| [`MAPPING.md`](MAPPING.md) | SLAM od nule: vožnja, spremanje karte, gate-ovi |
-| [`RUNNING.md`](RUNNING.md) | rad po terminalima, logovi, poznati problemi |
-| [`notes/00_MAPA.md`](notes/00_MAPA.md) | stablo zahtjeva i status svakog (ulazna točka) |
-| `notes/00_run/00_testing/misija.md` | postupak pokretanja i što gledati, korak po korak |
-| `notes/03_problemi/` | svaki problem s **tablicom svih pokušaja** i izmjerenim ishodima |
-| `notes/04_odluke/` | odluke (ADR) |
-| `notes/06_parametri.md` | svaka podesiva vrijednost i zašto je takva |
+| [`docs/RUNNING.md`](docs/RUNNING.md) | running the system terminal by terminal, logs, known issues |
+| [`docs/MAPPING.md`](docs/MAPPING.md) | SLAM from scratch: driving, saving the map, acceptance gates |
+| [`docs/SENSORS.md`](docs/SENSORS.md) | every sensor, its topic, and whether it closes a loop, gates a decision, or is unused |
+| `seminar.pdf` | the written report: requirements, design, results and limitations |
+

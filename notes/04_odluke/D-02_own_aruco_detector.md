@@ -19,7 +19,7 @@ binarni `cv_bridge` segfaulta pod numpy 2.
 1. Promijeniti rječnik na onaj koji `aruco_ros` zna.
 2. **Vlastiti čvor s `cv2.aruco`**, s pretvorbom slike bez `cv_bridge`.
 
-## Odluka (12. 6., `45ba359`)
+## Odluka (12. 6.)
 Opcija 2: `pas_dual_arm_scripts/aruco_detector.py`. Sučelje je isto kao kod `aruco_ros`
 (`/aruco_single/pose`, TF `aruco_marker_frame`), pa ostatak sustava ne ovisi o izboru.
 

@@ -13,8 +13,6 @@ Bridges:
 - TF: /base_controller/tf_odometry -> /tf
   (for odom -> base_footprint transform)
 """
-import time
-
 import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -49,10 +47,22 @@ class CmdVelRelay(Node):
         self.create_subscription(
             TFMessage, '/base_controller/tf_odometry', self._on_tf, 10)
 
+    def _now(self):
+        """Seconds on the same clock everything else in this run uses.
+
+        This was wall-clock (monotonic) while every other timeout in the system
+        is simulation time. At RTF 0.57 a 1.0 s wall window is 0.57 s of
+        simulated time, so a collision monitor publishing at its nominal rate
+        can still look dead here and raw /cmd_vel gets control back while the
+        monitor is in fact filtering. It held only because the margin was
+        generous (P-47; AGENT_GUIDE invariant 4).
+        """
+        return self.get_clock().now().nanoseconds * 1e-9
+
     def _safety_live(self):
         timeout = self.get_parameter('safe_command_timeout').value
         return self._last_safe is not None and \
-            time.monotonic() - self._last_safe <= timeout
+            self._now() - self._last_safe <= timeout
 
     def _on_cmd_vel(self, msg: Twist):
         if self._safety_live():
@@ -63,7 +73,7 @@ class CmdVelRelay(Node):
         if self._last_safe is None:
             self.get_logger().info(
                 'collision monitor is live; raw /cmd_vel is now ignored')
-        self._last_safe = time.monotonic()
+        self._last_safe = self._now()
         self.cmd_pub.publish(msg)
 
     def _on_odom(self, msg: Odometry):

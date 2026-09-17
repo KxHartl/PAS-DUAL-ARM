@@ -21,8 +21,8 @@ plugin u svijetu.
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
 | 1 | 30. 6. | `tip_contact` makro s `<topic>` + bridge kratkih imena | šuti; fallback depth + stall | krivi topic |
-| 2 | 16. 7. `c504720` | bridge mapira **duge** gz putanje na `/contact/<ruka>_<prst>_tip` (`bridge.yaml:44-69`) | kontakti stižu, s imenima kolizija | rješenje |
-| 3 | 16. 7. `c504720` | brojati samo kontakt čija je druga kolizija `aruco_box` (stol ili sebe ne) | pošten dokaz | rješenje ([[D-12_honesty_abort_over_fake]]) |
+| 2 | 16. 7. | bridge mapira **duge** gz putanje na `/contact/<ruka>_<prst>_tip` (`bridge.yaml:44-69`) | kontakti stižu, s imenima kolizija | rješenje |
+| 3 | 16. 7. | brojati samo kontakt čija je druga kolizija `aruco_box` (stol ili sebe ne) | pošten dokaz | rješenje ([[D-12_honesty_abort_over_fake]]) |
 
 ## Ne ponavljati
 - Oslanjati se na `<topic>` u Fortress senzorima; prvo `ign topic -l`.

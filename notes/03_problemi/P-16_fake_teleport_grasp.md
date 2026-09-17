@@ -23,9 +23,9 @@ updated: 2026-09-13
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 30. 6. `397f080` | teleport → DetachableJoint nakon „zatvorenih hvataljki“ provjerenih TF-om | pošteniji, ali slab dokaz | nedovoljno |
+| 1 | 30. 6. | teleport → DetachableJoint nakon „zatvorenih hvataljki“ provjerenih TF-om | pošteniji, ali slab dokaz | nedovoljno |
 | 2 | 30. 6. (plan `ne-radi-hvatanje-kutije`) | uklonjeni cirkularni check i x = 0.55 fallback; `verify_reached` (TF vs naredba); `fingertips_on_box`; fuzija kontakt senzora + stall | aborti umjesto lažnih hvata | smjer ispravan |
-| 3 | 16. 7. `c504720` | dokaz = kontakt s kolizijom **`aruco_box`** (ime iz poruke) na oba jastučića | 3 stvarna uspjeha, ~15 poštenih aborta | **rješenje** |
+| 3 | 16. 7. | dokaz = kontakt s kolizijom **`aruco_box`** (ime iz poruke) na oba jastučića | 3 stvarna uspjeha, ~15 poštenih aborta | **rješenje** |
 
 ## Ne ponavljati
 - Bilo koji attach/teleport bez nezavisnog fizičkog dokaza ([[D-12_honesty_abort_over_fake]]).

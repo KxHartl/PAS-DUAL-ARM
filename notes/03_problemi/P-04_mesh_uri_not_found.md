@@ -19,4 +19,4 @@ koje Fortress ne nalazi bez resource patha.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `d29498a` | `IGN_GAZEBO_RESOURCE_PATH` iz svakog `AMENT_PREFIX_PATH/share` u `sim.launch.py` | 92 → 0 grešaka, cijeli robot vidljiv | rješenje |
+| 1 | 12. 6. | `IGN_GAZEBO_RESOURCE_PATH` iz svakog `AMENT_PREFIX_PATH/share` u `sim.launch.py` | 92 → 0 grešaka, cijeli robot vidljiv | rješenje |

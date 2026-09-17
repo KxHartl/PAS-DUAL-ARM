@@ -28,7 +28,7 @@ zida, `main_task` bi mogao odmah krenuti u vizualni servo i **preskočiti** mapi
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 13. 9. `2bda09e` | zidovi 1.2 m uz pretpostavku da blokiraju pogled | — | pretpostavka nije bila provjerena |
+| 1 | 13. 9. | zidovi 1.2 m uz pretpostavku da blokiraju pogled | — | pretpostavka nije bila provjerena |
 | 2 | 13. 9. | izmjerena visina robota u korisnikovoj pozi | kamera 1.39–1.45 m, **iznad zidova** | pretpostavka pala |
 | 3 | 13. 9. | **zidovi podignuti na 3.0 m** (odluka korisnika) | SDF valjan (`ign sdf -k`) | kamera je 1.6 m ispod vrha zida → pogled preko zida nije moguć |
 

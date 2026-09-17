@@ -1,11 +1,12 @@
 ---
 id: P-35
 type: problem
-status: otvoreno
+status: rijeseno
+verified: "DRIVE_V4 0.821 m i CARRY_V4 prolaze; gate ruku worst joint 0.000 rad (M1)"
 requirements: ["[[R-18_door_pass_empty]]", "[[R-19_door_pass_with_box]]", "[[R-11_door_80cm]]"]
 solutions: ["[[S-06_navigation]]", "[[S-09_task_orchestration]]"]
 decisions: ["[[D-13_three_room_world]]", "[[D-15_door_transit_behaviour]]"]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # P-35: Širina robota s rukama — koja poza stane kroz vrata
 
@@ -71,7 +72,7 @@ Simetrična varijanta (j2 = −90°, j4 = −90°, j6 = +70°) daje isto.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 23. 6. `45c32f1` | `ARM_CARRY` + vrata 1.2 m | prolaz headless uspio | prošao zbog **širokih vrata**, ne zbog uske poze |
+| 1 | 23. 6. | `ARM_CARRY` + vrata 1.2 m | prolaz headless uspio | prošao zbog **širokih vrata**, ne zbog uske poze |
 | 2 | 13. 9. | `ARM_CARRY` izvršen preko MoveIt-a, pa izmjereni TF linkovi | MoveIt OK, širina **1.29 m** | poza neupotrebljiva za 0.9 m |
 | 3 | 13. 9. | FK mjerenje 12 kandidata + provjera samokolizije | najuže = **0.85 m**; tražena j2/j4 = 90° pada na sudaru šaka | granica je ~0.85 m, ne 0.6 m |
 | 4 | 13. 9. | sweep j2/j4/j6 za validnu usku pozu | **j2 = ±90°, j4 = ±90°, j6 = ∓70°** → 0.85 m, validno | kandidat za `ARM_DOOR` |
@@ -79,7 +80,7 @@ Simetrična varijanta (j2 = −90°, j4 = −90°, j6 = +70°) daje isto.
 | 6 | 13. 9. | `fit_test.py` sa zidom **debljine 10 cm na x = 0** | 83.4 cm | **neispravno**: ruke sežu do x = +0.70 i prošle su pokraj zida |
 | 7 | 13. 9. | `fit_test.py` s **hodnikom duljine 3 m** | **85.6 cm**, prvi dodiruje `right_spherical_wrist_2_link` | ispravno |
 | 8 | 13. 9. | `mesh_extent.py`: vrhovi svih meshova kroz TF, vizualni i kolizijski zasebno | **85.4 cm**, isto za obje geometrije | potvrđuje 7; vizual = kolizija |
-| 9 | 14. 9. `48aab9c` | **četvrta metoda:** živa konveksna ljuska svih linkova iz TF-a, objavljena kao Nav2 footprint, mjerena tijekom gibanja ruku | `ARM_HOME` **1.408 m** (P-35 metodom B: 1.41 m), `ARM_CARRY_V2` **0.841 m** (metodom C: 0.854 m) | mjerenja se slažu neovisno o metodi; uz to se prvi put vidi da **duljina** naraste na 1.35 m usred zamaha, što nijedno dosadašnje mjerenje nije hvatalo |
+| 9 | 14. 9. | **četvrta metoda:** živa konveksna ljuska svih linkova iz TF-a, objavljena kao Nav2 footprint, mjerena tijekom gibanja ruku | `ARM_HOME` **1.408 m** (P-35 metodom B: 1.41 m), `ARM_CARRY_V2` **0.841 m** (metodom C: 0.854 m) | mjerenja se slažu neovisno o metodi; uz to se prvi put vidi da **duljina** naraste na 1.35 m usred zamaha, što nijedno dosadašnje mjerenje nije hvatalo |
 
 ## Sljedeći korak (NIJE rađeno: samo identificirano)
 1. Odluka korisnika o širini vrata (0.95 / 1.0 m) prema izmjerenih 0.85 m.

@@ -30,8 +30,8 @@ Svi aktuatori idu kroz `ign_ros2_control/IgnitionSystem` i controller_manager (1
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 12. 6. | headless | 7 kontrolera aktivno; `left_joint_2` → 0.8 postigao 0.799 | `7aaab94` |
-| 23. 6. | headless | `base_controller` vozi, odom x 0 → 0.24 | `6eb7487` |
+| 12. 6. | headless | 7 kontrolera aktivno; `left_joint_2` → 0.8 postigao 0.799 | |
+| 23. 6. | headless | `base_controller` vozi, odom x 0 → 0.24 | |
 
 ## Otvoreno
 - Zamjena `base_controller` omni/mecanum kontrolerom, vidi [[S-04_base_drive]].

@@ -25,7 +25,7 @@ scenom.
 - [x] hvat koristi MoveIt (IK `/compute_ik`, `/compute_cartesian_path`, `/move_action`, `/execute_trajectory`)
 
 ## Trenutno stanje
-✅ Od 12. 6. (M3, `b7cfcd2`). Napomena za seminar: **simultani press** obje ruke šalje putanje
+✅ Od 12. 6. (M3). Napomena za seminar: **simultani press** obje ruke šalje putanje
 koje je izračunao MoveIt (`compute_cartesian_path`) **izravno na oba JTC-a**, jer `move_group`
 izvršava jednu trajektoriju odjednom ([[P-26_one_sided_press_bulldozes]]). Planiranje je i dalje
 MoveIt-ovo.

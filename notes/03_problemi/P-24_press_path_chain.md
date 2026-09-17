@@ -39,7 +39,7 @@ updated: 2026-09-13
 | 9 | 16. 7. | RRT na ~2 cm ispred plohe + linearni re-press | Δ 0.001–0.005 m | pouzdan fallback |
 | 10 | 16. 7. | re-press sa **zrcaljenjem greške** | overshoot 10 cm u kocku → ruka tunelira | ❌ uklonjeno |
 
-Sve je u `c504720`.
+Sve je u.
 
 ## Trenutno rješenje
 `_linear_traj`, `press_both_linear`, `_ik`, `_wait_settle`, `_traj_starts_here` u `main_task.py`.

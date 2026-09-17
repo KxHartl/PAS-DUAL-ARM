@@ -38,7 +38,7 @@ Nije upravljač: DWB je vodio robota na os koju mu je zadala kriva poza.
 **Tri doprinosa, svaki izmjeren:**
 
 1. **Karta je snimljena starim lidarom.** `maps/seminar_map.*` je od 13. 9.
-   (run 44); commit `bd61802` od 14. 9. podigao je lidar s 360 zraka / 10 mm / 10 Hz
+   (run 44); commit od 14. 9. podigao je lidar s 360 zraka / 10 mm / 10 Hz
    na 1080 zraka / 1 mm / 25 Hz. Karta taj senzor nikad nije vidjela.
 2. **Rezolucija karte 0.05 m.** `scripts/check_map_geometry.py` (novo, 14. 9.) na njoj
    mjeri: zid od 0.10 m nacrtan **0.150–0.178 m** debelo (+2.5 do +3.9 cm po licu),
@@ -67,7 +67,7 @@ gdje kroz rutu naraste. Do 14. 9. to nitko nije mjerio.
 ## Trenutno rješenje
 Ništa se još ne korigira. U kodu su **samo mjerila**:
 - `src/pas_dual_arm_scripts/pas_dual_arm_scripts/loc_error.py` — |TF `map→base_footprint`
-  − Gazebo poza|, pokreće se samo uz `sim.launch.py debug_truth:=true`;
+  − Gazebo poza| pokreće se samo uz `sim.launch.py debug_truth:=true`;
 - `room_navigator._report_disagreement()` — razlika lidarske i lokalizirane osi u
   svakom prolazu, bez ground trutha;
 - `scripts/check_map_geometry.py` — geometrijski gate karte, zove ga `save_map.sh`.

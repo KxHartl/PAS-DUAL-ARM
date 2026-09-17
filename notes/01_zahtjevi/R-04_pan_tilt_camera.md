@@ -25,7 +25,7 @@ Gazebu stvarno objavljuje sliku, dubinu i oblak točaka.
 - [x] topici `/camera/image`, `/camera/depth_image`, `/camera/points`, `/camera/camera_info`
 
 ## Trenutno stanje
-✅ RGB od 12. 6. (`ae60d9b`), RGBD od 30. 6. (`e31f2fa`). Senzor je native Ignition
+✅ RGB od 12. 6. (), RGBD od 30. 6. (). Senzor je native Ignition
 `rgbd_camera` (640×480, 15 Hz, HFOV 1.211), jer originalni opis nema Fortress senzor
 ([[P-06_classic_only_sensors]]). `realsense-ros` je u `src/` (v4.57.6) i namjerno nadjačava apt
 `realsense2_description` (RUNNING.md).

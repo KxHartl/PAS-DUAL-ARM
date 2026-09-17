@@ -1,13 +1,14 @@
 ---
 id: R-14
 type: zahtjev
-status: riješeno
+status: ispunjeno
+verified: "karta runa 60 prosla geometrijski gate (otvor 0.980 m, zid 120 mm)"
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-06_navigation]]"]
 problems: ["[[P-11_nav2_slam_drift]]"]
 decisions: ["[[D-04_visual_servo_instead_nav2]]"]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # R-14: Mapiranje slam_toolboxom
 

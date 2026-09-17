@@ -176,7 +176,7 @@ Kada se u repozitoriju naiđe na kontradiktorne tvrdnje, vrijedi sljedeća strog
 
 ## 4. Kronologija projekta kroz git commitove (48 commitova)
 
-Razvoj projekta tekao je kroz 5 prepoznatljivih faza (od `5d0eca0` do `cb9f459`):
+Razvoj projekta tekao je kroz 5 prepoznatljivih faza (od do):
 
 ```mermaid
 timeline
@@ -189,19 +189,19 @@ timeline
 ```
 
 ### Faza 1: Početna integracija sustava (M0 do M6, 25. 5. – 23. 6. 2026.)
-- **Commitovi `5d0eca0` … `c5dc31b` … `eee79c4`:** Uspostavljen osnovni repozitorij, podešena geometrija torza s klinastim nosačima pod 45°, usklađen vizualni model sa stvarnim robotom ([[R-05_visual_match]]).
+- **Commitovi … …:** Uspostavljen osnovni repozitorij, podešena geometrija torza s klinastim nosačima pod 45°, usklađen vizualni model sa stvarnim robotom ([[R-05_visual_match]]).
 - **Commitovi `M0`–`M6` (lipanj):** Podignut `ros2_control` u Gazebo Fortressu, integrirani 360° lidar i RealSense kamera, konfiguriran MoveIt 2 za dvoručnu manipulaciju, implementiran detektor markera i početni Nav2 slijed. Prolaz kroz vrata postignut samo uz umjetno proširenje prolaza na 1.2 m ([[D-08_door_widened]]).
 
 ### Faza 2: Pošten, kontaktom verificiran hvat (kraj lipnja – 16. 7. 2026.)
-- **Commit `90e7638` (30. 6.):** Prijelaz s Nav2 navigacije na direct `cmd_vel` vizualno vođenje zbog driftanja skid-steera ([[D-04_visual_servo_instead_nav2]]). Uklonjen lažni teleport kocke; uveden `DetachableJoint` s obostranom kontaktom potvrdom ([[D-05_contact_verified_attach]]).
-- **Commit `c504720` (15./16. 7.):** Prelazak s tanke šipke na punu kocku 0.3 m po zadatku. Razvijena kartezijska press-putanja s 2π unwrapom zglobova i sinkroniziranim pritiskom zatvorenim hvataljkama ([[S-08_grasp_squeeze_attach]]).
-- **Commit `73617e8` (16. 7.):** Dodano spuštanje s kontaktom pri odlaganju, uklanjanje kolizijskog objekta kocke nakon hvata i eksperimentalni parametar `probe_transport`.
+- **Commit (30. 6.):** Prijelaz s Nav2 navigacije na direct `cmd_vel` vizualno vođenje zbog driftanja skid-steera ([[D-04_visual_servo_instead_nav2]]). Uklonjen lažni teleport kocke; uveden `DetachableJoint` s obostranom kontaktom potvrdom ([[D-05_contact_verified_attach]]).
+- **Commit (15./16. 7.):** Prelazak s tanke šipke na punu kocku 0.3 m po zadatku. Razvijena kartezijska press-putanja s 2π unwrapom zglobova i sinkroniziranim pritiskom zatvorenim hvataljkama ([[S-08_grasp_squeeze_attach]]).
+- **Commit (16. 7.):** Dodano spuštanje s kontaktom pri odlaganju, uklanjanje kolizijskog objekta kocke nakon hvata i eksperimentalni parametar `probe_transport`.
 
 ### Faza 3: Izolacija projektnog okoliša (10. 9. 2026.)
-- **Commitovi `31df80e` … `ebd392e` … `f046e98`:** Riješen slom okoliša uzrokovan sistemskim `apt upgradeom` ([[P-31_apt_upgrade_breakage]]). Kreiran [scripts/run_native.sh](../../scripts/run_native.sh) koji strogo čisti varijable okoline (Zenoh, tuđi workspaceovi) i forsira Fast DDS, domenu 5 i localhost. Upstream paketi pinani u [ros2.repos](../../ros2.repos).
+- **Commitovi … …:** Riješen slom okoliša uzrokovan sistemskim `apt upgradeom` ([[P-31_apt_upgrade_breakage]]). Kreiran [scripts/run_native.sh](../../scripts/run_native.sh) koji strogo čisti varijable okoline (Zenoh, tuđi workspaceovi) i forsira Fast DDS, domenu 5 i localhost. Upstream paketi pinani u [ros2.repos](../../ros2.repos).
 
 ### Faza 4: Trosobni svijet, mjerenje dimenzija i Obsidian bilješke (13. 9. 2026., jutro)
-- **Commitovi `5f6d016` … `2bda09e` … `7f24fbd` … `cb9f459`:**
+- **Commitovi … … …:**
   - Uvedena kompletna baza znanja u `notes/` (21 R, 10 S, 36 P, 15 D kartica).
   - Kreiran novi svijet s tri sobe u L (HOME, PLAVA, CRVENA), 6×6 m, zidovi podignuti na 3.0 m, prolazi 1.0 m, kocka olakšana na 0.3 kg ([[D-13_three_room_world]], [[D-14_light_box_free_size]]).
   - Izmjerene stvarne dimenzije robota: u novoj pozi `ARM_CARRY_V2` robot je širok **85.4 cm**, dug 1.04 m, visok 1.45 m ([notes/08_poze.md](../08_poze.md)).
@@ -262,7 +262,7 @@ Prilikom analize radnog prostora uočene su sljedeće konkretne neusklađenosti:
 | # | Tema proturječja | Lokacija A | Lokacija B | Stvarno stanje i objašnjenje |
 |---|---|---|---|---|
 | 1 | **Status hvata (R-17)** | [danas.md:20](../07_predaja/danas.md): `✅ (🧪 zadnje izmjene)` | [00_MAPA.md:17,83](../00_MAPA.md): `❌ hvat nije dobar (korisnik, 13. 9.)` | Korisnik je 13. 9. povukao ocjenu da hvat radi. R-17 je **otvoren**. |
-| 2 | **Širina prolaza (vrata)** | [izvori.md:8](../01_zahtjevi/izvori.md): `0.8 m` po [ZAD]; [danas.md:17](../07_predaja/danas.md): `0.9 m` | [seminar_world.sdf:13](../../src/pas_dual_arm_bringup/worlds/seminar_world.sdf): `1.0 m`; [STATE.md:258](../../STATE.md): `1.2 m` | U SDF-u su vrata **1.0 m** (proširena u commitu `e99316e`). 0.8 i 0.9 m su zastarjeli zapisi. |
+| 2 | **Širina prolaza (vrata)** | [izvori.md:8](../01_zahtjevi/izvori.md): `0.8 m` po [ZAD]; [danas.md:17](../07_predaja/danas.md): `0.9 m` | [seminar_world.sdf:13](../../src/pas_dual_arm_bringup/worlds/seminar_world.sdf): `1.0 m`; [STATE.md:258](../../STATE.md): `1.2 m` | U SDF-u su vrata **1.0 m** (proširena u commitu). 0.8 i 0.9 m su zastarjeli zapisi. |
 | 3 | **Širina robota u carry pozi** | [danas.md:32](../07_predaja/danas.md): `1.26 m`; `main_task.py`: `~0.6 m` | [08_poze.md:22](../08_poze.md): `85.4 cm`; Run 40 izmjereno: `1.109 m` | Statička poza `ARM_CARRY_V2` je **85.4 cm**, ali u vožnji progib zglobova širi ruke na **1.109 m**. |
 | 4 | **Popis odluka u vodičima** | [AGENT_GUIDE.md:78](../AGENT_GUIDE.md) i [00_MAPA.md:103](../00_MAPA.md) završavaju s `D-14` | Postoji datoteka [D-15_door_transit_behaviour.md](../04_odluke/D-15_door_transit_behaviour.md) | Odluka `D-15` je napisana, ali nije uvrštena u popise na dnu vodiča. |
 | 5 | **Vezanje kocke pri spawnu** | [robot.urdf.xacro:191](../../src/pas_dual_arm_bringup/urdf/robot.urdf.xacro): `starts_attached="true"` | [mapping.launch.py](../../src/pas_dual_arm_bringup/launch/mapping.launch.py) i [mapping_tour.py](../../src/pas_dual_arm_scripts/pas_dual_arm_scripts/mapping_tour.py) | `DetachableJoint` je kruto spojen pri spawnu; samo `main_task` šalje detach, SLAM tijek **nikada ne šalje detach**. |

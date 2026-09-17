@@ -1,11 +1,12 @@
 ---
 id: P-42
 type: problem
-status: otvoreno
+status: zatvoreno-nerijeseno
+verified: "Fortress kontakt nema iznos sile (0 od 49035); grana hvata silom napustena (D-21), misija je na position sucelju"
 requirements: ["[[R-17_dual_arm_lift]]", "[[R-06_realistic_parameters]]"]
 solutions: ["[[S-08_grasp_squeeze_attach]]"]
 decisions: ["[[D-21_effort_pid_actuator_profile]]"]
-updated: 2026-09-15
+updated: 2026-09-17
 ---
 # P-42 — Fortress kontaktni senzor ne daje sile, samo točke dodira
 

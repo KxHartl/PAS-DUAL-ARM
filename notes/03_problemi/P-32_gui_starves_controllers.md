@@ -15,8 +15,8 @@ Uz Gazebo GUI na opterećenom stroju spawneri kontrolera isteknu.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `7aaab94` | `--controller-manager-timeout 120` | pomaže (učitavanje traje 50–60 s) | — |
-| 2 | 23. 6. `45c32f1` | `sim.launch.py headless:=true` (samo server) | pouzdano | za automatske provjere |
+| 1 | 12. 6. | `--controller-manager-timeout 120` | pomaže (učitavanje traje 50–60 s) | — |
+| 2 | 23. 6. | `sim.launch.py headless:=true` (samo server) | pouzdano | za automatske provjere |
 | 3 | 30. 6. – 16. 7. | GUI runovi (s timeoutom) | rade | GUI je OK za demo |
 
 ## Trenutno rješenje

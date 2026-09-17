@@ -23,7 +23,7 @@ pa se tek onda odlučuje dalje. Vidi [[R-17_dual_arm_lift]].
 > **lokalno na disku**, ali su izašli iz repoa: pokus je napušten ([[D-21_effort_pid_actuator_profile]])
 > i nije dio gotove misije, koja radi na običnom `position` sučelju.
 > Biblioteka `force_model.py` je zadržana jer je koristi `scripts/grasp_width.py`.
-> Izmjerene brojke iz pokusa ostaju u [[P-41]], [[P-42]] i [[06_parametri]].
+> Izmjerene brojke iz pokusa ostaju u [[P-41_effort_pid_arm_actuator_profile]], [[P-42_contact_sensor_has_no_forces]] i [[06_parametri]].
 
 > [!important] Zadani profil i dalje ide na `position` sučelje
 > Bez zastavice `force_grasp:=true` ni ruke ni vodilice nemaju regulator. Ako nešto ne stigne na

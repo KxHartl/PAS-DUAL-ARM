@@ -20,7 +20,7 @@ modela.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `f79e393` | pri launchu proširiti xacro u Pythonu i ukloniti `-` iz svih `scale` atributa | 0 DART asserta, 7 kontrolera aktivno | rješenje (vizualno zanemarivo) |
+| 1 | 12. 6. | pri launchu proširiti xacro u Pythonu i ukloniti `-` iz svih `scale` atributa | 0 DART asserta, 7 kontrolera aktivno | rješenje (vizualno zanemarivo) |
 
 ## Trenutno rješenje
 Isti postupak u `sim.launch.py` i `move_group.launch.py`.

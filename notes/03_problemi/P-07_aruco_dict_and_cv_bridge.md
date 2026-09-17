@@ -20,7 +20,7 @@ Nema detekcije markera DICT_4X4_50. Čvor s `cv_bridge` se ruši.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `45ba359` | vlastiti čvor `aruco_detector` (`cv2.aruco`, `solvePnP` IPPE_SQUARE, slika bez `cv_bridge`) | poza ~1 cm od stvarne | rješenje ([[D-02_own_aruco_detector]]) |
+| 1 | 12. 6. | vlastiti čvor `aruco_detector` (`cv2.aruco`, `solvePnP` IPPE_SQUARE, slika bez `cv_bridge`) | poza ~1 cm od stvarne | rješenje ([[D-02_own_aruco_detector]]) |
 
 ## Ne ponavljati
 - Uvoditi `cv_bridge` u Python čvorove (numpy 2).

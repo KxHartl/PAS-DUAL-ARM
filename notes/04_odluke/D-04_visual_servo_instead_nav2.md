@@ -11,7 +11,7 @@ updated: 2026-09-13
 # D-04: Visual servo (cmd_vel na marker) umjesto Nav2/SLAM
 
 ## Kontekst
-Na punom autonomnom slijedu (30. 6., `580948b`) je 360° spin za traženje markera razbio
+Na punom autonomnom slijedu (30. 6.) je 360° spin za traženje markera razbio
 lokalizaciju: skid-steer kliže → wheel-odom i scan-matching su krivi → robot „odluta“ ~30 m.
 
 ## Opcije
@@ -19,7 +19,7 @@ lokalizaciju: skid-steer kliže → wheel-odom i scan-matching su krivi → robo
 2. **Zaobići Nav2/SLAM**: skeniranje pan-tilt kamerom uz mirnu bazu, pa izravni `cmd_vel` servo na
    TF `base_link → aruco_marker_frame`.
 
-## Odluka (30. 6., `33bc2ac`)
+## Odluka (30. 6.)
 Opcija 2. Servo je neovisan o SLAM-u i radi pouzdano za prilaz kutiji.
 
 ## Posljedice

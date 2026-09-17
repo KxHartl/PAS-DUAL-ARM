@@ -9,7 +9,7 @@ updated: 2026-09-16
 > runa** `mission.launch.py`: run A s navigacijskim pogledom, run B s pogledom na kocku.
 > Razlog za dva: `mission.launch.py` prima **jedan** `rviz_config`, a S4/S5 traže `nav2.rviz`
 > dok S6 traži `cube.rviz`. Otvaranje drugog RViza usred runa radi, ali otima CPU
-> `gz_ros2_control` petlji ([[P-32_gui_starves_control]]) — ne isplati se.
+> `gz_ros2_control` petlji ([[P-32_gui_starves_controllers]]) — ne isplati se.
 >
 > **Nikad headless** — za slike treba GUI.
 
@@ -80,7 +80,7 @@ RVIZ=$(./scripts/run_native.sh ros2 pkg prefix pas_dual_arm_bringup)/share/pas_d
 |---|---|---|---|
 | **S6** | Kamere na zapešćima vide markere | log: `STEP5a WRIST CAMERAS: markers 0.300 m apart` | RViz `cube.rviz`: **oba prozora kamera** („Slika – lijeva/desna ruka") s vidljivim markerom u svakom, plus oblak točaka i TF okviri. Cijeli RViz prozor |
 | **S7** | Trenutak hvata | log: `STEP5d left tool tip … mm from its target` | Gazebo **izbliza**: obje šake na suprotnim plohama kocke, jastučići na plohi |
-| **S11** | MoveIt scena *(neobavezno)* | dok ruke planiraju, prije `STEP5b` | RViz s `PlanningScene`: stol (ploča + noge) i kocka kao kolizijski objekti — dokaz da planer zna za svijet ([[P-23_moveit_scene]]) |
+| **S11** | MoveIt scena *(neobavezno)* | dok ruke planiraju, prije `STEP5b` | RViz s `PlanningScene`: stol (ploča + noge) i kocka kao kolizijski objekti — dokaz da planer zna za svijet ([[P-23_moveit_blind_to_world]]) |
 
 ---
 

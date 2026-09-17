@@ -1,13 +1,13 @@
 ---
 id: PARAMETRI
 type: registar
-updated: 2026-09-15
+updated: 2026-09-17
 ---
 # Registar parametara (jedini izvor istine za podesive vrijednosti)
 
 > [!warning] Pravilo
 > Svaka promjena vrijednosti se upisuje **ovdje** (nova vrijednost + datum) **i** kao novi red u
-> tablici pokušaja pripadne P-kartice. Vrijednosti su pročitane iz koda 13. 9. 2026. (`datoteka:linija`).
+> tablici pokušaja pripadne P-kartice. Vrijednosti su pročitane iz koda; zadnja provjera 17. 9. 2026. (`datoteka:linija`).
 > Kod: `MT` = `src/pas_dual_arm_scripts/pas_dual_arm_scripts/main_task.py`,
 > `URDF` = `src/pas_dual_arm_bringup/urdf/robot.urdf.xacro`,
 > `CTRL` = `src/pas_dual_arm_bringup/config/controllers.yaml`,

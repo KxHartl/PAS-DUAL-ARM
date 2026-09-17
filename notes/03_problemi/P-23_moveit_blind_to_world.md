@@ -19,7 +19,7 @@ korisnik u GUI-ju).
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 15./16. 7. `c504720` | `publish_collision_scene`: pod, stol (iz visine kocke), kocka kao `CollisionObject` | nema prolaza kroz stol | rješenje |
+| 1 | 15./16. 7. | `publish_collision_scene`: pod, stol (iz visine kocke), kocka kao `CollisionObject` | nema prolaza kroz stol | rješenje |
 
 ## Povezano
 Nakon attacha kocku treba ukloniti iz scene ([[P-30_stale_collision_object]]).

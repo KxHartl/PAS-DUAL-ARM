@@ -1,13 +1,14 @@
 ---
 id: R-18
 type: zahtjev
-status: djelomicno
+status: ispunjeno
+verified: "5/5 prolaza u oba smjera kroz oboja vrata (runovi 62, 70)"
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-06_navigation]]", "[[S-09_task_orchestration]]"]
 problems: ["[[P-12_door_too_narrow]]", "[[P-35_arm_span_too_wide_for_door]]"]
 decisions: ["[[D-08_door_widened]]"]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # R-18: Prolaz kroz vrata BEZ kutije
 
@@ -23,7 +24,7 @@ Prazan robot (ruke uvučene) prođe kroz otvor od ~0.9 m bez sudara sa zidom, au
 - [ ] ruke u `ARM_CARRY` ili tuck pozi tijekom prolaza
 
 ## Trenutno stanje
-⚠ Jednom provjereno **kroz 1.2 m**, headless, 23. 6. (`45c32f1`): baza je išla x 0.45 → 3.07
+⚠ Jednom provjereno **kroz 1.2 m**, headless, 23. 6. (): baza je išla x 0.45 → 3.07
 preko Nav2, uz staging poziciju ispred vrata. Kroz 0.9 m nikad. Trenutni `main_task` uopće ne
 vozi kroz vrata.
 

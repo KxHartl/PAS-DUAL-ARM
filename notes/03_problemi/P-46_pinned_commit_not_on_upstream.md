@@ -42,13 +42,13 @@ Ostala četiri paketa su bila uredno pinirana na stvarne upstream commitove.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 16. 9. / `91fcbbf` | Klon objavljenog repoa u izoliranu mapu, `vcs import`, `apply_patches`, `colcon build` | ❌ **0 paketa**; `pan_tilt_description` i `pan_tilt_bringup` padaju na `find_package(catkin)`, 10 prekinuto | kvar postoji i reproducibilan je izvan našeg workspacea |
-| 2 | 16. 9. | Usporedba checkoutanih commitova s pinovima iz `ros2.repos` | ❌ `pan_tilt_ros` na `01b26f3` umjesto `b0f6534`; ostala četiri točna | `vcs import` je tiho odstupio, bez greške |
+| 1 | 16. 9. / | Klon objavljenog repoa u izoliranu mapu, `vcs import`, `apply_patches`, `colcon build` | ❌ **0 paketa**; `pan_tilt_description` i `pan_tilt_bringup` padaju na `find_package(catkin)`, 10 prekinuto | kvar postoji i reproducibilan je izvan našeg workspacea |
+| 2 | 16. 9. | Usporedba checkoutanih commitova s pinovima iz `ros2.repos` | ❌ `pan_tilt_ros` na umjesto `b0f6534`; ostala četiri točna | `vcs import` je tiho odstupio, bez greške |
 | 3 | 16. 9. | `git cat-file -e b0f6534` u svježem klonu | ❌ `Not a valid object name` | pinani commit **ne postoji** na upstreamu |
 | 4 | 16. 9. | `git branch -r --contains` nad svih pet paketa u našem workspaceu | `pan_tilt_ros` jedini **nije** ni na jednoj remote grani | commit je naš lokalni; ostali su čisti |
 | 5 | 16. 9. | Provjera grane na koju se palo: `build_type` u `pan_tilt_description/package.xml` | `master` → catkin; `humble-devel` → `ament_cmake` | fallback je odveo na ROS 1 granu, odatle greška |
-| 6 | 16. 9. / `9663b3b` | Re-pin na roditelja `9b08758` (postoji na `origin/humble-devel`) + naš popravak izvučen u `patches/pan_tilt_ros-inertials-and-effort-limits.patch` | ✅ `git apply --check` čist; obje zakrpe se primjenjuju | popravak se nosi kao i svaka druga izmjena tuđeg koda |
-| 7 | 16. 9. / `9663b3b` | Ponovni izolirani test: klon → `vcs import` → `apply_patches` → `colcon build` | ✅ **25 paketa, 0 neuspjelih**; `verify_environment` **17/17**; `check_doors`/`check_zones` `PASS`; karta instalirana u `share/` | riješeno |
+| 6 | 16. 9. / | Re-pin na roditelja `9b08758` (postoji na `origin/humble-devel`) + naš popravak izvučen u `patches/pan_tilt_ros-inertials-and-effort-limits.patch` | ✅ `git apply --check` čist; obje zakrpe se primjenjuju | popravak se nosi kao i svaka druga izmjena tuđeg koda |
+| 7 | 16. 9. / | Ponovni izolirani test: klon → `vcs import` → `apply_patches` → `colcon build` | ✅ **25 paketa, 0 neuspjelih**; `verify_environment` **17/17**; `check_doors`/`check_zones` `PASS`; karta instalirana u `share/` | riješeno |
 
 > [!note] Lažni `[FAIL]` u testiranju
 > Jedan prolaz `verify_environment.sh` javio je 16/17. Uzrok je bio moj `PAS_DUAL_ARM_ROS_DOMAIN_ID=7`
@@ -61,6 +61,6 @@ Ostala četiri paketa su bila uredno pinirana na stvarne upstream commitove.
   Lokalni commit izgleda ispravno kod nas i pada **samo** onome tko klonira.
 - Pravilo je upisano u zaglavlje `ros2.repos`.
 - **Repozitorij se prije predaje testira iz svježeg klona**, ne iz radnog workspacea — vidi
-  [[verify-remote-by-cloning]] obrazac u [[02_testiranje]].
+  provjerom svježeg klona obrazac u [[02_testiranje]].
 
 Vezano: [[S-10_build_run_environment]], [[vanjski_paketi]].

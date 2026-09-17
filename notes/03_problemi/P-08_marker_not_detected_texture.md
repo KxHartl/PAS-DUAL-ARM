@@ -20,8 +20,8 @@ Kamera vidi kutiju, a detektor nikad ne nađe marker. Hvat pada na hardkodiranu 
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `45ba359` | novi PNG: marker 75 % plohe + bijela margina | detekcija uz pitch 0.72 | uzrok 1 riješen |
-| 2 | 29. 6. `e9157e1` | materijal: `metalness` 0, `roughness` 1, `specular` 0 + `CORNER_REFINE_SUBPIX` | pouzdana detekcija, TF 0.858 vs 0.85 | uzrok 2 riješen |
+| 1 | 12. 6. | novi PNG: marker 75 % plohe + bijela margina | detekcija uz pitch 0.72 | uzrok 1 riješen |
+| 2 | 29. 6. | materijal: `metalness` 0, `roughness` 1, `specular` 0 + `CORNER_REFINE_SUBPIX` | pouzdana detekcija, TF 0.858 vs 0.85 | uzrok 2 riješen |
 
 ## Trenutno rješenje
 Ploča markera 0.22 m na -X plohi kocke, marker 0.165 m (`aruco.launch.py:20`), matiran.

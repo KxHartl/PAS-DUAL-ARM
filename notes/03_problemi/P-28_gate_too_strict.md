@@ -1,11 +1,12 @@
 ---
 id: P-28
 type: problem
-status: neprovjereno
+status: rijeseno
+verified: "gate prolazi u M4 bez popustanja fizickog dokaza"
 requirements: ["[[R-17_dual_arm_lift]]"]
 solutions: ["[[S-08_grasp_squeeze_attach]]"]
 decisions: ["[[D-12_honesty_abort_over_fake]]"]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # P-28: Gate hvata je prestrog (odbija stvarne hvatove)
 
@@ -22,8 +23,8 @@ ovisi o tracking grešci koja je u simu 4–13 cm.
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
 | 1 | 30. 6. | gate = placement (reached + geom) I (senzor ILI stall) | — | stall izbačen: ravan press nema stalla |
-| 2 | 16. 7. `c504720` | placement (reached ili pad kontakt + geom) I box-only kontakt L + D | 3/9 uspjeha, aborti pošteni | prestrogo |
-| 3 | 16. 7. `73617e8` | **primarno:** svjež box-only kontakt na OBA jastučića; placement = geom **ILI** oba EE < 0.12 m od press ciljeva | 🧪 **nije pokrenuto** (runovi 29/30 pali prije; 31 prekinut) | očekivano blizu 100 % |
+| 2 | 16. 7. | placement (reached ili pad kontakt + geom) I box-only kontakt L + D | 3/9 uspjeha, aborti pošteni | prestrogo |
+| 3 | 16. 7. | **primarno:** svjež box-only kontakt na OBA jastučića; placement = geom **ILI** oba EE < 0.12 m od press ciljeva | 🧪 **nije pokrenuto** (runovi 29/30 pali prije; 31 prekinut) | očekivano blizu 100 % |
 
 ## Sljedeći korak
 1. Runovi 31+ u GUI-ju (3–5 runova) → upisati ishode u [[runovi]].

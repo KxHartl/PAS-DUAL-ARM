@@ -22,7 +22,7 @@ različite radne prostore za press.
 |---|---|---|---|---|
 | 1 | 15. 7. | kocka gdje je prilaz ostavi (y ≈ -0.13) | lijeva pada | — |
 | 2 | 16. 7. | centrirati kocku na y = 0 | desna pada | — |
-| 3 | 16. 7. `c504720` | **centrirajući okret na y ≈ -0.075** (sredina), kut iz odometrije | obje ruke izvedive | rješenje |
+| 3 | 16. 7. | **centrirajući okret na y ≈ -0.075** (sredina), kut iz odometrije | obje ruke izvedive | rješenje |
 | — | 15. 9., radno stablo | Traženo IK rješenje za pomake 0.5 / 5 / 10 mm od **trenutne** poze svake ruke, pa izmjerena i točnost rješenja (kroz `/compute_fk`) i koliko se zglobovi moraju pomaknuti | **IK je točan: pogreška poze 0.00 mm za sve slučajeve, obje ruke.** Ali za pomak od **0.5 mm** lijeva ruka vrati rješenje **3.04 rad** od trenutne konfiguracije (preskok grane), a desna **0.0036 rad**. Isto vrijedi za 5 i 10 mm: lijeva 2.84–3.04 rad, desna 0.016–0.037 rad | Asimetrija **nije** u dosegu ni u točnosti IK-a nego u **izboru grane**. Zbog toga stisak silom povremeno pukne na `left IK branch/tracking jump`: zaštita ispravno odbije izvesti zamah od 3 rad za pomak od pola milimetra. Sjeme (`seed`) iz trenutnog stanja to ne spriječi |
 
 ## Izmjereno 15. 9.: lijeva ruka je sustavno lošija, desna je izvrsna

@@ -22,8 +22,8 @@ updated: 2026-09-13
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 15./16. 7. `c504720` | sve „čekaj N s“ petlje → monotoni ili **sim-time** rok; `drive()` tempiran sim vremenom | vožnje točne | rješenje |
-| 2 | 15./16. 7. `c504720` | stvarni pomak iz `/base_controller/odom`, a ne iz naredbe | dovoz/okret korigirani | rješenje |
+| 1 | 15./16. 7. | sve „čekaj N s“ petlje → monotoni ili **sim-time** rok; `drive()` tempiran sim vremenom | vožnje točne | rješenje |
+| 2 | 15./16. 7. | stvarni pomak iz `/base_controller/odom`, a ne iz naredbe | dovoz/okret korigirani | rješenje |
 
 ## Ne ponavljati
 - `spin_once` kao pauzu; wall-clock tempiranje gibanja u simu.

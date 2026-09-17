@@ -49,9 +49,9 @@ kutiju nakon **dokazanog** obostranog kontakta nosi DetachableJoint na lijevom z
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 30. 6. | GUI | ploča: contact check, attach, lift, place na isti stol | `ec766a2`, `5c9e201` |
-| 16. 7. | GUI | kocka: 3 puna ciklusa hvat + lift; ~15 poštenih aborta | `c504720` |
-| 16. 7. | — | gate popuštanje, kontaktni place, REMOVE, transport-proba: **samo build** | `73617e8` |
+| 30. 6. | GUI | ploča: contact check, attach, lift, place na isti stol | — |
+| 16. 7. | GUI | kocka: 3 puna ciklusa hvat + lift; ~15 poštenih aborta | |
+| 16. 7. | — | gate popuštanje, kontaktni place, REMOVE, transport-proba: **samo build** | |
 
 ## Otvoreno
 - Potvrditi uspješnost s novim gateom (run 31+).

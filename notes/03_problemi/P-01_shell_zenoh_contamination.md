@@ -20,8 +20,8 @@ nedostupan), `ROS_DOMAIN_ID=5` i učitavao `~/ws_moveit2`, `~/stage_ws`, `~/astr
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `7aaab94` | `SetEnvironmentVariable` Fast DDS + prazan `ZENOH_CONFIG_OVERRIDE` u svakom launchu | launch radi | pokriva launch, ali ne ručne naredbe |
-| 2 | 10. 9. `31df80e` `eeefb28` `ebd392e` | neutralan `~/.bashrc` + `scripts/run_native.sh` (samo Humble + overlay, domena 5, localhost) | čisti rebuild 25/25 | **rješenje** |
+| 1 | 12. 6. | `SetEnvironmentVariable` Fast DDS + prazan `ZENOH_CONFIG_OVERRIDE` u svakom launchu | launch radi | pokriva launch, ali ne ručne naredbe |
+| 2 | 10. 9. | neutralan `~/.bashrc` + `scripts/run_native.sh` (samo Humble + overlay, domena 5, localhost) | čisti rebuild 25/25 | **rješenje** |
 
 ## Trenutno rješenje
 [[D-11_project_scoped_ros_env]]. Svaki terminal otvoriti s `./scripts/run_native.sh`.

@@ -20,7 +20,7 @@ instancirali ([[P-09_omni_drive_on_fortress]]). `ign_ros2_control` je u isto vri
 2. Planarni „kinematski“ pogon (PAL `planar_move`, samo Classic).
 3. **`diff_drive_controller` na 4 kotača (skid-steer)**: x + yaw, odometrija, TF.
 
-## Odluka (23. 6., `6eb7487`)
+## Odluka (23. 6.)
 Opcija 3, kao **privremeno** rješenje: „x + yaw je sve što zadatak treba“.
 
 ## Posljedice

@@ -10,7 +10,7 @@ updated: 2026-09-13
 ---
 # S-07: MoveIt2 (konfiguracija + način korištenja)
 
-## Konfiguracija (`pas_dual_arm_moveit_config`, M3, `b7cfcd2`)
+## Konfiguracija (`pas_dual_arm_moveit_config`, M3)
 - SRDF grupe: `left_arm`, `right_arm`, `both_arms`, torzo, pan-tilt, obje hvataljke; stanja
   Home/Retract/Open/Close; 235 `disable_collisions` parova.
 - KDL kinematika po ruci, OMPL (RRTConnect default), limiti za svih 20 zglobova.
@@ -32,5 +32,5 @@ Lanac popravaka kartezijskog pressa: [[P-24_press_path_chain]]. Planning scena:
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 12. 6. | headless | obje ruke Home, hvataljka 0.600 | `b7cfcd2` |
-| 16. 7. | GUI | squeeze + lift, bez „čudnih rotacija“ | `c504720` |
+| 12. 6. | headless | obje ruke Home, hvataljka 0.600 | |
+| 16. 7. | GUI | squeeze + lift, bez „čudnih rotacija“ | |

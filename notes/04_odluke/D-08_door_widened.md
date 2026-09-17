@@ -18,9 +18,9 @@ Nav2 nije mogao isplanirati prolaz kroz 0.8 m: robot je širok 0.6 m, a footprin
 inflaciju 0.35 m.
 
 ## Odluka
-- 23. 6. (`45c32f1`): **1.2 m** (= 2× širina robota) + `inflation_radius` 0.35 → 0.15. Prolaz
+- 23. 6. (): **1.2 m** (= 2× širina robota) + `inflation_radius` 0.35 → 0.15. Prolaz
   provjeren headless.
-- 29. 6. (`e9157e1`): **2.0 m** (uzgredna izmjena u commitu percepcije; razlog nije zapisan,
+- 29. 6. (): **2.0 m** (uzgredna izmjena u commitu percepcije; razlog nije zapisan,
   vjerojatno slobodan prostor za eksperimente s kutijom).
 
 ## Posljedice

@@ -1,11 +1,12 @@
 ---
 id: P-18
 type: problem
-status: otvoreno
+status: rijeseno
+verified: "kutija prenesena kroz oboja vrata i odlozena (M4)"
 requirements: ["[[R-19_door_pass_with_box]]", "[[R-20_place_at_destination]]"]
 solutions: ["[[S-08_grasp_squeeze_attach]]", "[[S-09_task_orchestration]]", "[[S-06_navigation]]"]
 decisions: ["[[D-07_carry_on_left_wrist]]", "[[D-05_contact_verified_attach]]"]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # P-18: Vožnja baze s kutijom izbacuje kutiju
 
@@ -24,9 +25,9 @@ odleti. Zato se kutija dosad vraćala na isti stol.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 30. 6. `ec766a2` | okret baze 0.4 rad/s s pločom na zglobu | kutija ispala | — |
-| 2 | 30. 6. `5c9e201` | vožnja baze do zasebnog stola | kutija izbačena | odustano, place na isti stol |
-| 3 | 16. 7. `73617e8` | **transport-proba** `probe_transport`: nakon lifta otvori oba jastučića (test A), vozi 0.4 m + okret ~60° | 🧪 **nije pokrenuto** | — |
+| 1 | 30. 6. | okret baze 0.4 rad/s s pločom na zglobu | kutija ispala | — |
+| 2 | 30. 6. | vožnja baze do zasebnog stola | kutija izbačena | odustano, place na isti stol |
+| 3 | 16. 7. | **transport-proba** `probe_transport`: nakon lifta otvori oba jastučića (test A), vozi 0.4 m + okret ~60° | 🧪 **nije pokrenuto** | — |
 
 ## Trenutno rješenje
 Nema: place na isti stol ([[R-20_place_at_destination]] ⚠).

@@ -19,11 +19,11 @@ Nakon attacha kutija nedeterministički odleti preko svijeta (GUI i headless).
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 30. 6. `ec766a2` | jak stisak (120) + attach | kutija odleti | stisak se tuče sa spojem |
-| 2 | 30. 6. `ec766a2` | **attach PRIJE stiska** + nježan stisak (efort 20) | drži pri dizanju | ✅ za ploču |
-| 3 | 30. 6. `5c9e201` | desna ruka ostaje stisnuta i diže se svojim RRT putem | kutija odleti | nikad dvije krute veze |
-| 4 | 30. 6. `5c9e201` | **desna se otvori i povuče, nosi samo lijevi zglob** | drži, slegne na stol | ✅ ([[D-07_carry_on_left_wrist]]) |
-| 5 | 16. 7. `c504720` | squeeze: attach nakon gatea, desna odmah popušta (linearno −v 0.10) | 3 ciklusa bez odlijetanja | ✅ trenutno |
+| 1 | 30. 6. | jak stisak (120) + attach | kutija odleti | stisak se tuče sa spojem |
+| 2 | 30. 6. | **attach PRIJE stiska** + nježan stisak (efort 20) | drži pri dizanju | ✅ za ploču |
+| 3 | 30. 6. | desna ruka ostaje stisnuta i diže se svojim RRT putem | kutija odleti | nikad dvije krute veze |
+| 4 | 30. 6. | **desna se otvori i povuče, nosi samo lijevi zglob** | drži, slegne na stol | ✅ ([[D-07_carry_on_left_wrist]]) |
+| 5 | 16. 7. | squeeze: attach nakon gatea, desna odmah popušta (linearno −v 0.10) | 3 ciklusa bez odlijetanja | ✅ trenutno |
 
 ## Otvoreno
 Vožnja baze s kutijom na spoju → [[P-18_transport_drops_box]]. Glavna hipoteza je isti mehanizam:

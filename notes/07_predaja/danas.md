@@ -1,9 +1,26 @@
 ---
 id: DANAS
 type: plan
-updated: 2026-09-13
+updated: 2026-09-17
 ---
-# Zadnji dan (13. 9. 2026.): gap analiza i redoslijed
+# Plan predaje
+
+> [!warning] Gap analiza ispod je **arhiva od 13. 9. 2026.**
+> Sve što je ondje označeno kao ❌ ili ⚠ zatvoreno je 15.–16. 9. Aktualno stanje je u
+> [[00_MAPA]], a preostala odstupanja u [[odstupanja]]. Tablica se čuva jer pokazuje
+> redoslijed rada, ne trenutno stanje.
+
+## Aktualno otvoreno (17. 9. 2026.)
+Nakon profesorovih smjernica na objavljeni repo i seminar:
+1. **Video cijelog sustava** — nužno, ne postoji.
+2. **README na engleskom, samostalan, sa slikama** — ne smije upućivati u `notes/`.
+3. **Razdvajanje radnog i release repozitorija.**
+4. **Uskladiti seminar**: broj zahtjeva, kontaktni senzori, zazor kroz vrata, 0,835 m,
+   mapiranje vs. spremljena karta, formalniji izrazi, literatura.
+5. **Ponavljanja misije i statistika** — bez toga tvrdnje o robusnosti ne stoje.
+6. Slajdovi.
+
+## Gap analiza (13. 9. 2026., arhiva)
 
 > [!important] Redoslijed misije je iz [MAIL]
 > **Mapiranje (SLAM) → korisnik zada regiju (Nav2 u plavu sobu) → pronađi kutiju → podigni je
@@ -53,12 +70,11 @@ korak ostavlja nešto što se može pokazati: kartu, dolazak u regiju, hvat, pri
 time-boxan, a neuspjeh se piše kao iskreno odstupanje.
 
 ## Checklist predaje ([[R-21_deliverables]])
-- [ ] `seminar.tex` → PDF (FSB predložak i `build-docs.sh` su **lokalno**, u `.ai/`, izvan
-      repozitorija od 16. 9.; vidi [[vanjski_paketi]])
-- [ ] slike: robot (Gazebo), svijet s tri sobe, **SLAM karta u RViz-u**, TF stablo, graf čvorova,
-      hvat (sekvenca), dijagram slijeda misije
+- [x] `seminar.tex` → PDF (16. 9.; FSB predložak i `build-docs.sh` su **lokalno**, u `.ai/`,
+      izvan repozitorija; vidi [[vanjski_paketi]])
+- [x] slike: 13 rasterskih + 5 TikZ dijagrama u `seminar/slike/` (16. 9.)
 - [ ] video (GUI run) → `dist/`
 - [ ] slajdovi → `dist/`
-- [ ] `README.md` + `RUNNING.md` ažurni (jedna naredba do demoa)
-- [ ] [[odstupanja]] prenesena u seminar (poglavlje „Ograničenja“)
+- [ ] `README.md` **na engleskom**, samostalan, sa slikama; `RUNNING.md` ažuran
+- [x] [[odstupanja]] prenesena u seminar (poglavlje „Ograničenja“)
 - [ ] `git tag` predaje, `git status` čist

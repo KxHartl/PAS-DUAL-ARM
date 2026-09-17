@@ -1,7 +1,7 @@
 ---
 id: AGENT_GUIDE
 type: pravila
-updated: 2026-09-14
+updated: 2026-09-17
 ---
 # Vodič za agente (i ljude koji preuzimaju posao)
 
@@ -92,4 +92,5 @@ Detalji: `RUNNING.md`, [[S-10_build_run_environment]].
 [[D-13_three_room_world]] · [[D-14_light_box_free_size]] ·
 [[D-15_door_transit_behaviour]] (zamijenjena) · [[D-16_zones_from_detected_features]] ·
 [[D-17_closed_loop_door_transit]] (povučena) · [[D-18_verified_baseline_first]] ·
-[[D-19_dynamic_footprint]] · [[D-20_single_potential_field_costmap]]
+[[D-19_dynamic_footprint]] · [[D-20_single_potential_field_costmap]] ·
+[[D-21_effort_pid_actuator_profile]] (napušten pokus, vidi [[P-42_contact_sensor_has_no_forces]])

@@ -41,6 +41,6 @@ izvora (marker + oblak točaka) koji se međusobno provjeravaju.
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 12. 6. | headless | poza markera ~1 cm od ground trutha | `45ba359` |
-| 29. 6. | headless | pouzdana detekcija nakon matiranja | `e9157e1` |
-| 16. 7. | GUI | mjerenje + cross-check u svim runovima s kockom | `c504720` |
+| 12. 6. | headless | poza markera ~1 cm od ground trutha | |
+| 29. 6. | headless | pouzdana detekcija nakon matiranja | |
+| 16. 7. | GUI | mjerenje + cross-check u svim runovima s kockom | |

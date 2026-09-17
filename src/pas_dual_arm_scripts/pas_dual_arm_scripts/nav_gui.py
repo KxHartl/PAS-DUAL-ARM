@@ -27,7 +27,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String
+from std_msgs.msg import Empty, String
 from tf2_ros import Buffer, TransformListener
 
 from pas_dual_arm_scripts.room_navigator import HALF_LENGTH, HALF_WIDTH
@@ -50,6 +50,11 @@ class NavGuiNode(Node):
         # purpose: that one drives the base right now, this one hands the whole
         # run over to main_task, which drives through the navigator itself.
         self.mission = self.create_publisher(String, '/mission/start', 10)
+        # Mapping scenarios: the user decides when the map is good enough. The
+        # handoff node saves it and the run switches from SLAM to localisation.
+        self.finish_mapping = self.create_publisher(Empty, '/mapping/finish', 10)
+        self.mapping_state = None
+        self.explore_state = None
         self.status = {'state': 'idle', 'detail': 'waiting for the navigator'}
         self.task_status = {
             'step': 0, 'total_steps': 8, 'phase': 'Pripravan',
@@ -61,6 +66,8 @@ class NavGuiNode(Node):
         self.create_subscription(String, '/room_navigator/status', self._on_status, latched)
         self.create_subscription(String, '/mission/task_status', self._on_task_status, latched)
         self.create_subscription(String, '/nav_graph', self._on_graph, latched)
+        self.create_subscription(String, '/mapping/handoff_status', self._on_mapping, 10)
+        self.create_subscription(String, '/exploration/status', self._on_explore, 10)
         self.create_subscription(LaserScan, '/scan_filtered', self._on_scan,
                                  qos_profile_sensor_data)
         self._tf = Buffer()
@@ -90,6 +97,16 @@ class NavGuiNode(Node):
         except Exception:
             pass
 
+    def _on_mapping(self, msg):
+        state, _, detail = msg.data.partition('|')
+        self.mapping_state = (state, detail)
+
+    def _on_explore(self, msg):
+        try:
+            self.explore_state = json.loads(msg.data)
+        except json.JSONDecodeError:
+            self.explore_state = {'state': 'idle', 'detail': msg.data}
+
     def _on_graph(self, msg):
         self.graph = json.loads(msg.data)
 
@@ -99,6 +116,10 @@ class NavGuiNode(Node):
     def send(self, room):
         self.goto.publish(String(data=room))
         self.get_logger().info(f'requested: {room}')
+
+    def end_mapping(self):
+        self.finish_mapping.publish(Empty())
+        self.get_logger().info('mapping finished: saving the map and handing over to AMCL')
 
     def start_mission(self, room):
         self.mission.publish(String(data=room))
@@ -155,6 +176,20 @@ class NavGui:
             button.grid(row=1, column=column, **pad)
             self.buttons[room] = button
 
+        # Mapping scenarios only: this button is what ends the mapping phase.
+        # It stays visible (and harmless) in the plain mission scenario, where
+        # nothing is listening on /mapping/finish.
+        self.map_done = tk.Button(frame, text='MAPIRANJE GOTOVO  →  spremi kartu i kreni u misiju',
+                                  height=2, bg='#2c5282', fg='white',
+                                  font=('TkDefaultFont', 10, 'bold'),
+                                  command=self.node.end_mapping)
+        self.map_done.grid(row=2, column=0, columnspan=3, sticky='ew', **pad)
+
+        self.map_state = tk.Label(frame, text='', font=('TkDefaultFont', 9),
+                                  fg='white', bg=COLOURS['idle'], anchor='w',
+                                  padx=10, pady=3)
+        self.map_state.grid(row=3, column=0, columnspan=3, sticky='ew', **pad)
+
         # Hands the whole run to the mission node: it drives to the cube itself,
         # picks it up, carries it to the red room and places it. The buttons
         # above stay what they are - plain drives, nothing else.
@@ -162,39 +197,39 @@ class NavGui:
                             bg='#276749', fg='white',
                             font=('TkDefaultFont', 11, 'bold'),
                             command=lambda: self.node.start_mission('blue'))
-        mission.grid(row=2, column=0, columnspan=3, sticky='ew', **pad)
+        mission.grid(row=4, column=0, columnspan=3, sticky='ew', **pad)
 
         stop = tk.Button(frame, text='STOP', height=1, bg='#c53030', fg='white',
                          font=('TkDefaultFont', 10, 'bold'),
                          command=lambda: self.node.send('stop'))
-        stop.grid(row=3, column=0, columnspan=3, sticky='ew', **pad)
+        stop.grid(row=5, column=0, columnspan=3, sticky='ew', **pad)
 
         self.state = tk.Label(frame, text='idle', font=('TkDefaultFont', 10, 'bold'),
                               fg='white', bg=COLOURS['idle'], anchor='w', padx=10, pady=4)
-        self.state.grid(row=4, column=0, columnspan=3, sticky='ew', **pad)
+        self.state.grid(row=6, column=0, columnspan=3, sticky='ew', **pad)
 
         self.detail = ttk.Label(frame, text='', wraplength=580, justify='left')
-        self.detail.grid(row=5, column=0, columnspan=3, sticky='w', **pad)
+        self.detail.grid(row=7, column=0, columnspan=3, sticky='w', **pad)
 
         # --- Task / Mission section ---
-        ttk.Separator(frame, orient='horizontal').grid(row=6, column=0, columnspan=3,
+        ttk.Separator(frame, orient='horizontal').grid(row=8, column=0, columnspan=3,
                                                        sticky='ew', pady=5)
         ttk.Label(frame, text='Trenutni zadatak / Misija', font=('TkDefaultFont', 11, 'bold')) \
-            .grid(row=7, column=0, columnspan=3, sticky='w', **pad)
+            .grid(row=9, column=0, columnspan=3, sticky='w', **pad)
 
         self.task_phase = tk.Label(frame, text='ČEKA POKRETANJE', font=('TkDefaultFont', 10, 'bold'),
                                    fg='white', bg=COLOURS['idle'], anchor='w', padx=10, pady=4)
-        self.task_phase.grid(row=8, column=0, columnspan=3, sticky='ew', **pad)
+        self.task_phase.grid(row=10, column=0, columnspan=3, sticky='ew', **pad)
 
         self.task_detail = ttk.Label(frame, text='Pripravan za rad.', wraplength=580, justify='left')
-        self.task_detail.grid(row=9, column=0, columnspan=3, sticky='w', **pad)
+        self.task_detail.grid(row=11, column=0, columnspan=3, sticky='w', **pad)
 
         # Mini console / log
         ttk.Label(frame, text='Dnevnik koraka misije:', font=('TkDefaultFont', 9, 'italic')) \
-            .grid(row=10, column=0, columnspan=3, sticky='w', padx=8, pady=(3, 0))
+            .grid(row=12, column=0, columnspan=3, sticky='w', padx=8, pady=(3, 0))
 
         log_frame = ttk.Frame(frame)
-        log_frame.grid(row=11, column=0, columnspan=3, sticky='nsew', padx=8, pady=2)
+        log_frame.grid(row=13, column=0, columnspan=3, sticky='nsew', padx=8, pady=2)
         self.task_log_text = tk.Text(log_frame, height=5, bg='#1a202c', fg='#e2e8f0',
                                      font=('TkFixedFont', 8), wrap='word', state='disabled')
         log_scroll = ttk.Scrollbar(log_frame, orient='vertical', command=self.task_log_text.yview)
@@ -210,17 +245,39 @@ class NavGui:
         self._rendered_history_count = 0
 
         # --- Navigation / Readout section ---
-        ttk.Separator(frame, orient='horizontal').grid(row=12, column=0, columnspan=3,
+        ttk.Separator(frame, orient='horizontal').grid(row=14, column=0, columnspan=3,
                                                        sticky='ew', pady=5)
         self.readout = ttk.Label(frame, text='', justify='left',
                                  font=('TkFixedFont', 9))
-        self.readout.grid(row=13, column=0, columnspan=3, sticky='w', **pad)
+        self.readout.grid(row=15, column=0, columnspan=3, sticky='w', **pad)
 
         for column in range(3):
             frame.columnconfigure(column, weight=1)
         self.refresh()
 
+    MAP_COLOURS = {'mapping': '#2b6cb0', 'saving': '#b7791f', 'saved': '#276749',
+                   'failed': '#9b2c2c', 'done': '#276749', 'driving': '#2b6cb0',
+                   'doorway': '#6b46c1', 'planning': '#2b6cb0', 'stalled': '#975a16',
+                   'waiting': '#b7791f'}
+
+    def refresh_mapping(self):
+        """Show the mapping/exploration phase, and hide the row when idle."""
+        explore = self.node.explore_state
+        handoff = self.node.mapping_state
+        if handoff and handoff[0] in ('saving', 'saved', 'failed'):
+            state, detail = handoff
+        elif explore:
+            state, detail = explore.get('state', 'idle'), explore.get('detail', '')
+        elif handoff:
+            state, detail = handoff
+        else:
+            self.map_state.configure(text='', bg=COLOURS['idle'])
+            return
+        self.map_state.configure(text=f'MAPIRANJE: {state.upper()} — {detail}',
+                                 bg=self.MAP_COLOURS.get(state, '#4a5568'))
+
     def refresh(self):
+        self.refresh_mapping()
         status = self.node.status
         state = status.get('state', 'idle')
         self.state.configure(text=f"NAV: {state.upper()}", bg=COLOURS.get(state, '#4a5568'))

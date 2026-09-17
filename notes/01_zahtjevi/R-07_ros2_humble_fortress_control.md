@@ -26,10 +26,10 @@ controller_manager.
 - [x] reproducibilan build iz čistog checkouta (`ros2.repos` + `apply_patches.sh`)
 
 ## Trenutno stanje
-✅ Od 12. 6. (M0 + M1, `7aaab94`). Aktivni kontroleri: `joint_state_broadcaster`,
+✅ Od 12. 6. (M0 + M1). Aktivni kontroleri: `joint_state_broadcaster`,
 `left/right_arm_controller`, `torso_controller`, `pan_tilt_controller`,
 `left/right_gripper_controller`, `base_controller`. Okoliš je izoliran 10. 9.
-(`scripts/run_native.sh`), provenance pinan (`f046e98`).
+(`scripts/run_native.sh`), provenance pinan ().
 
 ## Problemi
 - [[P-01_shell_zenoh_contamination]], [[P-02_robot_description_yaml_parse]],

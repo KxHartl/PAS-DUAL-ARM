@@ -18,5 +18,5 @@ Pod Fortressom ništa ne objavljuje `/scan` ni sliku.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `ae60d9b` | native Ignition `gpu_lidar` na `virtual_base_laser_link` + RGB `camera` na `camera_link` + bridge | `/scan` 360 zraka, slika ~12 Hz | rješenje |
-| 2 | 30. 6. `e31f2fa` | kamera → `rgbd_camera` (RGB + dubina + oblak) | 640×480 oblak | potrebno za mjerenje kutije |
+| 1 | 12. 6. | native Ignition `gpu_lidar` na `virtual_base_laser_link` + RGB `camera` na `camera_link` + bridge | `/scan` 360 zraka, slika ~12 Hz | rješenje |
+| 2 | 30. 6. | kamera → `rgbd_camera` (RGB + dubina + oblak) | 640×480 oblak | potrebno za mjerenje kutije |

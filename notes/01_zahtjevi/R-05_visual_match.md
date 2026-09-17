@@ -15,7 +15,7 @@ updated: 2026-09-13
 > „Šaljem sliku cijelog sustava kako bi trebao izgledati“ [MAIL]
 > Slika: `data/raw/zadatak/mail_img-000.png`
 
-![[mail_img-000.png]]
+![Ciljani izgled sustava (B. Ćaran, prilog uz [MAIL])](../../data/raw/zadatak/mail_img-000.png)
 
 ## Tehnički znači
 Raspored komponenti odgovara slici:
@@ -29,7 +29,7 @@ Raspored komponenti odgovara slici:
 - [x] cijeli robot se renderira u Gazebu (bez nevidljivih dijelova)
 
 ## Trenutno stanje
-✅ Geometrija je kalibrirana 12. 6. uz vizualne provjere korisnika (`5b96ffc` … `d1af724`;
+✅ Geometrija je kalibrirana 12. 6. uz vizualne provjere korisnika ( …;
 protokol GUI checkpointa je danas [[AGENT_GUIDE]] §6). Mjere su u [[S-01_robot_description]]
 § „Geometrija montaže": torzo rpy 0, klizači na ±Y, desni rotiran 180°.
 Izvor mjera je CAD slika `data/raw/zadatak/torzo_cad_mjere.png`. Mesh URI popravak

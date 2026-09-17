@@ -1,13 +1,14 @@
 ---
 id: R-19
 type: zahtjev
-status: otvoreno
+status: ispunjeno
+verified: "run M4: kutija prosla oboja vrata, arms CARRY_V4 held"
 source: "[MAIL]"
 parent: "[[00_MAPA]]"
 solutions: ["[[S-06_navigation]]", "[[S-08_grasp_squeeze_attach]]"]
 problems: ["[[P-18_transport_drops_box]]", "[[P-12_door_too_narrow]]", "[[P-35_arm_span_too_wide_for_door]]"]
 decisions: ["[[D-07_carry_on_left_wrist]]"]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 # R-19: Prolaz kroz vrata S kutijom
 
@@ -25,7 +26,7 @@ hvatu, a robot s kockom stane u otvor.
 
 ## Trenutno stanje
 ❌ **Nikad nije uspjelo.** Gibanje baze s kockom na DetachableJointu izbacivalo je kutiju (30. 6.).
-Transport-proba je **napisana, a nije pokrenuta** (`probe_transport`, `73617e8`), a
+Transport-proba je **napisana, a nije pokrenuta** (`probe_transport`), a
 `task.launch.py` taj parametar **ne prosljeđuje** ([[P-18_transport_drops_box]]).
 
 ## Kako se rješava

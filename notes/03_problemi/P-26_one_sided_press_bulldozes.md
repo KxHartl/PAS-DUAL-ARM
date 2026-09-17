@@ -20,7 +20,7 @@ istovremeno.
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
 | 1 | 15. 7. | press ruku redom kroz `move_group` | kocka odgurnuta | — |
-| 2 | 16. 7. `c504720` | obje MoveIt kartezijske putanje poslati **istovremeno** izravno na `left/right_arm_controller` (FollowJointTrajectory) | sile se poništavaju, kocka ostaje | rješenje |
+| 2 | 16. 7. | obje MoveIt kartezijske putanje poslati **istovremeno** izravno na `left/right_arm_controller` (FollowJointTrajectory) | sile se poništavaju, kocka ostaje | rješenje |
 
 ## Trenutno rješenje
 `press_both_linear` (`main_task.py:620`).

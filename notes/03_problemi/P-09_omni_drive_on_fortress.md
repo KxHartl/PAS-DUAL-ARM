@@ -16,7 +16,7 @@ Riješeno 13. 9. Baza ima puni omnidirekcijski pogon (vx, vy, wz) preko `mecanum
 **Potvrđeno:**
 - PAL rješenje je Classic-only ([[P-03_pal_base_classic_control]]).
 - Fortress sistem pluginovi `MecanumDrive` i `VelocityControl` se na ovoj instalaciji ne
-  instanciraju (`controllers.yaml` komentar, `6eb7487`).
+  instanciraju (`controllers.yaml` komentar).
 - PAL `omni_drive_controller/OmniDriveController` nije instaliran i nije u apt-u (13. 9.).
 
 **Činjenica (13. 9.):** `ros-humble-mecanum-drive-controller` **2.53.3 je instaliran**
@@ -29,10 +29,10 @@ ispravno zapovijedati brzine kotača, ali bočno gibanje fizički neće nastati 
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `7aaab94` | PAL ros2_control (Classic) | ne učita se | Classic-only |
-| 2 | 12. 6. `7aaab94` | Ignition `MecanumDrive` system plugin preko `/cmd_vel` | nikad se ne instancira | slijepa ulica na ovoj instalaciji |
-| 3 | 23. 6. `6eb7487` | Ignition `VelocityControl` / PAL `planar_move` | ne instancira se / Classic-only | slijepa ulica |
-| 4 | 23. 6. `6eb7487` | `diff_drive_controller` na 4 kotača (skid-steer) | radi: x + yaw, odom, TF | privremeno ([[D-03_diff_drive_base_temporary]]) |
+| 1 | 12. 6. | PAL ros2_control (Classic) | ne učita se | Classic-only |
+| 2 | 12. 6. | Ignition `MecanumDrive` system plugin preko `/cmd_vel` | nikad se ne instancira | slijepa ulica na ovoj instalaciji |
+| 3 | 23. 6. | Ignition `VelocityControl` / PAL `planar_move` | ne instancira se / Classic-only | slijepa ulica |
+| 4 | 23. 6. | `diff_drive_controller` na 4 kotača (skid-steer) | radi: x + yaw, odom, TF | privremeno ([[D-03_diff_drive_base_temporary]]) |
 | 5 | 13. 9. (provjera) | traženje omni kontrolera: `apt-cache`, ament index | PAL omni ❌, **`mecanum_drive_controller` ✅** | novi kandidat |
 | 6 | 13. 9. | `mecanum_drive_controller` + URDF base prilagodba (effort 100 Nm, damping/friction 0, `fdir1` u `base_footprint`, mu2 0.20) + `cmd_vel_relay` | **PUNI USPJEH** ✅: vx, vy (0.33 m), wz (okret u mjestu), dijagonala rade | Omnidirekcijski pogon potpuno operativan |
 

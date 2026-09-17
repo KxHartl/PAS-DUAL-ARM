@@ -11,7 +11,7 @@ updated: 2026-09-14
 
 ## Simptom
 Tijekom 360° spina za traženje markera lokalizacija je skočila ~30 m i robot je odvozio daleko
-(30. 6., `580948b`).
+(30. 6.).
 
 ## Uzrok
 **Potvrđeno (djelomično):** skid-steer se okreće klizanjem kotača ([[P-10_skid_steer_cannot_turn]]),
@@ -23,13 +23,13 @@ odometriju mogao bi biti dovoljan.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 23. 6. `6eb7487` `45c32f1` | SLAM + Nav2, pretežno ravne vožnje (M5/M6) | radi, kroz 1.2 m vrata | ravne dionice su OK |
-| 2 | 30. 6. `f62ebbd` | Nav2 `/spin` 360° za scan + iterativni prilaz | drift ~30 m | okret u mjestu razbija lokalizaciju |
-| 3 | 30. 6. `33bc2ac` | izbaciti Nav2/SLAM: pan kamere uz mirnu bazu + cmd_vel servo | prilaz pouzdan | zaobiđeno ([[D-04_visual_servo_instead_nav2]]) |
+| 1 | 23. 6. | SLAM + Nav2, pretežno ravne vožnje (M5/M6) | radi, kroz 1.2 m vrata | ravne dionice su OK |
+| 2 | 30. 6. | Nav2 `/spin` 360° za scan + iterativni prilaz | drift ~30 m | okret u mjestu razbija lokalizaciju |
+| 3 | 30. 6. | izbaciti Nav2/SLAM: pan kamere uz mirnu bazu + cmd_vel servo | prilaz pouzdan | zaobiđeno ([[D-04_visual_servo_instead_nav2]]) |
 | 4 | 13. 9. | SLAM mapiranje triju soba ([[D-13_three_room_world]]) uz **spore okrete**: DWB v 0.5 → 0.3, ω 1.0 → 0.4, akceleracija ω 3.2 → 1.0 (i velocity smoother); `cmd_vel_relay` dodan u `nav2.launch.py`; ciljeve zadaje korisnik u RViz-u | 🧪 u tijeku | — |
 | 5 | 13. 9. | čista headless simulacija + `scan_filter`, `mapping_tour`, `ARM_CARRY_V2` | okret −89.9°, ali ravna dionica zadana 4.5 m daje samo 1.89 m, `map→odom` promijeni se 1.04 m; karta neprihvatljiva | SLAM ne smije biti proglašen uspješnim; uz odometriju treba riješiti dinamičku širinu ruku i pogon |
 | 6 | 13. 9. | Ručno teleop mapiranje (run 43) uz `ARM_CARRY_V2`, spore okrete i povratak u HOME | ✅ Savršena karta triju soba ($11.9 \times 11.9$ m raspon, $102.3\text{ m}^2$ slobodnog prostora), oštri pojedinačni zidovi, vrata otvorena, stol mapiran. `check_map.py` prošao. | Karta validirana i spremljena u `maps/seminar_map.*` |
-| 7 | 14. 9. | Karta iz runa 44 izmjerena geometrijski (`scripts/check_map_geometry.py`): zid 0.10 m nacrtan 0.15 m, otvor 1.00 m očitan 0.950 m, os +1.5 cm — ali **mjerilo karte točno 0.0 mm na 4.243 m** | ⚠ karta nije driftala, nego je kvantizirana; uz to je snimljena prije lidara od 1080 zraka (`bd61802`) | P-11 (drift) nije uzrok aktualnog problema; uzrok je rezolucija → `slam_params.yaml` 0.05 → **0.02 m**, nova tura. Vidi [[P-40_amcl_pose_disagrees_with_lidar]] |
+| 7 | 14. 9. | Karta iz runa 44 izmjerena geometrijski (`scripts/check_map_geometry.py`): zid 0.10 m nacrtan 0.15 m, otvor 1.00 m očitan 0.950 m, os +1.5 cm — ali **mjerilo karte točno 0.0 mm na 4.243 m** | ⚠ karta nije driftala, nego je kvantizirana; uz to je snimljena prije lidara od 1080 zraka () | P-11 (drift) nije uzrok aktualnog problema; uzrok je rezolucija → `slam_params.yaml` 0.05 → **0.02 m**, nova tura. Vidi [[P-40_amcl_pose_disagrees_with_lidar]] |
 
 ## Trenutno rješenje
 Bez Nav2/SLAM, što **odstupa od obaveznih** [[R-14_slam_mapping]] i [[R-15_region_goal_nav2]].

@@ -19,8 +19,8 @@ parsirao kao YAML.
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 12. 6. `7aaab94` | omotati u `ParameterValue(..., value_type=str)` | robot se učita | rješenje |
-| 2 | 12. 6. `f79e393` | xacro proširivati u Pythonu (`subprocess` + `re`) jer `Command` spaja argumente bez razmaka i ne može pipe | radi, uz uklanjanje negativnih skala | trajni oblik ([[P-05_negative_mesh_scale_dart]]) |
+| 1 | 12. 6. | omotati u `ParameterValue(..., value_type=str)` | robot se učita | rješenje |
+| 2 | 12. 6. | xacro proširivati u Pythonu (`subprocess` + `re`) jer `Command` spaja argumente bez razmaka i ne može pipe | radi, uz uklanjanje negativnih skala | trajni oblik ([[P-05_negative_mesh_scale_dart]]) |
 
 | 3 | 13. 9. | pokušaj pokretanja `display.launch.py` (RViz + slideri) | **isti pad**: `Unable to parse the value of parameter robot_description as yaml` | popravak iz M0 nikad nije prenesen u `display.launch.py` → dodan `ParameterValue(..., value_type=str)`; RViz sa sliderima radi |
 

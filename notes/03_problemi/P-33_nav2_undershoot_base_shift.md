@@ -20,7 +20,7 @@ pomiču bazu. Ekstremni slučaj je [[P-23_moveit_blind_to_world]] (ruka kroz sto
 ## Pokušaji
 | # | datum / commit | što smo probali | rezultat | zaključak |
 |---|---|---|---|---|
-| 1 | 23. 6. `45c32f1` | ništa (zabilježeno kao fino ugađanje) | — | — |
+| 1 | 23. 6. | ništa (zabilježeno kao fino ugađanje) | — | — |
 
 ## Sljedeći korak
 Ako se Nav2 vrati ([[P-11_nav2_slam_drift]]): nakon Nav2 cilja lokalna korekcija (odometrija ili

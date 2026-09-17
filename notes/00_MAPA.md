@@ -1,7 +1,7 @@
 ---
 id: MAPA
 type: mapa
-updated: 2026-09-14
+updated: 2026-09-16
 ---
 # PAS-DUAL-ARM: mapa projekta (ULAZ)
 
@@ -12,11 +12,14 @@ updated: 2026-09-14
 > **Izvori:** [ZAD] task.pdf · [MAIL] mail asistenta 4. 5. 2026. · [USM] usmeno, NE obvezuje · [VLAST] naša odluka → [[izvori]]
 > **Agenti:** prije bilo kakve izmjene pročitajte [[AGENT_GUIDE]].
 
-## Stanje (14. 9. 2026.)
-- **Radi:** robot sam pronađe kocku i dođe do nje (percepcija + prilaz, [[R-16_find_box]]).
-- **NE radi:** hvat. Kartica [[R-17_dual_arm_lift]] je do 13. 9. stajala kao ✅ („3 uspješna GUI
-  ciklusa 16. 7."); **korisnik je tu ocjenu povukao** — hvat nije dobro napravljen. Iz tog rada je
-  zadržana samo ručno namještena poza `ARM_CARRY_V2`.
+## Stanje (16. 9. 2026.)
+- **Radi, cijela misija:** jedna naredba vozi slijed home → plava soba → hvat → kroz vrata →
+  crvena soba → odlaganje na marker. Potvrđeno u korisnikovom GUI-ju 16. 9. (run M4):
+  `PLACE VERIFIED: 5 mm od centra markera`, `MISSION COMPLETE` ([[runovi]] M4).
+- **Hvat radi od 16. 9.** Kartica [[R-17_dual_arm_lift]] je do 13. 9. stajala kao ✅ („3 uspješna
+  GUI ciklusa 16. 7."), **korisnik je tu ocjenu povukao**, a hvat je zatim iznova napravljen na
+  ručno snimljenim V4 pozama ([[P-44_grasp_from_reference_pose]]). Uvjet za uspostavu krute veze
+  je potvrđen obostrani dodir s kutijom ([[D-05_contact_verified_attach]]).
 - **Novo 13. 9.:** svijet s **tri sobe u L** i vratima od 1.0 m, te lagana kutija (0.3 kg)
   ([[D-13_three_room_world]], [[D-14_light_box_free_size]]).
 - **Novo 13. 9. (SLAM sesija):** `ARM_CARRY_V2` je u kodu (`postures.py`); lidar više ne vidi
@@ -49,8 +52,23 @@ updated: 2026-09-14
 - **Novo 16. 9. (run M1, GUI korisnika):** **`DRIVE_V4` je potvrđen kao poza vožnje** — 9 ciljeva,
   3 prolaza kroz vrata bez aborta, gate ruku `worst joint 0.000 rad`, dolasci 2.8–5.0 cm, lidar vs
   AMCL 2.1–3.5 cm. Dock/undock dionica **nije** vožena; vozi je M2 ([[runovi]] M1).
-- **Otvoreno (obavezno iz maila):** vožnja kroz vrata uživo, nošenje kroz vrata, odlaganje
-  u crvenoj sobi.
+- **Zatvoreno 16. 9. (bilo obavezno iz maila):** vožnja kroz vrata uživo (5/5, runovi 62 i 70),
+  nošenje kroz oboja vrata s kutijom i odlaganje u crvenoj sobi — sve u runu M4.
+- **Otvoreno:** [[R-21_deliverables]] — video snimka i slajdovi. Seminar je napisan (16. 9.).
+- **Novo 17. 9.:** scenariji (samostalno/ručno mapiranje/samo misija), frontier istraživanje s
+  prepoznavanjem prolaza, generator svijeta i ispitni sklop s ponavljanjem. Prvo pokretanje
+  sklopa otkrilo je [[P-47_headless_batch_map_odom_stale]] — misija pada na prvoj
+  dionici jer `map → odom` zastari. **Dok to stoji, brojke iz sklopa nisu mjera uspješnosti.**
+- **Novo 17. 9. (navečer):** isti kvar i u **GUI automatskom mapiranju** — dakle nije headless ni
+  AMCL. Iz logova: `/scan_filtered` prestane u sim 8.69 s (tri nezavisna potrošača stanu u istoj
+  sekundi, `scan_filter` nije odbacio nijedan sken), pa slam_toolbox prestane osvježavati
+  `map → odom` i robot stoji. Uzrok je sužen na tri karike (senzor / most / DDS); razdvaja ih
+  jedan mjeren run, upute [[automated_mapping]] ([[P-47_headless_batch_map_odom_stale]]).
+- **Novo 18. 9.: automatsko mapiranje je ODLOŽENO.** Pokrivanje soba trakama radi i odvoženo je
+  (bez ijednog okreta u mjestu), prolazi se prepoznaju i mjere uživo (0.98 m) — ali **prolazak kroz
+  vrata nije prošao nijednom**: Nav2 vraća `ABORTED` na pozi poravnanja, bez ijedne poruke u logu.
+  Kod ostaje, ali je **izvan README-a**: predaja navodi samo **ručno mapiranje**
+  ([[D-23_coverage_sweep_instead_of_frontier]]).
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
   → odloži u crvenoj sobi. Plan dana: [[danas]]. Iskrena odstupanja: [[odstupanja]].
 
@@ -58,15 +76,15 @@ updated: 2026-09-14
 flowchart LR
   R0["R0 DUAL ARM simulacija<br/>u Gazebu"]
   R0 --> G1["R1 Model robota ⚠"]
-  R0 --> G2["R2 Okvir upravljanja ⚠"]
+  R0 --> G2["R2 Okvir upravljanja ✅"]
   R0 --> G3["R3 Okruženje ✅"]
-  R0 --> G4["R4 Misija ❌"]
-  R0 --> G5["R5 Predaja ❌"]
-  G1 --> R01["R-01 omni baza ⚠"] & R02["R-02 2× Kinova ✅"] & R03["R-03 vodilice ⚠"] & R04["R-04 pan-tilt + kamera ✅"] & R05["R-05 izgled ✅"] & R06["R-06 realni parametri ⚠"]
+  R0 --> G4["R4 Misija ✅"]
+  R0 --> G5["R5 Predaja ⚠"]
+  G1 --> R01["R-01 omni baza ✅"] & R02["R-02 2× Kinova ✅"] & R03["R-03 vodilice ⚠"] & R04["R-04 pan-tilt + kamera ✅"] & R05["R-05 izgled ✅"] & R06["R-06 realni parametri ⚠"]
   G2 --> R07["R-07 Humble/Fortress/ros2_control ✅"] & R08["R-08 omni_controller ✅"] & R09["R-09 ruke: ros2_control + MoveIt ✅"]
-  G3 --> R10["R-10 tri sobe (mapirljivo) ✅"] & R11["R-11 vrata 0.9 m ⚠"] & R12["R-12 kutija + ArUco ✅"] & R13["R-13 odredište (crvena soba) ✅"]
-  G4 --> R14["R-14 SLAM ✅"] & R15["R-15 regija → Nav2 ✅"] & R16["R-16 pronađi kutiju ✅"] & R17["R-17 dvoručni hvat ❌"] & R18["R-18 kroz vrata prazan ✅"] & R19["R-19 kroz vrata s kutijom ❌"] & R20["R-20 odloži na odredište ⚠"]
-  G5 --> R21["R-21 seminar, repo, video, slajdovi ❌"]
+  G3 --> R10["R-10 tri sobe (mapirljivo) ✅"] & R11["R-11 vrata 1.0 m ✅"] & R12["R-12 kutija + ArUco ✅"] & R13["R-13 odredište (crvena soba) ✅"]
+  G4 --> R14["R-14 SLAM ✅"] & R15["R-15 regija → Nav2 ✅"] & R16["R-16 pronađi kutiju ✅"] & R17["R-17 dvoručni hvat ✅"] & R18["R-18 kroz vrata prazan ✅"] & R19["R-19 kroz vrata s kutijom ✅"] & R20["R-20 odloži na odredište ✅"]
+  G5 --> R21["R-21 seminar+repo ✅, video+slajdovi ❌"]
 ```
 
 ## R0: Cilj [ZAD]
@@ -78,12 +96,12 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 ## R1: Model robota
 | Zahtjev | Izvor | Status | Rješenje | Problemi | Odluke |
 |---|---|---|---|---|---|
-| [[R-01_omni_base]] | MAIL | ⚠ model da, omni pogon ne | [[S-01_robot_description]], [[S-04_base_drive]] | [[P-03_pal_base_classic_control]], [[P-09_omni_drive_on_fortress]] | [[D-03_diff_drive_base_temporary]] |
+| [[R-01_omni_base]] | MAIL | ✅ model + `mecanum_drive_controller` (13. 9., [[P-09_omni_drive_on_fortress]]) | [[S-01_robot_description]], [[S-04_base_drive]] | [[P-03_pal_base_classic_control]], [[P-09_omni_drive_on_fortress]] | [[D-03_diff_drive_base_temporary]] |
 | [[R-02_kinova_arms]] | MAIL | ✅ | [[S-01_robot_description]] | [[P-05_negative_mesh_scale_dart]] | — |
-| [[R-03_linear_rails_torso]] | MAIL | ⚠ model da, ne diže pod teretom | [[S-01_robot_description]] | [[P-13_torso_prismatic_no_lift]], [[D-21_effort_pid_actuator_profile]] | [[D-09_lift_with_arms_not_torso]] |
+| [[R-03_linear_rails_torso]] | MAIL | ✅ diže pod teretom od 15. 9.; uzrok je bio `initial_value` 0.05 na graničniku → 0.06 ([[P-13_torso_prismatic_no_lift]]) | [[S-01_robot_description]] | [[P-13_torso_prismatic_no_lift]], [[D-21_effort_pid_actuator_profile]] | [[D-09_lift_with_arms_not_torso]] |
 | [[R-04_pan_tilt_camera]] | MAIL | ✅ | [[S-01_robot_description]], [[S-05_perception]] | [[P-06_classic_only_sensors]] | — |
 | [[R-05_visual_match]] | MAIL | ✅ | [[S-01_robot_description]] | [[P-04_mesh_uri_not_found]] | — |
-| [[R-06_realistic_parameters]] | ZAD | ⚠ | [[S-01_robot_description]], [[S-03_ros2_control_setup]] | [[P-13_torso_prismatic_no_lift]], [[P-15_dart_friction_no_hold]] | [[D-05_contact_verified_attach]] |
+| [[R-06_realistic_parameters]] | ZAD | 🔁 odstupanje: mase vodilica/klizača su procjena (12/2 kg), a kutiju drži kruta veza jer je DART ne drži trenjem | [[S-01_robot_description]], [[S-03_ros2_control_setup]] | [[P-13_torso_prismatic_no_lift]], [[P-15_dart_friction_no_hold]] | [[D-05_contact_verified_attach]] |
 
 ## R2: Okvir upravljanja
 | Zahtjev | Izvor | Status | Rješenje | Problemi | Odluke |
@@ -96,7 +114,7 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 | Zahtjev | Izvor | Status | Rješenje | Problemi | Odluke |
 |---|---|---|---|---|---|
 | [[R-10_mappable_world]] | MAIL | ✅ tri sobe (GUI potvrđeno 13. 9.) | [[S-02_world_and_sim_launch]] | [[P-36_walls_lower_than_camera]] | [[D-13_three_room_world]] |
-| [[R-11_door_80cm]] | MAIL + korisnik (0.9 m) | ⚠ vrata postoje, prolaz netestiran | [[S-02_world_and_sim_launch]], [[S-06_navigation]] | [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-13_three_room_world]] (zamjenjuje [[D-08_door_widened]]) |
+| [[R-11_door_80cm]] | MAIL + korisnik | ✅ vrata **1.0 m** (na karti 0.980 m); prolaz potvrđen 5/5 prazan i s kutijom (runovi 62, 70, M4) | [[S-02_world_and_sim_launch]], [[S-06_navigation]] | [[P-12_door_too_narrow]], [[P-35_arm_span_too_wide_for_door]] | [[D-13_three_room_world]] (zamjenjuje [[D-08_door_widened]]) |
 | [[R-12_box_with_aruco]] | MAIL (dimenzije slobodne) | ✅ 0.30 m, 0.3 kg | [[S-02_world_and_sim_launch]], [[S-05_perception]] | [[P-08_marker_not_detected_texture]], [[P-14_gripper_too_small_for_cube]] | [[D-01_aruco_dict_4x4_50]], [[D-06_cube_squeeze_grasp]], [[D-14_light_box_free_size]] |
 | [[R-13_destination_place]] | MAIL | ✅ `place_table` u crvenoj sobi | [[S-02_world_and_sim_launch]] | — | [[D-13_three_room_world]] |
 
@@ -114,7 +132,7 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 ## R5: Predaja (danas)
 | Zahtjev | Izvor | Status | Gdje |
 |---|---|---|---|
-| [[R-21_deliverables]] | korisnik | ❌ | [[danas]], [[seminar_mapa]], [[odstupanja]] |
+| [[R-21_deliverables]] | korisnik | ⚠ seminar i repo gotovi (16. 9.); **video i slajdovi otvoreni** | [[danas]], [[seminar_mapa]], [[odstupanja]] |
 
 ## Rješenja (podsustavi)
 [[S-01_robot_description]] · [[S-02_world_and_sim_launch]] · [[S-03_ros2_control_setup]] ·
@@ -126,5 +144,5 @@ kutiju → podigni je objema rukama → prođi kroz vrata → odloži je na zada
 - Povijest: [[timeline]], [[runovi]]
 - Svi podesivi brojevi: [[06_parametri]]
 - Izmjerene poze ruku i njihove dimenzije: [[08_poze]]
-- Odluke (ADR): [[D-01_aruco_dict_4x4_50]] … [[D-20_single_potential_field_costmap]]. Popis je u [[AGENT_GUIDE]].
+- Odluke (ADR): [[D-01_aruco_dict_4x4_50]] … [[D-21_effort_pid_actuator_profile]]. Popis je u [[AGENT_GUIDE]].
 - Vizualno stablo: `00_mapa.canvas`

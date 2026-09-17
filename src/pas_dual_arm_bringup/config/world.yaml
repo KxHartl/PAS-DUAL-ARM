@@ -1,0 +1,57 @@
+# Parameters of the simulated world. `scripts/gen_world.py` turns this into an
+# SDF; everything not listed here (physics, plugins, the table/cube/marker
+# models with their friction and inertia) is taken verbatim from the template
+# world, so changing a number here cannot quietly change the physics.
+#
+#   ./scripts/run_native.sh python3 scripts/gen_world.py
+#   ./scripts/run_native.sh ros2 launch pas_dual_arm_bringup sim.launch.py \
+#       world:=src/pas_dual_arm_bringup/worlds/generated_world.sdf
+#
+# A new layout needs a new map: drive scenario_manual_map.launch.py or
+# scenario_auto_map.launch.py once, and the mission runs on it.
+
+# The world NAME is fixed on purpose. bridge.yaml maps the fingertip contact
+# sensors through Gazebo topic paths that embed it, and those sensors are the
+# condition for the grasp. Rename the world and the grasp silently never
+# confirms.
+world_name: seminar_world
+
+wall:
+  thickness: 0.10
+  height: 3.00        # the head camera is at 1.39 m; lower walls let it see
+                      # over into the next room and skip navigating there
+
+room_size: [6.0, 6.0] # every room, in metres
+
+# Rooms sit on a grid; `cell` is in room widths, so [1, 0] is one room along +X.
+# Add a cell and its floor, walls and corners follow.
+rooms:
+  home: {cell: [0, 0],  colour: [0.85, 0.85, 0.85]}
+  blue: {cell: [0, -1], colour: [0.70, 0.78, 0.95]}
+  red:  {cell: [1, 0],  colour: [0.95, 0.72, 0.72]}
+
+# Openings in the shared wall between two adjacent rooms. Anything not listed
+# is a solid wall, which is what forces the robot to navigate.
+# The robot is 0.821 m wide with its arms tucked: below about 0.95 m it does not
+# fit, and gen_world.py refuses to write a world it cannot pass through.
+doors:
+  - {between: [home, blue], width: 1.00}
+  - {between: [home, red],  width: 1.00}
+
+# Offsets are from the centre of the room the table stands in.
+tables:
+  pick_table:  {room: blue, offset: [0.0, -0.5]}
+  place_table: {room: red,  offset: [0.5, 0.0]}
+
+# The box to be carried, and the marker it has to be placed on. Offsets are from
+# the centre of the named table.
+cube:
+  table: pick_table
+  offset: [0.0, 0.15]
+  z: 0.90
+  yaw: -1.5708
+
+marker:
+  table: place_table
+  offset: [-0.18, 0.0]
+  z: 0.7515

@@ -23,7 +23,7 @@ vodilica, s realnim kinematikom, masama i limitima iz proizvođačevog opisa.
 - [x] obje ruke se renderiraju i gibaju u Gazebu (JTC kontroleri aktivni)
 
 ## Trenutno stanje
-✅ Od 12. 6. (`7aaab94`, `b7cfcd2`). Obje ruke dosežu Home preko MoveIt-a, a hvataljke se
+✅ Od 12. 6. (). Obje ruke dosežu Home preko MoveIt-a, a hvataljke se
 zatvaraju. Jedina lokalna zakrpa upstreama je uklanjanje Isaac-Sim xacro argumenata
 (`patches/ros2_kortex-robotiq_2f_85-drop-isaac-args.patch`).
 

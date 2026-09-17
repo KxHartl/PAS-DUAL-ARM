@@ -1,11 +1,12 @@
 ---
 id: P-43
 type: problem
-status: u tijeku
+status: rijeseno
+verified: "V4 poze: sirina 0.827 m kroz cijeli hvat (run V2)"
 requirements: ["[[R-19_door_pass_with_box]]", "[[R-17_dual_arm_lift]]", "[[R-11_door_80cm]]"]
 solutions: ["[[S-08_grasp_squeeze_attach]]"]
 decisions: ["[[D-05_contact_verified_attach]]", "[[D-12_honesty_abort_over_fake]]"]
-updated: 2026-09-15
+updated: 2026-09-17
 ---
 # P-43 — Poza hvata šira od vrata
 

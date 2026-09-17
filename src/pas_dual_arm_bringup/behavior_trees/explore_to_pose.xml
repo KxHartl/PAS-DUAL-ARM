@@ -1,0 +1,52 @@
+<!--
+  The mapping profile's navigate-to-pose tree.
+
+  Same shape as nav2_bt_navigator's navigate_to_pose_w_replanning_and_recovery,
+  with two deliberate differences, both about what in-place rotation costs while
+  SLAM is running:
+
+  1. FollowPath runs on `FollowPathExplore` and `explore_goal_checker`, which do
+     not care about the goal's heading. The lidar sees 360 degrees, so the
+     orientation the robot happens to hold on a frontier carries no information -
+     but reaching it costs a pirouette on a base that slides when it turns in
+     place (mu2 = 0, P-10). Every one of those feeds yaw error into the scan
+     matcher.
+
+  2. `Spin` is gone from the recovery round robin, for the same reason: it is a
+     1.57 rad turn in place, run precisely when the map is already the thing in
+     doubt. Clearing the costmaps, waiting, and backing up remain - BackUp is a
+     way out of a corner, not a way of travelling.
+
+  The mission keeps the stock tree. Squaring up in front of a doorway *is* a
+  turn in place, and it is the one we want, so frontier_explorer sends the
+  doorway poses on the default tree and only frontier goals on this one.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPathExplore" goal_checker_id="explore_goal_checker"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Wait wait_duration="5"/>
+          <BackUp backup_dist="0.30" backup_speed="0.05"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

@@ -4,7 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, GroupAction, IncludeLaunchDescription,
                             SetEnvironmentVariable, TimerAction)
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node, SetRemap
@@ -32,8 +32,14 @@ def generate_launch_description():
     # Nav2 out - P-32), so reaching for this one means navigating on the saved
     # map. The old 'mapping' default started a second slam_toolbox against a
     # map file that may not exist.
-    mode_arg = DeclareLaunchArgument('mode', default_value='localization',
-                                     description='localization (saved map) or mapping (live SLAM)')
+    # 'none' starts neither: the mapping scenarios own the slam_toolbox node
+    # themselves, because they have to shut it down at the handover (two things
+    # must never publish map -> odom at once) and a launch can only stop a
+    # process it started.
+    mode_arg = DeclareLaunchArgument(
+        'mode', default_value='localization',
+        description='localization (saved map), mapping (live SLAM), or none '
+                    '(caller provides the map source)')
     map_arg = DeclareLaunchArgument(
         'map', default_value=os.path.join(pkg_bringup, 'maps', 'seminar_map.yaml'),
         description='Saved occupancy map for AMCL localization')
@@ -50,7 +56,7 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': 'true', 'map': map_file,
                           'params_file': params_file,
                           'log_level': nav2_log_level}.items(),
-        condition=UnlessCondition(PythonExpression(["'", mode, "' == 'mapping'"])),
+        condition=IfCondition(PythonExpression(["'", mode, "' == 'localization'"])),
     )
 
     # Nav2 stack (planner, controller, behaviors, bt_navigator...).

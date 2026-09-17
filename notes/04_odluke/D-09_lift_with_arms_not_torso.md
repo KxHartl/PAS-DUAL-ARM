@@ -14,7 +14,7 @@ updated: 2026-09-13
 Prismatic klizači torza ne dižu se pod težinom ruke u `ign_ros2_control`: lagani zglobovi rade, a
 opterećeni vertikalni ostaje na donjem limitu ([[P-13_torso_prismatic_no_lift]]).
 
-## Odluka (30. 6., `397f080`)
+## Odluka (30. 6.)
 Kutija se diže MoveIt pokretom ruku (~15 cm ravno gore). Torzo se postavi jednom (ili ostane na
 limitu), a meta se podigla na stol (niža potrebna visina dohvata).
 

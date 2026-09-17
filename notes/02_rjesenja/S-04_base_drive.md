@@ -22,10 +22,10 @@ nikad ne rade istovremeno: s mu2 = 0 baza tada „krabira“.
 
 ## Povijest pogona
 1. PAL ros2_control (Gazebo Classic) → ne učita se na Fortressu ([[P-03_pal_base_classic_control]]).
-2. Ignition `MecanumDrive` sistem plugin (`7aaab94`, 12. 6.) → prema kasnijem nalazu **nikad se
-   ne instancira** na ovoj instalaciji (`6eb7487`).
-3. `diff_drive_controller` preko ros2_control (`6eb7487`, 23. 6.) → radi, ali samo x + yaw.
-4. mu2 1.5 → 0 da se može okretati (`f62ebbd`, 30. 6.), mu1 → 0.4 (`33bc2ac`).
+2. Ignition `MecanumDrive` sistem plugin (, 12. 6.) → prema kasnijem nalazu **nikad se
+   ne instancira** na ovoj instalaciji ().
+3. `diff_drive_controller` preko ros2_control (, 23. 6.) → radi, ali samo x + yaw.
+4. mu2 1.5 → 0 da se može okretati (, 30. 6.), mu1 → 0.4 ().
 
 Detalji pokušaja: [[P-09_omni_drive_on_fortress]].
 
@@ -36,6 +36,6 @@ pitanja su u [[P-09_omni_drive_on_fortress]] → „Sljedeći korak“.
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 23. 6. | headless | Nav2 goal → baza se pomakne | `6eb7487` |
-| 30. 6. | GUI | okret u mjestu, drift ~4 mm | `33bc2ac` |
-| 16. 7. | GUI | odometrijski korigiran dovoz i centrirajući okret | `c504720` |
+| 23. 6. | headless | Nav2 goal → baza se pomakne | |
+| 30. 6. | GUI | okret u mjestu, drift ~4 mm | |
+| 16. 7. | GUI | odometrijski korigiran dovoz i centrirajući okret | |

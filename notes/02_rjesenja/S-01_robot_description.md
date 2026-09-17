@@ -70,10 +70,10 @@ rotirani klizač, pa svojih 180° u globalnom sustavu dobiva prirodno.
 ## Provjereno
 | datum | način | što | commit |
 |---|---|---|---|
-| 12. 6. | RViz + korisnik | geometrija po slici i CAD mjerama | `8045b62`…`d1af724` |
-| 12. 6. | Gazebo | 0 urdf2sdf grešaka, 0 DART asserta, 0 mesh grešaka | `7aaab94`, `d29498a`, `f79e393` |
-| 30. 6. | Gazebo | RGBD + oblak | `e31f2fa` |
-| 16. 7. | Gazebo GUI | kontaktni senzori objavljuju, imena kolizija u poruci | `c504720` |
+| 12. 6. | RViz + korisnik | geometrija po slici i CAD mjerama | — |
+| 12. 6. | Gazebo | 0 urdf2sdf grešaka, 0 DART asserta, 0 mesh grešaka | — |
+| 30. 6. | Gazebo | RGBD + oblak | |
+| 16. 7. | Gazebo GUI | kontaktni senzori objavljuju, imena kolizija u poruci | |
 
 ## Otvoreno
 - Masa torza je procjena, a omni pogon nije postignut ([[R-06_realistic_parameters]], [[R-08_omni_controller]]).

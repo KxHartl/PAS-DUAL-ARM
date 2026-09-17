@@ -18,7 +18,7 @@ zato bila šipka ili ploča koju svaka ruka obuhvati na svom kraju ([[P-14_gripp
 1. Hvatljiva šipka/ploča (radila, ali „nije kutija po zadatku“).
 2. **Kocka 0.3 m, stisnuta između dviju ruku zatvorenim hvataljkama kao jastučićima.**
 
-## Odluka (15./16. 7., `c504720`)
+## Odluka (15./16. 7.)
 Opcija 2: kocka „po zadatku“.
 
 ## Posljedice
