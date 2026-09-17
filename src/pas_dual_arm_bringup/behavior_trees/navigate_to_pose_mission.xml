@@ -1,0 +1,50 @@
+<!--
+  Nav2's default navigate_to_pose tree, with one addition: FollowPath names the
+  goal checker.
+
+  Nav2's own tree leaves goal_checker_id empty, and the controller server then
+  falls back to "the only goal checker there is". That works while there is
+  exactly one. The mapping work added a second one (explore_goal_checker, looser
+  tolerances for exploring), and from that moment every FollowPath on the default
+  tree was rejected with
+
+      FollowPath called with goal_checker name  in parameter
+      'current_goal_checker', which does not exist
+
+  so the robot never moved and every leg ended in Nav2 status 6 (ABORTED). The
+  empty name is the bug: naming the checker makes the mission independent of how
+  many others happen to be loaded.
+
+  Kept in step with nav2_bt_navigator's navigate_to_pose_w_replanning_and_recovery.xml
+  (Humble); the only difference is goal_checker_id below.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="general_goal_checker"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Spin spin_dist="1.57"/>
+          <Wait wait_duration="5"/>
+          <BackUp backup_dist="0.30" backup_speed="0.05"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>
