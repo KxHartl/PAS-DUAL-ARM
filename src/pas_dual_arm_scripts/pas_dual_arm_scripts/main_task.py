@@ -2140,7 +2140,45 @@ class MainTask(BaseDriver, Node):
         room = (self._mission_start or '').strip() or default_room
         self._mission_start = None
         self.get_logger().info(f'MISSION START: going for the cube in "{room}"')
+        self._wait_for_localisation()
         return room
+
+    def _wait_for_localisation(self, timeout=90.0, freshness=1.0, settle=2.0):
+        """Do not drive on a transform that is not there yet, or is stale.
+
+        AMCL needs a few seconds and a scan or two after the stack is up. Press
+        the button before that and the controller works with an out-of-date
+        `map -> odom` - "Transform data too old", visible in the log - and the
+        goal, transformed into the local frame with it, can land on top of the
+        robot. Nav2 then reports the leg as reached without the robot having
+        moved. Waiting here costs seconds; not waiting produces a run that
+        claims to have arrived somewhere it never left.
+        """
+        started = time.time()
+        stable_since = None
+        while rclpy.ok() and time.time() - started < timeout:
+            rclpy.spin_once(self, timeout_sec=0.1)
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    'map', 'base_footprint', rclpy.time.Time())
+            except Exception:
+                stable_since = None
+                continue
+            stamp = tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9
+            now = self.get_clock().now().nanoseconds * 1e-9
+            if now - stamp > freshness:
+                stable_since = None
+                continue
+            stable_since = stable_since or time.time()
+            if time.time() - stable_since >= settle:
+                self.get_logger().info(
+                    f'localised: map -> base_footprint fresh and stable for '
+                    f'{settle:.0f} s; driving')
+                return True
+        self.get_logger().error(
+            'map -> base_footprint never became fresh; AMCL is not localised. '
+            'Driving now would be driving on a stale transform.')
+        return False
 
     def _goto(self, destination, timeout=None):
         """Drive to `destination` through room_navigator and wait for its verdict.

@@ -55,6 +55,11 @@ HALF_LENGTH, HALF_WIDTH = 0.52, 0.427
 # Left plus right reading below this means the robot is between the jambs rather
 # than in a room: the doorway is 1.0 m, the narrowest room dimension is 6 m.
 DOORWAY_SPAN = 1.5
+# How far from a leg's goal the robot may be and still count as having arrived.
+# Nav2's own goal checker works to 5 cm, so this is not a precision gate: it is
+# the distance beyond which "succeeded" cannot be true, whatever Nav2 reports.
+ARRIVAL_TOLERANCE = 0.30
+ARRIVAL_YAW_TOLERANCE = math.radians(20.0)
 
 
 def yaw_to_quaternion(yaw):
@@ -644,7 +649,8 @@ class RoomNavigator(Node):
                       else self._drive_through(group, label, dest))
             if not driven:
                 return
-            self._report_arrival(last, label)
+            if not self._confirm_arrival(last, label, dest):
+                return
             if getattr(last, 'dock', False):
                 table = self._table_by_pose((last.x, last.y))
                 self._docked = table['id'] if table is not None else dest.split(':')[0]
@@ -829,15 +835,36 @@ class RoomNavigator(Node):
         self._spin(1.0)
         self._status(level, reason, destination=destination)
 
-    def _report_arrival(self, leg, label):
+    def _confirm_arrival(self, leg, label, destination):
+        """Nav2 saying "succeeded" is a claim; this is the measurement.
+
+        On 18 Sep a leg came back SUCCEEDED 0.6 s after it was sent, with the
+        robot still 1.84 m and 90 deg from the goal, because the button had been
+        pressed before the localiser was warm and the goal had been transformed
+        with a stale `map -> odom`. The distance was already being computed and
+        printed here; it was simply not being believed. It is now.
+        """
         pose = self.pose()
         if pose is None:
-            return
+            self.get_logger().error(
+                f'{label}: Nav2 reported success but there is no pose to check it against')
+            self._status('failed', f'{label}: no pose to confirm arrival',
+                         destination=destination)
+            return False
         offset = math.hypot(pose[0] - leg.x, pose[1] - leg.y)
         heading = wrap(pose[2] - leg.yaw)
+        if offset > ARRIVAL_TOLERANCE or abs(heading) > ARRIVAL_YAW_TOLERANCE:
+            detail = (f'{label}: Nav2 reported success {offset * 100:.1f} cm and '
+                      f'{math.degrees(heading):+.1f} deg from the goal - it did not '
+                      f'arrive (limits {ARRIVAL_TOLERANCE * 100:.0f} cm, '
+                      f'{math.degrees(ARRIVAL_YAW_TOLERANCE):.0f} deg)')
+            self.get_logger().error(detail)
+            self._status('failed', detail, destination=destination)
+            return False
         self.get_logger().info(
             f'{label}: arrived {offset * 100:.1f} cm and '
             f'{math.degrees(heading):+.1f} deg from the goal')
+        return True
 
 
 def main():

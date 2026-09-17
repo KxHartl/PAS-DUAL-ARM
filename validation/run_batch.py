@@ -67,6 +67,7 @@ LATEST = os.path.join(RESULTS, 'latest')
 # the bulk of the data and nothing in the analysis reads them, while everything
 # below is either a measurement or the state needed to interpret one.
 BAG_TOPICS = [
+    '/clock',                       # sim time itself: a run can stall or step back
     '/debug/gz_dynamic_pose',       # ground truth: robot, box, anything that moves
     '/debug/loc_error',             # its comparison against TF, as computed live
     '/amcl_pose', '/particle_cloud',
