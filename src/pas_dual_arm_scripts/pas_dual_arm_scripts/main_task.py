@@ -3511,18 +3511,47 @@ class MainTask(BaseDriver, Node):
             rclpy.spin_once(self, timeout_sec=0.05)
         # Then down with the cube in the hands (user: to 100 mm), as far as the
         # arms stay clear of the torso column.
+        #
+        # Two candidate heights used to be tried, the wanted one and the drive
+        # one, and if MoveIt refused both the carriages simply stayed up. Run 10
+        # of the centring series is what that costs: the left arm would have
+        # touched the torso at 0.10 m, so the cube rode the whole way at the lift
+        # height, 45 cm higher than every other run - and four minutes later the
+        # head camera could not see the place marker past it at any of three
+        # tilts, so the mission threw away a cube it was carrying correctly.
+        #
+        # So come down as far as it can rather than not at all. Any lowering
+        # moves the cube out of the camera's line to the table; the height that
+        # self-collides is not evidence that the one above it does.
         wanted = float(self.get_parameter('final_carriage_height').value)
         live = self._live_joints()
+        here = live.get('torso_left_carriage_joint', DRIVE_CARRIAGE)
+        ladder = [wanted, DRIVE_CARRIAGE]
+        step = 0.05
+        rung = wanted + step
+        while rung < here - 1e-6:                   # every rung between, lowest first
+            ladder.append(round(rung, 3))
+            rung += step
+        # Lowest first, so the one chosen is the lowest that MoveIt accepts.
+        candidates = sorted({h for h in ladder if h < here - 1e-6})
+
         final_height = None
-        for height in (wanted, DRIVE_CARRIAGE):
+        for height in candidates:
             state = dict(live)
             state['torso_left_carriage_joint'] = state['torso_right_carriage_joint'] = height
             if self._state_valid(state, f'STEP7 check at carriages {height:.2f}') is not False:
                 final_height = height
                 break
         if final_height is None:
-            self.get_logger().warn('STEP7 the held arms would touch the torso lower down; '
-                                   'the carriages stay where they are')
+            self.get_logger().warn(
+                'STEP7 the held arms would touch the torso at every height down to '
+                f'{min(candidates) if candidates else here:.2f} m; the carriages stay '
+                'where they are and the cube rides high - the head camera may not see '
+                'past it at the far table')
+        elif final_height > wanted + 1e-6:
+            self.get_logger().warn(
+                f'STEP7 carriages can only come down to {final_height:.2f} m, not the '
+                f'{wanted:.2f} m wanted: lower than that the held arms touch the torso')
         elif not self._torso_to(final_height, 'STEP7 carriages down with the cube'):
             return self._fail('carriages did not come down with the cube')
         self.measure_width('carrying the cube, away from the table')
