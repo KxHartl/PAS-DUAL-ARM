@@ -324,7 +324,7 @@ controller_server:
     FollowPathAlign:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: False
-      min_vel_x: -0.26
+      min_vel_x: -0.30
       max_vel_x: 0.45
       min_vel_y: -0.15
       max_vel_y: 0.15
@@ -338,7 +338,7 @@ controller_server:
       decel_lim_x: -1.5
       decel_lim_y: -1.5
       decel_lim_theta: -3.0
-      vx_samples: 25
+      vx_samples: 15
       vy_samples: 25
       vtheta_samples: 25
       sim_time: 1.2
@@ -356,7 +356,13 @@ controller_server:
       RotateToGoal.scale: 64.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
-      # The one addition, and the only difference from FollowPath.
+      # The one addition, and the ONLY difference from FollowPath. That was
+      # claimed once and was not true: the first version of this block also
+      # carried min_vel_x -0.26 against the mission's -0.30 and vx_samples 25
+      # against its 15, copied wrong by hand. Both change how trajectories are
+      # generated, so the 10-run series that followed could not tell GoalAlign
+      # apart from two stray numbers - and that series measured the doorway
+      # 2.7 cm tighter. Whatever it measured, it was not this critic alone.
       GoalAlign.scale: 8.0
       GoalAlign.forward_point_distance: 0.325
       Twirling.scale: 2.0
