@@ -170,6 +170,24 @@ predloška). Provjereno u drugom probnom runu: `SCAN: marker found at base_link 
 > **Pouka za sklop:** svaki run na **generiranom** svijetu treba proći kroz percepciju prije nego se
 > pokrene serija od 20. Vožnja i vrata ne dokazuju da svijet ima teksture.
 
+### Prvi ispravan run kroz sklop (18. 9., `smoke2-18-09`)
+Headless, generirani svijet, cijela misija: **`success`, 546 s, 8/8**, robot javlja
+`PLACE VERIFIED: 4 mm`. Lanac mjerenja iz baga također radi (`analyze_runs.py`, 28 373 uzorka
+ground trutha). Prva dva nalaza, oba važna za seminar:
+
+| veličina | vrijednost (n=1) | što znači |
+|---|---|---|
+| `table_clear_transit_min_m` | **0.686 m** | seminar navodi **0,835 m**. Izmjereno u vožnji je **manje**. Tvrdnju treba prepisati na izmjereno, ne na offline izračun |
+| `place_err_truth_mm` | **19.1 mm** | robot je za isti run tvrdio **4 mm**. Ground truth kaže 19.1 |
+| `amcl_err_max_cm` / `rms` / `yaw` | 4.4 cm / 1.8 cm / 1.4° | greška lokalizacije kroz cijeli run |
+| `door_clear_min_m` | 0.471 m | najtješnji prolaz kroz vrata |
+
+> [!important] Robotova tvrdnja nije mjerenje
+> `PLACE VERIFIED` (4 mm) i ground truth (19.1 mm) razilaze se za ~15 mm na istom runu. To je točno
+> ono zbog čega postoji [[D-24_measure_from_recordings_not_logs]]. **U seminar ide broj iz
+> `metrics.csv`**, a robotov ispis se navodi kao ono što jest — što sustav tvrdi o sebi.
+> S n=1 ovo još nije nalaz nego opažanje; serija mu daje raspon.
+
 ### Podaci od 17. 9. su nevažeći
 Sve što je sklop izmjerio 17. 9. snimljeno je na slomljenom ROS stacku
 ([[P-51_apt_upgrade_stops_amcl]]) i **ne smije se navoditi**. Serija se pokreće **od nule**.
