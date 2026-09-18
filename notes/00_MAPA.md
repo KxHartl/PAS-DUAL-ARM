@@ -12,7 +12,7 @@ updated: 2026-09-16
 > **Izvori:** [ZAD] task.pdf · [MAIL] mail asistenta 4. 5. 2026. · [USM] usmeno, NE obvezuje · [VLAST] naša odluka → [[izvori]]
 > **Agenti:** prije bilo kakve izmjene pročitajte [[AGENT_GUIDE]].
 
-## Stanje (16. 9. 2026.)
+## Stanje (18. 9. 2026.)
 - **Radi, cijela misija:** jedna naredba vozi slijed home → plava soba → hvat → kroz vrata →
   crvena soba → odlaganje na marker. Potvrđeno u korisnikovom GUI-ju 16. 9. (run M4):
   `PLACE VERIFIED: 5 mm od centra markera`, `MISSION COMPLETE` ([[runovi]] M4).
@@ -64,6 +64,15 @@ updated: 2026-09-16
   sekundi, `scan_filter` nije odbacio nijedan sken), pa slam_toolbox prestane osvježavati
   `map → odom` i robot stoji. Uzrok je sužen na tri karike (senzor / most / DDS); razdvaja ih
   jedan mjeren run, upute [[automated_mapping]] ([[P-47_headless_batch_map_odom_stale]]).
+- **RIJEŠENO 18. 9.: uzrok dvodnevnog pada bio je `apt`, ne kod.** Neinteraktivna nadogradnja
+  **439 `ros-humble-*` paketa 17. 9. u 18:09** zaustavlja AMCL usred vožnje: skenovi mu stižu
+  (13 Hz), proces je živ, ali mu se callback ne okida, pa `map → odom` zamrzne i Nav2 odbija svaki
+  cilj. Dokazano A/B-om — **stablo od 16. 9. (`d594fd8`) pada identično** kao noćni kod
+  ([[runovi]] A1). Stack je vraćen na snapshot `2026-08-07`, svih 543 paketa je na `apt-mark hold`,
+  pa misija opet vozi do kraja: **`MISSION COMPLETE`, 5 mm od centra markera** s **nepromijenjenim**
+  kodom ([[runovi]] B1). → [[P-51_apt_upgrade_stops_amcl]], [[S-10_build_run_environment]].
+  **Ispravak:** [[P-47_headless_batch_map_odom_stale]] je za uzrok navodio prestanak dotoka
+  skenova — to nije točno; stane samo AMCL.
 - **Novo 18. 9.: automatsko mapiranje je ODLOŽENO.** Pokrivanje soba trakama radi i odvoženo je
   (bez ijednog okreta u mjestu), prolazi se prepoznaju i mjere uživo (0.98 m) — ali **prolazak kroz
   vrata nije prošao nijednom**: Nav2 vraća `ABORTED` na pozi poravnanja, bez ijedne poruke u logu.

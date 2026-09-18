@@ -1,7 +1,7 @@
 ---
 id: DANAS
 type: plan
-updated: 2026-09-17
+updated: 2026-09-18
 ---
 # Plan predaje
 
@@ -9,6 +9,19 @@ updated: 2026-09-17
 > Sve što je ondje označeno kao ❌ ili ⚠ zatvoreno je 15.–16. 9. Aktualno stanje je u
 > [[00_MAPA]], a preostala odstupanja u [[odstupanja]]. Tablica se čuva jer pokazuje
 > redoslijed rada, ne trenutno stanje.
+
+## Riješeno 18. 9. (jutro): misija opet vozi
+Dva dana je izgledalo da se „projekt sam prepravio". **Git je bio netaknut** — radno stablo čisto,
+`git fsck` bez izgubljenih commitova, `main` čisti potomak `origin/main`, ništa prepisano.
+Uzrok je bila **`apt` nadogradnja 439 `ros-humble-*` paketa 17. 9. u 18:09**, koja zaustavlja AMCL
+usred vožnje ([[P-51_apt_upgrade_stops_amcl]]). Nakon vraćanja stacka na snapshot `2026-08-07`
+misija vozi **`MISSION COMPLETE`, 5 mm od centra markera**, s nepromijenjenim kodom ([[runovi]] B1).
+
+- Sav noćni rad (automatsko mapiranje, ispitni sklop, docs) ostaje na `main`; ništa nije vraćeno
+  unatrag. Sigurnosna kopija prije zahvata: grana `wip/automated-mapping-18-09` + tag
+  `backup-18-09-prije-povratka`.
+- **ROS stack je zaključan** (`apt-mark hold`, 543 paketa; živi repo isključen). Ne puštati
+  automatske nadogradnje do predaje ([[S-10_build_run_environment]]).
 
 ## Aktualno otvoreno (stanje 18. 9. 2026.)
 Nakon profesorovih smjernica na objavljeni repo i seminar:
@@ -20,7 +33,9 @@ Nakon profesorovih smjernica na objavljeni repo i seminar:
 4. **Uskladiti seminar** — ✅ 17. 9.: 20 zahtjeva dosljedno, tablica triju zazora, 0,835 m
    objašnjeno, ručno mapiranje izrijekom, kontaktni senzor kao uvjet a ne mjerenje sile,
    literatura s citatima.
-5. **Ponavljanja misije i statistika** — ⚠ sklop postoji, **podataka nema** (1 run, `aborted`).
+5. **Ponavljanja misije i statistika** — ⚠ sklop postoji; **podaci od 17. 9. su nevažeći** jer su
+   snimljeni na slomljenom stacku ([[P-51_apt_upgrade_stops_amcl]]). Seriju treba **ponoviti od
+   nule** na vraćenom stacku; prvi ispravan run je B1 ([[runovi]]).
 6. Slajdovi — ❌.
 
 ### Profesorovi komentari, doslovno (seminar)

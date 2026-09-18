@@ -5,7 +5,7 @@ status: rijeseno
 requirements: ["[[R-07_ros2_humble_fortress_control]]"]
 solutions: ["[[S-10_build_run_environment]]", "[[S-01_robot_description]]"]
 decisions: ["[[D-11_project_scoped_ros_env]]"]
-updated: 2026-09-17
+updated: 2026-09-18
 ---
 # P-31: `apt upgrade` je slomio okoliš
 
@@ -20,6 +20,7 @@ updated: 2026-09-17
 | 1 | 15. 7. | definirati `gazebo_version=gazebo` u `robot.urdf.xacro:19` | xacro radi | trajno |
 | 2 | 15. 7. | kompatibilnosni symlink za `geometric_shapes` | radi | privremeni hack |
 | 3 | 10. 9. | čisti rebuild **samo** na `/opt/ros/humble`, bez `~/ws_moveit2`, a symlink workaround uklonjen | 25/25 paketa | **rješenje** ([[D-11_project_scoped_ros_env]]) |
+| 5 | 18. 9. | **treći put isti obrazac, ali gori**: nadogradnja od 17. 9. u 18:09 zamijenila je **439** `ros-humble-*` paketa i zaustavila AMCL usred vožnje — misija je padala dva dana | stack vraćen na snapshot `2026-08-07`, svih 543 paketa na `hold` | **[[P-51_apt_upgrade_stops_amcl]]**. Pouka: `apt` ovdje ne lomi samo build, nego i ponašanje u izvođenju |
 | 4 | 17. 9. | isti obrazac, drugi paket: `colcon build` pada s `No rule to make target '.../librealsense2.so.2.58.3'`. Sustav ima **2.58.4**, a `build/realsense2_camera` je zadržao putanju na **2.58.3** od prije nadogradnje | `rm -rf build/realsense2_camera install/realsense2_camera` pa rebuild → **25 paketa, 0 neuspjelih** | **rješenje**: obrisati zastarjeli CMake cache pogođenog paketa, ne cijeli `build/` |
 
 ## Obrazac (vrijedi za svaki paket)
@@ -45,5 +46,8 @@ ls /opt/ros/humble/lib/x86_64-linux-gnu/librealsense2.so*
 ```
 
 ## Ne ponavljati
+- **Puštanje automatskih nadogradnji na ovaj stroj.** Od 18. 9. su svi `ros-humble-*` paketi na
+  `apt-mark hold`, a živi ROS repo je isključen ([[P-51_apt_upgrade_stops_amcl]]). Prije bilo kakve
+  buduće nadogradnje: snimiti `dpkg -l 'ros-humble-*'` i odvoziti misiju **prije i poslije**.
 - Kompat-symlinkove za ABI; učitavanje `~/ws_moveit2` u ovaj projekt.
 - Brisanje cijelog `build/` zbog jednog paketa — rebuild svega traje, a ne treba.

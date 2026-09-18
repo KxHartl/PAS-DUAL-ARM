@@ -1,9 +1,9 @@
 ---
 id: P-47
 type: problem
-status: otvoreno
-verified: "reproducirano 17. 9. u 3 uzastopna headless runa (misija) i u GUI runu automatskog mapiranja"
-updated: 2026-09-17
+status: rijeseno
+verified: "uzrok pronađen 18. 9. — [[P-51_apt_upgrade_stops_amcl]]; nakon vraćanja ROS stacka misija vozi do kraja"
+updated: 2026-09-18
 requirements: ["[[R-14_slam_mapping]]", "[[R-15_region_goal_nav2]]", "[[R-18_door_pass_empty]]"]
 solutions: ["[[S-06_navigation]]"]
 decisions: []
@@ -14,6 +14,19 @@ decisions: []
 > Isti kvar se dogodio u **GUI runu automatskog mapiranja**, gdje `map → odom` objavljuje
 > slam_toolbox, a ne AMCL. Zajednički nazivnik nije ni headless ni AMCL, nego **prestanak
 > dotoka skenova**. Naslov datoteke je ostao radi poveznica.
+
+> [!important] RIJEŠENO 18. 9. — uzrok je bio izvan repozitorija
+> Kvar opisan ispod uzrokovala je **`apt` nadogradnja 439 `ros-humble-*` paketa 17. 9. u 18:09**
+> ([[P-51_apt_upgrade_stops_amcl]]). Nakon vraćanja stacka na snapshot 2026-08-07 misija vozi
+> `MISSION COMPLETE`. **Ništa od popravaka u ovoj kartici nije bilo uzrok ni lijek.**
+>
+> **Ispravak dijagnoze:** ispod piše da prestaje dotok `/scan_filtered`. **To nije točno.**
+> Mjereno uživo tijekom kvara 18. 9.: `/scan` 13.6 Hz, `/scan_filtered` 13.3 Hz,
+> `/base_controller/odom` 56 Hz, `/clock` 459 Hz — svi živi; **šuti samo `/amcl_pose`**.
+> AMCL prima skenove i ne obrađuje ih. Zaključak „tri nezavisna potrošača stanu u istoj sekundi,
+> dakle tema je stala" bio je pogrešan: sva tri su potrošači koji su **stali sami**, svaki iz
+> istog razloga. Analiza iz 17. 9. ostaje zapisana jer pokazuje kako se do krivog osumnjičenika
+> došlo.
 
 ## Simptom
 U automatiziranom ispitivanju (`validation/run_batch.py`, `headless:=true`) misija se
@@ -98,14 +111,17 @@ invarijantu 4 iz [[AGENT_GUIDE]]. Pri RTF 0.57 još prolazi; pri nižem bi zatre
 | 1 | 17. 9. | analiza logova GUI runa automatskog mapiranja | zastoj lociran na `/scan_filtered`, uzrok sužen na tri karike | nije headless, nije AMCL, nije `scan_filter` |
 | 2 | 17. 9. | `sim.launch.py heavy_sensors:=false` — most bez 6 teških tema (3 oblaka + 3 dubinske slike), izveden iz `bridge.yaml` pri pokretanju | 🧪 čeka par runova A/B ([[automated_mapping]]) | most je jedina od tri karike koju zastavica može isključiti bez diranja svijeta |
 | 3 | 17. 9. | watchdog starosti `map → odom` u `frontier_explorer` (`tf_stale_timeout`, 5 s) | 🧪 čeka vožnju | kvar se dosad vidio samo kao tišina; sada ga run imenuje i stane |
-| 4 | 17. 9. | `cmd_vel_relay._safety_live()` prebačen sa `time.monotonic()` na sim vrijeme, čvor dobio `use_sim_time` | 🧪 čeka vožnju | nije uzrok, ali je kršenje invarijante 4; pri RTF 0.57 je 1.0 s stvarnog tek 0.57 s sim |
+| 4 | 17. 9. | `cmd_vel_relay._safety_live()` prebačen sa `time.monotonic()` na sim vrijeme, čvor dobio `use_sim_time` | ⚠ nije promijenilo ishod | nije uzrok, ali je kršenje invarijante 4; pri RTF 0.57 je 1.0 s stvarnog tek 0.57 s sim. **Izmjena je zadržana** |
+| 5 | 18. 9. | **A/B sa stablom od 16. 9.** (`d594fd8`) u istom okolišu | **pada identično** (`too old` 94, padova planera 14, ista poruka `PREKID [3/8]`) | **kod nije krivac** → [[P-51_apt_upgrade_stops_amcl]] |
+| 6 | 18. 9. | mjerenje tema uživo tijekom kvara | skenovi teku 13 Hz, `/amcl_pose` šuti | **stane AMCL, ne dotok skenova** — ispravak dijagnoze iz #1 |
+| 7 | 18. 9. | vraćanje ROS stacka na snapshot 2026-08-07 + `hold` + čist rebuild | ✅ **`MISSION COMPLETE`, 5 mm od centra markera**, 0 × `Transform data too old` | **rješenje** ([[P-51_apt_upgrade_stops_amcl]]) |
 
-## Sljedeći koraci
-1. **Dva mjerena runa, A i B**: [[automated_mapping]] §7 — `scripts/scan_watch.py` gleda `/scan` i
-   `/scan_filtered` sa stvarnog sata, a `heavy_sensors:=false` u runu B skida šest teških tema s
-   mosta. Par razdvaja **most** od senzora i DDS-a; gledatelj razdvaja preostalo dvoje.
-2. Ovisno o presudi: `ros_gz_bridge` (dijeljenje na lagani i teški most, teški se diže tek uz
-   misiju), Sensors sustav u simulatoru, ili `max_blocking_time` od 2 s u `fastdds_profiles.xml`.
-3. ✅ Napravljeno prije runa, jer vrijedi bez obzira na presudu: watchdog na starost `map → odom`
-   u `frontier_explorer` (run sada kvar **imenuje** umjesto da šuti) i `cmd_vel_relay` na sim
-   vremenu. Isti watchdog treba i `room_navigator`, kad dođe red.
+## Ishod
+A/B par iz koraka 1 (`heavy_sensors` A/B, `scan_watch.py`) **nije bio potreban** — pitanje koje je
+trebao razriješiti („senzor, most ili DDS?") bilo je krivo postavljeno, jer nijedna od te tri
+karike nije stala. `scripts/scan_watch.py` ostaje u repozitoriju kao koristan alat.
+
+Zadržano od popravaka iz 17. 9. (vrijedi neovisno o uzroku):
+- watchdog starosti `map → odom` u `frontier_explorer` — kvar se sada **imenuje** umjesto da šuti;
+- `cmd_vel_relay` na sim vremenu (invarijanta 4 iz [[AGENT_GUIDE]]);
+- isti watchdog u `room_navigator` i dalje **nije** napravljen.

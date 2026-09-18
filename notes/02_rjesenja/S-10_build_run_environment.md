@@ -3,10 +3,10 @@ id: S-10
 type: rjesenje
 status: ispunjeno
 requirements: ["[[R-07_ros2_humble_fortress_control]]", "[[R-21_deliverables]]"]
-problems: ["[[P-01_shell_zenoh_contamination]]", "[[P-31_apt_upgrade_breakage]]", "[[P-34_source_provenance]]", "[[P-46_pinned_commit_not_on_upstream]]"]
+problems: ["[[P-01_shell_zenoh_contamination]]", "[[P-31_apt_upgrade_breakage]]", "[[P-34_source_provenance]]", "[[P-46_pinned_commit_not_on_upstream]]", "[[P-51_apt_upgrade_stops_amcl]]"]
 decisions: ["[[D-11_project_scoped_ros_env]]"]
 files: ["scripts/run_native.sh", "ros2.repos", "scripts/apply_patches.sh", "patches/", "RUNNING.md", "README.md", "MAPPING.md"]
-updated: 2026-09-16
+updated: 2026-09-18
 ---
 # S-10: Build i pokretanje (projektni okoliš)
 
@@ -25,6 +25,14 @@ Reproducibilan build i izoliran ROS okoliš, bez ovisnosti o globalnom `~/.bashr
   izgleda ispravno kod nas, a ruši svjež klon ([[P-46_pinned_commit_not_on_upstream]]).
 - **`patches/` + `apply_patches.sh`**: dvije zakrpe, idempotentno — Isaac-Sim argumenti iz
   Robotiq xacroa, te inercije i effort limiti pan-tilt linkova za Ignition.
+
+- **Zaključan ROS stack (od 18. 9.)**: svi `ros-humble-*` paketi su na `apt-mark hold`, a živi
+  `packages.ros.org` izvor je zamijenjen dated snapshotom
+  `http://snapshots.ros.org/humble/2026-08-07/ubuntu`. Razlog: neinteraktivna nadogradnja 439
+  paketa 17. 9. zaustavila je AMCL usred vožnje i oborila misiju na dva dana
+  ([[P-51_apt_upgrade_stops_amcl]], [[P-31_apt_upgrade_breakage]] #5). Izvorni izvor i popis
+  verzija prije zahvata su u `/root/ros-rollback-backup-2026-09-18/`.
+  **Nakon svake promjene stacka obavezan je čist rebuild** (`rm -rf build install`).
 
 ## Standardni run
 ```bash
