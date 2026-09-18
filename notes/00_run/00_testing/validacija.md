@@ -36,6 +36,37 @@ domeni 5. Otvoreni Gazebo iz druge sesije bit će ugašen.
 
 ---
 
+## V0b — GUI run (kad se želi vidjeti kako radi)
+
+Isto što je vožено 16. 9. (run M4) i 17. 9. ujutro. Jedan terminal:
+
+```bash
+cd /home/khartl/FSB/PAS-DUAL-ARM
+bash scripts/clean_ros.sh
+./scripts/run_native.sh ros2 launch pas_dual_arm_bringup mission.launch.py
+```
+
+Otvore se **Gazebo** (svijet i robot), **RViz** (karta, costmap, putanja) i **navigacijski panel**
+s gumbom „MISIJA: po kutiju". Robot se stvori raširenih ruku, sam ih složi u `DRIVE_V4` i stane
+čekati. Pritisni gumb.
+
+Gledati, redom:
+- **terminal** — koraci `[1/8]` … `[8/8]`, pa `PLACE VERIFIED` i `MISSION COMPLETE`;
+- **Gazebo, dolje desno: `Real time factor`** — ispod ~0,5 lokalizacija zaostaje za satom i run je
+  krhak bez obzira na kod (18. 9.: pri 0,27 Nav2 je dionicu prijavio kao stignutu bez pomaka);
+- **RViz** — zelena putanja kroz vrata, robot na karti;
+- **panel** — koja je faza u tijeku.
+
+Od 18. 9. rani pritisak gumba više ne škodi: `main_task` čeka da `map → base_footprint` bude svjež
+i stabilan 2 s i to ispiše (`localised: … driving`), a `room_navigator` ne prihvaća „stigao sam"
+dalje od 30 cm od cilja ([[P-49_empty_goal_checker_id_with_two_checkers]],
+[[P-50_base_controller_missing_no_localisation]]).
+
+**Prije pokretanja stroj mora biti miran** — `bash scripts/clean_ros.sh` gasi i zaostale čvorove
+projekta (detektore, `move_group`, `loc_error`), koji su 18. 9. ostajali živi i rušili RTF.
+
+---
+
 ## V1 — Tri runa (prvi put uvijek ovo)
 
 ```bash
