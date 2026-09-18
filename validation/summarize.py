@@ -29,12 +29,49 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS = os.path.join(REPO, 'validation', 'results')
 LATEST = os.path.join(RESULTS, 'latest')
 
-MEASURES = [
+# What the robot SAID about itself, parsed from its own log (results.csv).
+# `place_error_mm` here is the robot's claim, and it is labelled as one: the
+# 20-run series of 18 Sep measured it against ground truth and found it
+# optimistic by a constant 15.4 mm (sd 0.8 mm over 13 runs). Reporting it as the
+# placement result would be reporting the claim instead of the measurement,
+# which is the one thing D-24 exists to prevent.
+CLAIMED = [
     ('duration_s', 'Trajanje misije', 's', 1),
-    ('place_error_mm', 'Odstupanje odlaganja', 'mm', 1),
+    ('place_error_mm', 'Odstupanje odlaganja (robot tvrdi)', 'mm', 1),
     ('tip_left_mm', 'Vrh lijevog alata od cilja', 'mm', 1),
     ('tip_right_mm', 'Vrh desnog alata od cilja', 'mm', 1),
 ]
+
+# What was RECORDED (metrics.csv, measured from the bag against the run's own
+# world). These are the numbers that belong in the report.
+#
+# The names say what is measured from what. "Zazor pri prelasku sobe" was the
+# old label and it misled a reader straight away - it sounds like a doorway
+# figure, so 0.70 m in a 1.0 m doorway looks impossible. It is not a doorway
+# figure at all: it is the distance from the robot to the nearest TABLE while
+# crossing a room, and the report's 0.835 m refers to exactly that.
+#
+# Both clearances are measured from the robot's CENTRE, because the planned
+# path that 0.835 m came from is a path of centre points. The robot is 0.821 m
+# wide in DRIVE_V4, so subtract ~0.41 m for the distance from its side.
+MEASURED = [
+    ('table_clear_transit_min_m',
+     'Udaljenost od ruba stola pri prelasku sobe (od centra robota)', 'm', 3),
+    ('table_clear_approach_min_m',
+     'Udaljenost od ruba stola pri prilazu stolu (od centra robota)', 'm', 3),
+    ('wall_clear_open_min_m',
+     'Udaljenost od zida u otvorenom prostoru (od centra robota)', 'm', 3),
+    ('door_clear_min_m',
+     'Udaljenost od dovratnika u prolazu (od centra robota)', 'm', 3),
+    ('place_err_truth_mm',
+     'Odstupanje odlaganja (izmjereno, ground truth)', 'mm', 1),
+    ('amcl_err_max_cm', 'Greska lokalizacije, najveca', 'cm', 1),
+    ('amcl_err_rms_cm', 'Greska lokalizacije, RMS', 'cm', 1),
+    ('amcl_yaw_max_deg', 'Greska lokalizacije, zakret', 'deg', 1),
+    ('path_len_m', 'Duljina puta', 'm', 2),
+]
+
+MEASURES = CLAIMED          # kept for callers that still expect the old name
 
 
 def load(path):
@@ -87,6 +124,21 @@ def main():
     out_dir = os.path.dirname(os.path.abspath(csv_path))
 
     rows = load(csv_path)
+    # Join the recorded measurements onto the runs they belong to. Without this
+    # the only placement figure available is the robot's own claim.
+    metrics_path = os.path.join(out_dir, 'metrics.csv')
+    measured = {}
+    if os.path.exists(metrics_path):
+        with open(metrics_path) as handle:
+            for row in csv.DictReader(handle):
+                measured[str(row.get('run', '')).lstrip('0') or '0'] = row
+    if rows:
+        for row in rows:
+            extra = measured.get(str(row.get('run', '')).lstrip('0') or '0')
+            if extra:
+                for key, value in extra.items():
+                    if key != 'run':
+                        row.setdefault(key, value)
     if rows is None:
         return 1
     total = len(rows)
@@ -121,7 +173,20 @@ def main():
             for reason, count in reasons.most_common():
                 print(f'  {count:3d} x  {reason[:70]}')
 
-    print('\nMjere (samo uspješni runovi; medijan i raspon):')
+    print('\nIZMJERENO iz snimke (samo uspješni runovi; medijan i raspon):')
+    measured_summary = []
+    for key, label, unit, digits in MEASURED:
+        stats = describe(numbers(rows, key), digits)
+        if stats is None:
+            continue
+        spread = f', sd {stats["spread"]}' if stats['spread'] is not None else ''
+        print(f'  {label:<62} {stats["median"]} {unit}  '
+              f'[{stats["lo"]} – {stats["hi"]}]{spread}   n={stats["n"]}')
+        measured_summary.append((label, unit, stats))
+    if not measured_summary:
+        print('  (nema metrics.csv - pokreni validation/analyze_runs.py)')
+
+    print('\nŠTO JE ROBOT TVRDIO o sebi (iz vlastitog loga):')
     summary = []
     for key, label, unit, digits in MEASURES:
         stats = describe(numbers(rows, key), digits)
@@ -145,7 +210,7 @@ def main():
             handle.write('        \\textbf{Mjera} & \\textbf{Medijan} & '
                          '\\textbf{Raspon} & \\textbf{$N$} \\\\\n        \\midrule\n')
             handle.write(f'        Uspje\\v{{s}}nost & {ok}/{valid} & --- & {valid} \\\\\n')
-            for label, unit, stats in summary:
+            for label, unit, stats in measured_summary + summary:
                 handle.write(f'        {label} & {stats["median"]} {unit} & '
                              f'{stats["lo"]}--{stats["hi"]} {unit} & {stats["n"]} \\\\\n')
             handle.write('        \\bottomrule\n    \\end{tabularx}\n\\end{table}\n')
