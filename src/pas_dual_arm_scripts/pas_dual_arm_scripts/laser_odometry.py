@@ -64,9 +64,10 @@ class LaserOdometry(Node):
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('publish_tf', False)
-        # Every Nth scan. The lidar runs at about 13 Hz and the matching needs
-        # nothing like that: 19 ms a match measured, against ~4 Hz of work.
-        self.declare_parameter('stride', 3)
+        # Every Nth scan. 1 means every one the lidar gives, about 13 Hz, and a
+        # match costs 19 ms so there is no reason to ask for less. The offline
+        # evaluation used 3 only to get through fifty bags faster.
+        self.declare_parameter('stride', 1)
         # A keyframe only moves after this much, which is what stops one
         # matching error per scan from compounding - scan-to-scan drifted
         # 286 mm over a run, keyframes brought it to 22, the metric did the rest.
@@ -76,6 +77,21 @@ class LaserOdometry(Node):
         self.declare_parameter('max_fitness', 0.08)
 
         self._pose = (0.0, 0.0, 0.0)        # laser in `odom`
+        # The laser corrects; the wheels carry between corrections.
+        #
+        # 13 Hz is the lidar's rate and it is the ceiling on matching, but a
+        # transform at 13 Hz is thin for a controller running at 20. So the
+        # laser is not asked to BE the odometry - it is asked to correct it, and
+        # the transform goes out whenever the wheels report, at 50 Hz.
+        #
+        # This is the same shape AMCL uses for map -> odom: a correction that
+        # updates when a measurement arrives, composed with a fast dead
+        # reckoning in between. It plays to what each one is good at. Wheels are
+        # accurate over a tenth of a second and hopeless over a run, because
+        # their error accumulates; the laser is accurate over a run and arrives
+        # too rarely to steer on. Between two matches the wheels move the robot
+        # a few millimetres and their sideways blindness has no time to matter.
+        self._correction = (0.0, 0.0, 0.0)  # laser pose = correction o wheel pose
         self._key_points = None
         self._key_pose = (0.0, 0.0, 0.0)
         self._key_wheel = None
@@ -104,6 +120,10 @@ class LaserOdometry(Node):
     def _on_wheel(self, msg):
         p, q = msg.pose.pose.position, msg.pose.pose.orientation
         self._wheel = (p.x, p.y, yaw_of(q))
+        if self._base_from_laser is None:
+            return
+        # Published at the wheels' rate, carrying the laser's correction.
+        self._publish(compose(self._correction, self._wheel), msg.header.stamp)
 
     def _laser_offset(self, frame):
         """base_footprint -> laser, looked up once; the mounting does not move."""
@@ -165,8 +185,11 @@ class LaserOdometry(Node):
             self._key_points, self._key_pose = points, self._pose
             self._key_wheel = self._wheel
 
+        # Re-seat the correction on this measurement. Nothing is published from
+        # here: the next wheel message carries it out, at 50 Hz instead of 13.
         base = compose(self._pose, invert(offset))
-        self._publish(base, msg.header.stamp)
+        if self._wheel is not None:
+            self._correction = compose(base, invert(self._wheel))
 
     def _publish(self, base, stamp):
         odom_frame = self.get_parameter('odom_frame').value

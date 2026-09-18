@@ -41,11 +41,31 @@ class CmdVelRelay(Node):
         self.create_subscription(
             Odometry, '/base_controller/odometry', self._on_odom, 10)
 
-        # TF odometry forwarding to standard /tf
+        # TF odometry forwarding to standard /tf.
+        #
+        # `publish_wheel_tf:=false` hands odom -> base_footprint to the laser
+        # odometry node instead. Two publishers on one transform is a worse
+        # fault than either alone, so exactly one of them does it.
+        #
+        # The wheels of this base cannot measure how it moves sideways: over ten
+        # runs, against ground truth, they drift 30.1 mm forwards and 22.3 mm
+        # sideways, where the same scans matched drift 0.9 and 1.5. A mecanum
+        # base with mu2 = 0.20 slides sideways by design and a slide leaves the
+        # wheels no rotation to count. PAL ship this base with
+        # `enable_odom_tf: false` for the same reason (D-25, P-52).
+        #
+        # /base_controller/odom keeps flowing either way: the laser node needs
+        # it, both to seed each match and to carry the transform between them.
+        self.declare_parameter('publish_wheel_tf', True)
         self.tf_pub = self.create_publisher(
             TFMessage, '/tf', 10)
-        self.create_subscription(
-            TFMessage, '/base_controller/tf_odometry', self._on_tf, 10)
+        if self.get_parameter('publish_wheel_tf').value:
+            self.create_subscription(
+                TFMessage, '/base_controller/tf_odometry', self._on_tf, 10)
+        else:
+            self.get_logger().info(
+                'odom -> base_footprint left to the laser odometry; '
+                'the wheels are not publishing it')
 
     def _now(self):
         """Seconds on the same clock everything else in this run uses.

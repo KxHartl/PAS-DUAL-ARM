@@ -334,12 +334,31 @@ def generate_launch_description():
 
     # Nav2/teleop publish Twist on /cmd_vel; the diff_drive controller listens on
     # its namespaced topic, so relay between them.
+    # Where odom -> base_footprint comes from. `laser_odometry:=true` hands it to
+    # the scan matcher and stops the wheels publishing it; see D-25. Off by
+    # default until a series has driven the whole mission on it - it changes the
+    # input to every part of navigation at once (D-18).
+    laser_odometry = LaunchConfiguration('laser_odometry', default='false')
+    laser_odometry_arg = DeclareLaunchArgument(
+        'laser_odometry', default_value='false',
+        description='Take odom -> base_footprint from the laser instead of the wheels')
+
+    laser_odometry_node = Node(
+        package='pas_dual_arm_scripts',
+        executable='laser_odometry',
+        parameters=[{'use_sim_time': True, 'publish_tf': True}],
+        condition=IfCondition(laser_odometry),
+        output=bg_output,
+    )
+
     cmd_vel_relay = Node(
         package='pas_dual_arm_scripts',
         executable='cmd_vel_relay',
         # Its collision-monitor freshness window is a timeout like any
         # other, so it belongs on simulation time (invariant 4).
-        parameters=[{'use_sim_time': True}],
+        parameters=[{'use_sim_time': True,
+                     'publish_wheel_tf': PythonExpression(
+                         ["'", laser_odometry, "' != 'true'"])}],
         output=bg_output,
     )
     scan_filter = Node(
@@ -451,6 +470,7 @@ def generate_launch_description():
     return LaunchDescription([
         headless_arg,
         heavy_sensors_arg,
+        laser_odometry_arg,
         quiet_arg,
         carry_arms_arg,
         table_arms_arg,
@@ -473,6 +493,7 @@ def generate_launch_description():
         detach_box_on_spawn,
         delayed_detach,
         cmd_vel_relay,
+        laser_odometry_node,
         scan_filter,
         footprint_publisher,
         *controller_spawners,
