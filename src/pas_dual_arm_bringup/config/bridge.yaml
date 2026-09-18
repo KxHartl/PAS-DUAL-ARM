@@ -9,6 +9,18 @@
 # so no cmd_vel/odom/tf bridging is needed here.
 
 # --- Sensors (Ignition gpu_lidar + camera defined in robot.urdf.xacro) ---
+# Base IMU, 100 Hz. PAL's own omni_base declares it
+# (pal_urdf_utils/urdf/interaction_sensors/imu.urdf.xacro, included by
+# urdf/base/base_sensors.urdf.xacro); it published nothing until the Imu system
+# plugin was added to the world. The gyro's yaw rate is the only direct
+# measurement of heading we have - wheels infer it from four wheel speeds and a
+# no-slip assumption, the laser infers it from scan geometry.
+- ros_topic_name: "/base_imu"
+  gz_topic_name: "/base_imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "ignition.msgs.IMU"
+  direction: GZ_TO_ROS
+
 - ros_topic_name: "/scan"
   gz_topic_name: "/scan"
   ros_type_name: "sensor_msgs/msg/LaserScan"

@@ -73,6 +73,8 @@ BAG_TOPICS = [
     '/amcl_pose', '/particle_cloud',
     '/tf', '/tf_static',
     '/base_controller/odom',
+    '/laser_odom',                  # laser scan matcher, when laser_odometry:=true
+    '/base_imu',                    # 100 Hz base IMU, when the Imu system is in the world
     '/scan', '/scan_filtered',
     '/joint_states',
     '/cmd_vel', '/cmd_vel_safe',

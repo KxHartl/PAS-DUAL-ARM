@@ -29,7 +29,7 @@ from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Imu, LaserScan
 
 from pas_dual_arm_scripts.scan_matcher import match, scan_to_points
 
@@ -61,6 +61,20 @@ class LaserOdometry(Node):
         super().__init__('laser_odometry')
         self.declare_parameter('scan_topic', '/scan_filtered')
         self.declare_parameter('wheel_odom_topic', '/base_controller/odom')
+        self.declare_parameter('imu_topic', '/base_imu')
+        # Where heading comes from. Measured over the calibration drive
+        # (scripts/yaw_drive.py, validation/evaluate_imu_yaw.py), against
+        # ground truth, mean absolute error over the whole drive:
+        #
+        #     IMU (gyro, integrated)   0.03 deg
+        #     laser (scan matching)    0.12 deg
+        #     wheels                   3.23 deg, ending 14.94 deg out
+        #
+        # The wheels are not merely worse, they are worse by two orders of
+        # magnitude, and a heading error is the one error that grows with
+        # distance travelled rather than staying put. `wheels` is kept so the
+        # comparison can be re-run, not because it is a reasonable choice.
+        self.declare_parameter('yaw_source', 'imu')
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('publish_tf', False)
@@ -95,7 +109,10 @@ class LaserOdometry(Node):
         self._key_points = None
         self._key_pose = (0.0, 0.0, 0.0)
         self._key_wheel = None
-        self._wheel = None
+        self._wheel = None          # the wheels' own pose, as published
+        self._dead = None           # what the transform is actually built on
+        self._imu_yaw = None        # gyro, integrated
+        self._imu_time = None
         self._base_from_laser = None
         self._count = 0
         self._skipped = 0
@@ -111,19 +128,73 @@ class LaserOdometry(Node):
         self.create_subscription(Odometry,
                                  self.get_parameter('wheel_odom_topic').value,
                                  self._on_wheel, 20)
+        self.create_subscription(Imu, self.get_parameter('imu_topic').value,
+                                 self._on_imu, sensor_qos)
         self.publisher = self.create_publisher(Odometry, '/laser_odom', 10)
         self.get_logger().info(
-            'laser odometry: matching %s; publish_tf=%s' % (
+            'laser odometry: matching %s; yaw from %s; publish_tf=%s' % (
                 self.get_parameter('scan_topic').value,
+                self.get_parameter('yaw_source').value,
                 self.get_parameter('publish_tf').value))
 
+    def _on_imu(self, msg):
+        """Integrate the yaw rate. Nothing else on the IMU is used.
+
+        The accelerometers are left alone deliberately: turning acceleration
+        into position needs a double integration and an attitude good enough to
+        separate gravity from motion, and the laser already supplies position.
+        The gyro is the one channel that measures something nothing else here
+        measures at all.
+
+        Bias is not estimated. Ignition gives this sensor 7.5e-6 rad/s of it,
+        which is 0.02 deg per minute, and the laser re-seats the heading through
+        the correction below on every accepted match anyway. On a real base the
+        bias would be larger and that correction is what would absorb it.
+        """
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if self._imu_time is None:
+            self._imu_yaw, self._imu_time = 0.0, stamp
+            return
+        dt = stamp - self._imu_time
+        self._imu_time = stamp
+        if 0.0 < dt < 1.0:                      # a gap means messages were dropped
+            self._imu_yaw += msg.angular_velocity.z * dt
+
     def _on_wheel(self, msg):
+        """Advance the dead reckoning and send the transform out.
+
+        The wheels are asked for one thing only: how far the robot moved in its
+        own frame since the last message. That they can do - over a fiftieth of
+        a second the base has barely moved and there is nothing for the sideways
+        blindness to accumulate into. What they must not be asked for is which
+        way the robot is now pointing, because the heading is where their error
+        lives, and every later displacement is rotated by it.
+
+        So the step is taken from the wheels and rotated by the IMU's heading.
+        PAL says the wheels may not own `odom -> base_footprint` on this base
+        (`enable_odom_tf: false`); this is that rule applied to the part of the
+        pose the measurement actually condemns.
+        """
         p, q = msg.pose.pose.position, msg.pose.pose.orientation
-        self._wheel = (p.x, p.y, yaw_of(q))
+        previous, self._wheel = self._wheel, (p.x, p.y, yaw_of(q))
+
+        by_imu = (self.get_parameter('yaw_source').value == 'imu'
+                  and self._imu_yaw is not None)
+        if not by_imu:
+            self._dead = self._wheel
+        elif previous is None or self._dead is None:
+            self._dead = (self._wheel[0], self._wheel[1], self._imu_yaw)
+        else:
+            step = compose(invert(previous), self._wheel)       # in the body frame
+            c, s = math.cos(self._dead[2]), math.sin(self._dead[2])
+            self._dead = (self._dead[0] + step[0] * c - step[1] * s,
+                          self._dead[1] + step[0] * s + step[1] * c,
+                          self._imu_yaw)
+
         if self._base_from_laser is None:
             return
         # Published at the wheels' rate, carrying the laser's correction.
-        self._publish(compose(self._correction, self._wheel), msg.header.stamp)
+        self._publish(compose(self._correction, self._dead), msg.header.stamp)
 
     def _laser_offset(self, frame):
         """base_footprint -> laser, looked up once; the mounting does not move."""
@@ -154,14 +225,14 @@ class LaserOdometry(Node):
                                 msg.range_min, msg.range_max)
         if self._key_points is None:
             self._key_points, self._key_pose = points, self._pose
-            self._key_wheel = self._wheel
+            self._key_wheel = self._dead
             return
 
-        # Seed from the wheels. They are poor sideways and good forwards, which
-        # makes them a bad measurement and a perfectly good starting point.
+        # Seed from the dead reckoning: the wheels' step under the IMU's
+        # heading. A bad measurement and a perfectly good starting point.
         guess = (0.0, 0.0, 0.0)
-        if self._wheel is not None and self._key_wheel is not None:
-            a, b = self._key_wheel, self._wheel
+        if self._dead is not None and self._key_wheel is not None:
+            a, b = self._key_wheel, self._dead
             c, s = math.cos(-a[2]), math.sin(-a[2])
             dx, dy = b[0] - a[0], b[1] - a[1]
             guess = (dx * c - dy * s, dx * s + dy * c,
@@ -183,13 +254,13 @@ class LaserOdometry(Node):
         if (math.hypot(dx, dy) > self.get_parameter('keyframe_distance').value
                 or abs(dtheta) > self.get_parameter('keyframe_angle').value):
             self._key_points, self._key_pose = points, self._pose
-            self._key_wheel = self._wheel
+            self._key_wheel = self._dead
 
         # Re-seat the correction on this measurement. Nothing is published from
         # here: the next wheel message carries it out, at 50 Hz instead of 13.
         base = compose(self._pose, invert(offset))
-        if self._wheel is not None:
-            self._correction = compose(base, invert(self._wheel))
+        if self._dead is not None:
+            self._correction = compose(base, invert(self._dead))
 
     def _publish(self, base, stamp):
         odom_frame = self.get_parameter('odom_frame').value

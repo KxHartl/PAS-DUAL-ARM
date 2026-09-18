@@ -18,6 +18,11 @@ echo "Zaustavljam zaostale ROS i Gazebo procese..."
 #
 # Iskljucuju se ANCESTORI, a ne cijela procesna grupa: simulator pokrenut iz istog terminala je u
 # istoj grupi, a njega treba ugasiti.
+#
+# `laser_odometry` je u popisu nedostajao do 18. 9. navecer, i to nije bilo tiho. Cvor prezivi
+# svako ciscenje, sljedeci run digne jos jedan, i za nekoliko pokusaja ih pet objavljuje na
+# /laser_odom istovremeno. U bagu se vidi kao 247 Hz umjesto 50, a mjerenje ispadne besmisleno:
+# 34 stupnja greske zakreta ondje gdje je isti pokus s jednim cvorom dao 1,3.
 ancestors() {
     local pid=$$
     while [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "1" ]; do
@@ -27,7 +32,7 @@ ancestors() {
 }
 SKIP=" $(ancestors | tr '\n' ' ')"
 
-PIDS=$(pgrep -f '(ros2 launch pas_dual_arm_bringup|gz sim|ign gazebo|room_navigator|cmd_vel_relay|scan_filter|static_transform_publisher|nav2_|controller_server|bt_navigator|amcl|map_server|rviz2|teleop_twist_keyboard|parameter_bridge|ros_gz_bridge|aruco_detector|loc_error|main_task|move_group|footprint_publisher|nav_gui|nav_zones|feature_registry|table_ready|map_handoff|room_sweeper|frontier_explorer|cloud_restamp|set_posture|robot_state_publisher|joint_state_publisher|spawner|ros2 bag record)' || true)
+PIDS=$(pgrep -f '(ros2 launch pas_dual_arm_bringup|gz sim|ign gazebo|room_navigator|cmd_vel_relay|scan_filter|static_transform_publisher|nav2_|controller_server|bt_navigator|amcl|map_server|rviz2|teleop_twist_keyboard|parameter_bridge|ros_gz_bridge|aruco_detector|loc_error|main_task|move_group|footprint_publisher|nav_gui|nav_zones|feature_registry|table_ready|map_handoff|room_sweeper|frontier_explorer|cloud_restamp|set_posture|laser_odometry|yaw_drive|scan_watch|robot_state_publisher|joint_state_publisher|spawner|ros2 bag record)' || true)
 
 # Makni sebe i svoje pretke iz popisa za gasenje.
 if [ -n "$PIDS" ]; then

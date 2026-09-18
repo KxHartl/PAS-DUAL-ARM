@@ -343,10 +343,20 @@ def generate_launch_description():
         'laser_odometry', default_value='false',
         description='Take odom -> base_footprint from the laser instead of the wheels')
 
+    # Which source the fused odometry takes its heading from. `imu` is the
+    # measured answer (P-53); `wheels` reproduces what ran before the IMU
+    # existed, so the two can be driven against each other.
+    yaw_source = LaunchConfiguration('yaw_source', default='imu')
+    yaw_source_arg = DeclareLaunchArgument(
+        'yaw_source', default_value='imu',
+        choices=['imu', 'wheels'],
+        description='Heading for the fused odometry: the gyro, or the wheels')
+
     laser_odometry_node = Node(
         package='pas_dual_arm_scripts',
         executable='laser_odometry',
-        parameters=[{'use_sim_time': True, 'publish_tf': True}],
+        parameters=[{'use_sim_time': True, 'publish_tf': True,
+                     'yaw_source': yaw_source}],
         condition=IfCondition(laser_odometry),
         output=bg_output,
     )
@@ -471,6 +481,7 @@ def generate_launch_description():
         headless_arg,
         heavy_sensors_arg,
         laser_odometry_arg,
+        yaw_source_arg,
         quiet_arg,
         carry_arms_arg,
         table_arms_arg,

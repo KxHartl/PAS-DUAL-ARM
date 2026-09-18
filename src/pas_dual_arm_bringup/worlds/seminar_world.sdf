@@ -49,6 +49,16 @@
       name="ignition::gazebo::systems::ForceTorque">
     </plugin>
 
+    <!-- IMU system: drives base_imu_sensor, the 100 Hz IMU that PAL's own
+         omni_base carries (pal_urdf_utils/urdf/interaction_sensors/imu.urdf.xacro).
+         The sensor was declared in the URDF from the start but never published,
+         because this system was missing. The gyro's yaw rate is the one quantity
+         neither the wheels nor the laser measure directly (notes/03_problemi/P-53). -->
+    <plugin
+      filename="libignition-gazebo-imu-system.so"
+      name="ignition::gazebo::systems::Imu">
+    </plugin>
+
     <!-- Light -->
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>
