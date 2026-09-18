@@ -179,7 +179,7 @@ controller_server:
     # They differ only in what they are allowed to do to build a map that the
     # mission will later trust - see explore_goal_checker below.
     goal_checker_plugins: ["general_goal_checker", "explore_goal_checker"]
-    controller_plugins: ["FollowPath", "FollowPathExplore"]
+    controller_plugins: ["FollowPath", "FollowPathExplore", "FollowPathAlign"]
 
     # Progress checker parameters
     progress_checker:
@@ -294,6 +294,72 @@ controller_server:
       RotateToGoal.scale: 64.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
+
+    # The approach profile: the mission's own FollowPath, plus one idea.
+    #
+    # Used ONLY on legs that are not a doorway transit - lining up at a doorway,
+    # squaring up in front of a table, docking. room_navigator picks it per leg
+    # through the goal's behavior_tree field, so a transit is driven by the
+    # untouched FollowPath above and behaves exactly as it does today. That
+    # isolation is the point: the doorway is the delicate part and it is not
+    # being experimented on.
+    #
+    # Why: on 18 Sep a leg sat 227 of its 241 seconds within 15 cm of its goal,
+    # 5.5 cm out (tolerance 5.0) and 12.3 deg off heading (tolerance 1.43), and
+    # never fixed the heading. Nav2 says why in RotateToGoalCritic's own class
+    # documentation: "If the current pose is outside xy_goal_tolerance LINEAR
+    # distance from the goal pose, this critic will just return score 0.0."
+    #
+    # So just outside the tolerance the mission's critic list contains nothing
+    # that rewards facing the goal - PathDist and GoalDist score only where a
+    # trajectory ENDS, RotateToGoal is inert, and Twirling actively penalises
+    # turning. The robot had no reason to correct 12 degrees and did not.
+    #
+    # GoalAlign scores a point held ahead of the robot, so heading starts paying
+    # before the tolerance is reached and the robot arrives already lined up,
+    # where RotateToGoal can finish the job. The scale is deliberately modest
+    # against RotateToGoal's 64: this is a nudge on the approach, not a demand
+    # to face the goal at all times, and reverse and strafe stay available -
+    # they are how an omni base reaches a pose behind it.
+    FollowPathAlign:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: False
+      min_vel_x: -0.26
+      max_vel_x: 0.45
+      min_vel_y: -0.15
+      max_vel_y: 0.15
+      max_vel_theta: 0.40
+      min_speed_xy: 0.0
+      max_speed_xy: 0.50
+      min_speed_theta: 0.0
+      acc_lim_x: 1.5
+      acc_lim_y: 1.5
+      acc_lim_theta: 3.0
+      decel_lim_x: -1.5
+      decel_lim_y: -1.5
+      decel_lim_theta: -3.0
+      vx_samples: 25
+      vy_samples: 25
+      vtheta_samples: 25
+      sim_time: 1.2
+      linear_granularity: 0.01
+      angular_granularity: 0.01
+      transform_tolerance: 0.2
+      xy_goal_tolerance: 0.05
+      trans_stopped_velocity: 0.05
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "GoalDist", "GoalAlign", "Twirling"]
+      ObstacleFootprint.scale: 2.0
+      PathDist.scale: 96.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 64.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
+      # The one addition, and the only difference from FollowPath.
+      GoalAlign.scale: 8.0
+      GoalAlign.forward_point_distance: 0.325
+      Twirling.scale: 2.0
 
     # The mapping profile.
     #

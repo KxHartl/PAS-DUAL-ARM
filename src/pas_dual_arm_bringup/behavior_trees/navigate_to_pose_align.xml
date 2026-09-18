@@ -1,0 +1,45 @@
+<!--
+  The mission tree again, driving FollowPathAlign instead of FollowPath.
+
+  room_navigator asks for this one by name, per leg, for everything that is NOT
+  a doorway transit: lining up at a doorway, squaring up before a table,
+  docking. A transit still runs navigate_to_pose_mission.xml on the untouched
+  FollowPath, so the tightest part of the mission is left exactly as it is.
+
+  The only difference downstream is the controller: FollowPathAlign is
+  FollowPath plus a GoalAlign critic, because outside xy_goal_tolerance nothing
+  in the mission list rewards facing the goal and Twirling penalises turning -
+  which is how a leg came to sit 227 s at 5.5 cm and 12.3 deg from its pose on
+  18 Sep. The goal checker is unchanged: general_goal_checker, 5 cm and
+  1.43 deg. Nothing about what counts as ARRIVING has moved.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPathAlign" goal_checker_id="general_goal_checker"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Spin spin_dist="1.57"/>
+          <Wait wait_duration="5"/>
+          <BackUp backup_dist="0.30" backup_speed="0.05"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

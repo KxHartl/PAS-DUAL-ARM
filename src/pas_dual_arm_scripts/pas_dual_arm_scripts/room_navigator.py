@@ -32,10 +32,12 @@ below the abort threshold the goal is cancelled instead of scraping through.
 
 import json
 import math
+import os
 import time
 
 import numpy as np
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped, Quaternion
 from nav2_msgs.action import NavigateThroughPoses, NavigateToPose
@@ -735,8 +737,30 @@ class RoomNavigator(Node):
                 f'{label}: tightest gap beside the robot {tightest * 100:.1f} cm')
         return True
 
+    # Nav2 picks the controller through the behaviour tree, and the goal carries
+    # the tree's name, so the choice can be made per leg. A doorway transit is
+    # left on the mission tree and its untouched FollowPath; everything else -
+    # lining up, squaring up, docking - gets the approach tree, whose only
+    # difference is a GoalAlign critic.
+    #
+    # The split exists because the two jobs are not the same. A transit is a
+    # straight run down a measured centreline with centimetres to spare, and it
+    # works; an approach has to ARRIVE, heading and all, and that is where a leg
+    # sat 227 s of its 241 s timeout 5.5 cm and 12.3 deg from its pose on 18 Sep
+    # with nothing in the critic list rewarding it to turn. Keeping the transit
+    # out of the experiment is the point (P-39, D-18).
+    ALIGN_TREE = 'navigate_to_pose_align.xml'
+
+    def _tree_for(self, leg):
+        """Which behaviour tree drives this leg; '' means Nav2's configured default."""
+        if getattr(leg, 'transit', False):
+            return ''
+        share = get_package_share_directory('pas_dual_arm_bringup')
+        return os.path.join(share, 'behavior_trees', self.ALIGN_TREE)
+
     def _drive(self, leg, label, destination):
         goal = NavigateToPose.Goal()
+        goal.behavior_tree = self._tree_for(leg)
         goal.pose = PoseStamped()
         goal.pose.header.frame_id = 'map'
         goal.pose.header.stamp = self.get_clock().now().to_msg()
