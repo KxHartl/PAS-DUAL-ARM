@@ -3351,6 +3351,53 @@ class MainTask(BaseDriver, Node):
         # GOOD. From here the cube is rigidly attached to the left wrist, so this
         # relation holds until it is let go - and it is the only way to know
         # where the cube is once the pads cover its markers (P-45).
+        # Where the cube actually ended up between the pads, measured rather
+        # than assumed. `grip` is the centre the wrist cameras saw BEFORE the
+        # press, and the press moves the cube: the two tool tips do not reach
+        # their targets equally (measured 4.4-5.4 mm on the left against
+        # 0.3-0.8 on the right, the same way round in every run), and whatever
+        # of that asymmetry the cube absorbed is a shift of its centre.
+        #
+        # The pads now rest on opposite faces, so the point halfway between the
+        # tool tips IS the centre of whatever is between them. It assumes
+        # nothing about the cube - not its size, not that it is a cube - which
+        # is the same reason the grasp is driven by the side markers rather
+        # than by a dimension in a file. This is the last moment it can be
+        # taken: the right pad eases off just below, and from then on the pads
+        # cover the markers and no camera can see the thing being carried.
+        #
+        # Nothing moves here. The correction reaches the world through the
+        # place, which brings this centre onto the marker with BOTH arms
+        # travelling the same vector - the grip is never disturbed, so the
+        # cube cannot be dropped by fixing where we think it is.
+        tips = {side: self._tf_point('base_link', f'{side}_tool_tip')
+                for side in ('left', 'right')}
+        seen = np.array([grip.x, grip.y, grip.z])
+        centre = seen
+        if all(tip is not None for tip in tips.values()):
+            between = (tips['left'] + tips['right']) / 2.0
+            shift = between - seen
+            # A pad that lost its face, or a transform read mid-motion, would
+            # put the midpoint somewhere absurd; the cameras' centre is then
+            # still the better of the two.
+            if float(np.linalg.norm(shift)) <= 0.05:
+                centre = between
+                self.get_logger().info(
+                    'cube centred on the pads: %.1f mm from where the cameras '
+                    'put it (%.1f right, %.1f forward, %.1f up)' % (
+                        np.linalg.norm(shift) * 1000.0, shift[1] * 1000.0,
+                        shift[0] * 1000.0, shift[2] * 1000.0))
+            else:
+                self.get_logger().warn(
+                    'the point between the pads is %.0f mm from the cameras\' '
+                    'centre - too far to believe; keeping the cameras\' figure' % (
+                        np.linalg.norm(shift) * 1000.0))
+        else:
+            missing = [s for s, t in tips.items() if t is None]
+            self.get_logger().warn(
+                f'no tool tip transform for {missing}; the cube centre stays '
+                'the one the cameras measured before the press')
+
         try:
             tf = self.tf_buffer.lookup_transform(
                 'base_link', 'left_tool_tip', rclpy.time.Time())
@@ -3359,7 +3406,7 @@ class MainTask(BaseDriver, Node):
                                tf.transform.translation.y,
                                tf.transform.translation.z])
             self._hold = {
-                'offset': rotation.T @ (np.array([grip.x, grip.y, grip.z]) - origin),
+                'offset': rotation.T @ (centre - origin),
                 'normal': rotation.T @ normal,
                 'half': span / 2.0,
             }
