@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'aruco_detector = pas_dual_arm_scripts.aruco_detector:main',
             'cmd_vel_relay = pas_dual_arm_scripts.cmd_vel_relay:main',
+            'laser_odometry = pas_dual_arm_scripts.laser_odometry:main',
             'main_task = pas_dual_arm_scripts.main_task:main',
             'mapping_tour = pas_dual_arm_scripts.mapping_tour:main',
             'set_posture = pas_dual_arm_scripts.set_posture:main',
