@@ -7,15 +7,40 @@ amcl:
       y: 0.0
       z: 0.0
       yaw: 0.0
-    # Motion-model noise, left at the stock 0.2 on purpose: these should be set
-    # from the mecanum base's measured odometry drift (loc_error, debug_truth:=true),
-    # not guessed, and changing them in the same run as the measurement model would
-    # make neither readable. alpha5 is the strafe term the OmniMotionModel adds.
-    alpha1: 0.2
-    alpha2: 0.2
-    alpha3: 0.2
-    alpha4: 0.2
-    alpha5: 0.2
+    # Motion-model noise. These sat at the stock 0.2 until the drift they describe
+    # was actually measured, which is what that note asked for; it has been, so
+    # they move. alpha5 is the strafe term the OmniMotionModel adds.
+    #
+    # What 0.2 tells AMCL: expect 0.2 m of odometry error per metre driven and
+    # 0.2 rad per radian turned. What the fused odometry does, measured against
+    # ground truth over three calibration drives (D-26, P-53):
+    #
+    #     heading      0.06 deg over 175 deg turned    = 0.0006 rad/rad
+    #     position     1.8 mm over ~7 m driven         = 0.00026 m/m
+    #
+    # So AMCL was being told its odometry is some three hundred times noisier
+    # than it is. It answers by spreading the particle cloud far wider than the
+    # motion warrants and letting each scan pull the estimate around, and that
+    # is visible in the runs: at the doorway the lidar put the robot 0.4 cm off
+    # the opening's axis while the localised pose said 3.6 cm, a disagreement of
+    # 3.2 cm in a gap with 5 cm to spare. Nav2 steers on the localised pose.
+    #
+    # 0.02 is not the measured number. It is roughly thirty times looser, which
+    # leaves the filter room to distrust the odometry when the laser cannot
+    # match - a bare corridor, a doorway with little wall in view - while no
+    # longer throwing away two orders of magnitude of accuracy. The measured
+    # value itself would be the next step, and only after this one is driven.
+    #
+    # Note what this leans on: recovery_alpha_fast/slow are 0.0, so there is no
+    # random injection to rescue a cloud that has converged somewhere wrong. The
+    # robot starts from a known pose (set_initial_pose) and is never moved by
+    # hand, so that is a trade this mission can make and a real deployment
+    # could not.
+    alpha1: 0.02
+    alpha2: 0.02
+    alpha3: 0.02
+    alpha4: 0.02
+    alpha5: 0.02
     base_frame_id: "base_footprint"
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
