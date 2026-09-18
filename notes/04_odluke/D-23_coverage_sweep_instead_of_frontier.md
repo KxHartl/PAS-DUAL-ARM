@@ -81,7 +81,12 @@ Tri stvari koje to čine ispravnim, a ne samo ljepšim:
 - Pretpostavka koja se uvodi i mora se izgovoriti: **sobe su pravokutne i poravnate s osima karte.**
   Ne pretpostavlja se ni koliko ih je, ni kojim redom, ni kako se zovu.
 - `room_sweeper` mjeri starost `/scan_filtered`, ne `map → odom`: slam_toolbox reobjavljuje tu
-  transformaciju 50×/s sa svježim žigom i kad skenovi stanu, pa je watchdog na njoj slijep ([[P-47]]).
+  transformaciju 50×/s i kad skenovi stanu, pa je watchdog na njoj slijep
+  ([[P-47_headless_batch_map_odom_stale]]).
+  > **Ispravak 18. 9.:** rečenica gore pretpostavlja da **skenovi stanu**. Stvarni kvar
+  > ([[P-51_apt_upgrade_stops_amcl]]) je suprotan — skenovi teku, a stane **potrošač**. Watchdog na
+  > `/scan_filtered` je zato tim kvarom **također slijep**: tema je živa. Ono što ga otkriva je
+  > starost **žiga objavljene transformacije** (`Transform time` stoji dok `Data time` raste).
 
 ## Prva vožnja (18. 9.) i što je popravljeno
 Korisnik: *„na početku se robot ok giba, ali previše vremena je u početnoj sobi i nikad nije prošao
