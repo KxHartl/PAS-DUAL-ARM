@@ -74,12 +74,28 @@ provjerivača — i misijski, i onaj iz RViz-a („2D Goal Pose") — pa navigac
 tome koliko je provjerivača slučajno učitano. Micanje `explore_goal_checker`-a vratilo bi misiju,
 ali bi obeskorijenilo istraživački BT.
 
+## Dopuna 18. 9. (GUI run 02:22): popravljeno je bilo **pola** kvara
+Run je prošao vožnju do plave sobe, hvat i podizanje (`TASK COMPLETE: cube lifted and carried
+away`), pa pao na **prvoj dionici prijenosa** s istom porukom. Razlog: `room_navigator` dionicu s
+više poza — „odmakni se od stola **i** poravnaj se pred vratima, bez zaustavljanja" — šalje kao
+**`NavigateThroughPoses`**, a ne `NavigateToPose`. Ta akcija koristi **drugo stablo**
+(`default_nav_through_poses_bt_xml`), koje je ostalo Nav2-ovo standardno, s praznim imenom
+provjerivača.
+
+Popravak je zato udvostručen: `behavior_trees/navigate_through_poses_mission.xml` +
+`default_nav_through_poses_bt_xml`. Obje putanje provjerene izvan simulatora — razrješuju se u
+postojeće instalirane datoteke.
+
+**Pouka:** „misija vozi kroz Nav2" nije jedna akcija nego dvije, i svaka ima svoje stablo. Prva
+verzija popravka gledala je samo onu koju je prvi pad slučajno pokazao.
+
 ## Tablica pokušaja
 | # | Datum | Što je pokušano | Ishod |
 |---|---|---|---|
 | 1 | 17. 9. | dodan `explore_goal_checker` za mapiranje (`9af9027`) | mapiranje dobilo svoje tolerancije; **misija ostala bez upravljanja** (tada neprimijećeno) |
 | 2 | 18. 9. | serija `2026-09-18_0130`, runovi 1–2 | `aborted` na `leg 1/4`, robot se ne miče; uzrok pročitan iz `controller_server` |
-| 3 | 18. 9. | vlastiti BT s `goal_checker_id="general_goal_checker"` + `default_nav_to_pose_bt_xml` | zamjena putanje provjerena izvan simulatora (`ParameterFile` + `RewrittenYaml` razrješuje `$(find-pkg-share …)` u instaliranu datoteku); **vožnja još nije napravljena** |
+| 3 | 18. 9. | vlastiti BT s `goal_checker_id="general_goal_checker"` + `default_nav_to_pose_bt_xml` | **polovičan**: `NavigateToPose` dionice rade (GUI run 02:22 vozi, hvata i podiže kocku), `NavigateThroughPoses` i dalje puca |
+| 4 | 18. 9. | isto i za `navigate_through_poses` stablo | **čeka run** |
 
 ## Otvoreno
 Ponoviti V1 iz [[validacija]] (tri runa). Tek ako prođu, brojke iz serije imaju smisla.

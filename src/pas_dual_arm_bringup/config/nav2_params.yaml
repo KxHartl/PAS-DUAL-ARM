@@ -102,9 +102,12 @@ bt_navigator:
     # ($(find-pkg-share ...) resolves because nav2_bringup loads this file with
     # allow_substs=True.)
     default_nav_to_pose_bt_xml: $(find-pkg-share pas_dual_arm_bringup)/behavior_trees/navigate_to_pose_mission.xml
-    # 'default_nav_through_poses_bt_xml' is the Nav2 default
-    # (navigate_through_poses_w_replanning_and_recovery.xml); nothing here sends
-    # NavigateThroughPoses goals.
+    # BOTH trees need it. room_navigator sends a multi-pose leg - back off the
+    # table and line up at the doorway without stopping between them - as
+    # NavigateThroughPoses, so half the mission runs on the second tree. Naming
+    # the checker in only the first one got the run as far as lifting the cube
+    # and then failed on the first leg of the carry.
+    default_nav_through_poses_bt_xml: $(find-pkg-share pas_dual_arm_bringup)/behavior_trees/navigate_through_poses_mission.xml
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
