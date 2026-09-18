@@ -2660,10 +2660,25 @@ class MainTask(BaseDriver, Node):
         #     (P-19) and with nothing of the robot over it.
         self._report_mission_step(7, 8, 'Detekcija markera za odlaganje',
                                   'Glavna kamera traži ciljni marker na stolu (ID 3), robot i ruke se pozicioniraju...')
-        self.look_down(0.65, 'PLACE look at the table')
-        mark = self._place_marker_in_base()
+        # One look is not enough to call it: run 6 of the 18 Sep series docked
+        # 4.7 cm and +1.4 deg from the pose, which is what a GOOD arrival looks
+        # like here - the successful run beside it managed 4.5 cm - and still
+        # came up empty at pitch 0.65, so the mission threw away a cube it was
+        # holding correctly. The difference between seeing the plate and not is
+        # a degree of head tilt, not a fault, so the head sweeps a little before
+        # the run is allowed to fail. Nothing is relaxed: the marker still has
+        # to be SEEN, freshly, or the cube stays in the hands (D-12).
+        mark = None
+        for pitch in (0.65, 0.55, 0.75):
+            self.look_down(pitch, f'PLACE look at the table (pitch {pitch:.2f})')
+            mark = self._place_marker_in_base()
+            if mark is not None:
+                break
+            self.get_logger().warn(
+                f'PLACE: no marker at pitch {pitch:.2f}; tilting the head and looking again')
         if mark is None:
-            self._fail('the place marker was never seen; the cube stays in the hands')
+            self._fail('the place marker was never seen at any head tilt; '
+                       'the cube stays in the hands')
             return False
         self.get_logger().info(
             f'PLACE marker at base_link ({mark[0]:.3f}, {mark[1]:.3f}, {mark[2]:.3f})')
