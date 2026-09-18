@@ -22,10 +22,23 @@ import time
 
 import rclpy
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
+from tf2_ros import Buffer, TransformListener
 
 CMD_VEL_TOPIC = '/base_controller/cmd_vel_unstamped'
-ODOM_TOPIC = '/base_controller/odom'
+# Read from the TRANSFORM, not from the wheel controller's topic.
+#
+# Until 18. 9. this read /base_controller/odom directly, and that quietly
+# defeated its own experiment: `laser_odometry:=true` hands odom ->
+# base_footprint to the scan matcher and stops the wheels publishing it, but
+# everything here - the drive primitives, _to_odom, _marker_in_base - went on
+# reading the wheels regardless. A ten-run series was driven on the laser and
+# placed the cube 21.0 mm from the marker, exactly as before, because the part
+# being measured never saw the laser at all.
+#
+# Through TF it inherits whatever owns the transform, which is the point: the
+# wheels today, the laser and the gyro when they are switched on.
+ODOM_FRAME = 'odom'
+BASE_FRAME = 'base_footprint'
 
 
 class BaseDriver:
@@ -36,35 +49,73 @@ class BaseDriver:
         # topic remap cannot reach it; publish to its own topic directly. Nav2's
         # /cmd_vel reaches the same place through cmd_vel_relay.
         self.cmd_vel = self.create_publisher(Twist, CMD_VEL_TOPIC, 10)
-        self._last_odom = None
-        self.create_subscription(Odometry, ODOM_TOPIC, self._odom_cb, 10)
+        self._odom_stamp = None
 
     # ------------------------------------------------------------------ odometry
-    def _odom_cb(self, msg):
-        self._last_odom = msg
+    def _drive_buffer(self):
+        """The transform buffer to read poses from.
+
+        A node that already keeps one - main_task does - lends it, so there is
+        one listener per node rather than two filling the same history.
+        """
+        buffer = getattr(self, 'tf_buffer', None) or getattr(self, '_drive_tf', None)
+        if buffer is None:
+            buffer = Buffer()
+            self._drive_tf = buffer
+            self._drive_tf_listener = TransformListener(buffer, self, spin_thread=True)
+        return buffer
+
+    def _odom_pose(self, timeout=2.0):
+        """A FRESH odom -> base_footprint pose as (x, y, yaw), or None.
+
+        Fresh means newer than the last one this returned. The old version
+        cleared its cached message and waited for the next; a transform is
+        always available, so what is waited for here is a newer stamp.
+        """
+        buffer = self._drive_buffer()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                tf = buffer.lookup_transform(ODOM_FRAME, BASE_FRAME,
+                                             rclpy.time.Time())
+            except Exception:
+                rclpy.spin_once(self, timeout_sec=0.05)
+                continue
+            stamp = tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9
+            if self._odom_stamp is None or stamp > self._odom_stamp:
+                self._odom_stamp = stamp
+                t, q = tf.transform.translation, tf.transform.rotation
+                return (t.x, t.y,
+                        math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                                   1.0 - 2.0 * (q.y * q.y + q.z * q.z)))
+            rclpy.spin_once(self, timeout_sec=0.05)
+        return None
+
+    def _odom_latest(self):
+        """The current odom -> base_footprint pose, without waiting, or None.
+
+        For callers that are tracking a pose continuously and would rather have
+        the last one than block for a new one.
+        """
+        try:
+            tf = self._drive_buffer().lookup_transform(
+                ODOM_FRAME, BASE_FRAME, rclpy.time.Time())
+        except Exception:
+            return None
+        t, q = tf.transform.translation, tf.transform.rotation
+        return (t.x, t.y,
+                math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                           1.0 - 2.0 * (q.y * q.y + q.z * q.z)))
 
     def _odom_xy(self, timeout=2.0):
-        """A FRESH wheel-odometry XY sample (odom frame), or None."""
-        self._last_odom = None
-        deadline = time.monotonic() + timeout
-        while self._last_odom is None and time.monotonic() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.05)
-        if self._last_odom is None:
-            return None
-        p = self._last_odom.pose.pose.position
-        return (p.x, p.y)
+        """A FRESH odometry XY sample (odom frame), or None."""
+        pose = self._odom_pose(timeout)
+        return None if pose is None else (pose[0], pose[1])
 
     def _odom_yaw(self, timeout=2.0):
-        """A FRESH wheel-odometry yaw sample (odom frame), or None."""
-        self._last_odom = None
-        deadline = time.monotonic() + timeout
-        while self._last_odom is None and time.monotonic() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.05)
-        if self._last_odom is None:
-            return None
-        q = self._last_odom.pose.pose.orientation
-        return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
-                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        """A FRESH odometry yaw sample (odom frame), or None."""
+        pose = self._odom_pose(timeout)
+        return None if pose is None else pose[2]
 
     # ---------------------------------------------------------------- commanding
     def _send_vel(self, lin, ang, lat=0.0):
