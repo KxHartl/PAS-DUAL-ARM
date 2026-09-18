@@ -2679,6 +2679,44 @@ class MainTask(BaseDriver, Node):
                          -dx * math.sin(yaw) + dy * math.cos(yaw),
                          float(height)])
 
+    def _map_pose(self, timeout=1.0):
+        """(x, y, yaw) of base_link in `map`, or None.
+
+        This is the localiser's answer - wheel odometry with the laser's
+        correction folded in - as opposed to `_odom_xy`, which is the wheels
+        alone.
+        """
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                'map', 'base_link', rclpy.time.Time(),
+                timeout=rclpy.duration.Duration(seconds=timeout))
+        except Exception:
+            return None
+        tr, q = tf.transform.translation, tf.transform.rotation
+        return (tr.x, tr.y,
+                math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                           1.0 - 2.0 * (q.y * q.y + q.z * q.z)))
+
+    def _to_map(self, point_xy):
+        """A base_link (x, y) as a `map` (x, y), or None."""
+        pose = self._map_pose()
+        if pose is None:
+            return None
+        x, y, yaw = pose
+        return (x + point_xy[0] * math.cos(yaw) - point_xy[1] * math.sin(yaw),
+                y + point_xy[0] * math.sin(yaw) + point_xy[1] * math.cos(yaw))
+
+    def _marker_in_base_from_map(self, mark_map, height):
+        """The remembered marker in base_link again, but carried in `map`."""
+        pose = self._map_pose()
+        if pose is None or mark_map is None:
+            return None
+        x, y, yaw = pose
+        dx, dy = mark_map[0] - x, mark_map[1] - y
+        return np.array([dx * math.cos(yaw) + dy * math.sin(yaw),
+                         -dx * math.sin(yaw) + dy * math.cos(yaw),
+                         float(height)])
+
     def _place_on_marker(self):
         """Put the cube down with the centre of its BOTTOM face on the marker.
 
@@ -2725,6 +2763,13 @@ class MainTask(BaseDriver, Node):
         if mark_odom is None:
             self._fail('no odometry to remember where the marker is')
             return False
+        # The same reading kept a second time, in `map`. Only the final check
+        # uses it, and only for the sideways half - see the verification below.
+        mark_map = self._to_map(mark)
+        if mark_map is None:
+            self.get_logger().warn(
+                'PLACE: no map pose to remember the marker in; the check at the '
+                'end will be odometry-only and will read low sideways')
         # The table top does not move, so its height is kept from this one
         # reading; everything after this works from the odometry copy.
         mark_height = float(mark[2])
@@ -2933,14 +2978,56 @@ class MainTask(BaseDriver, Node):
                                       'Kocka je odložena, ali dubinski senzor nije izmjerio centar.',
                                       state='success')
             return True
-        landed = self._to_odom((meas[0].x, meas[0].y))
-        if landed is None:
+        # Each frame is asked only for the axis it is good at.
+        #
+        # This check used to be odometry alone, and it read 15.4 mm low, every
+        # single time: over the 13 successful runs of the 18 Sep series the
+        # robot reported 2-7 mm while the box was recorded 16.9-21.6 mm from the
+        # marker, and the gap had a standard deviation of 0.2 mm. A constant
+        # that tight is not noise, it is a frame being wrong in one direction.
+        #
+        # Measured between remembering the marker and this check, against
+        # ground truth, over those 13 runs:
+        #
+        #                       forwards            sideways
+        #     odometry          0.8 mm (max 2.0)    19.5 mm (max 22.0)
+        #     map (AMCL)       65.5 mm (max 72.2)    1.3 mm (max  7.8)
+        #
+        # Wheels measure what they ROLL. Forwards they roll, so odometry is good
+        # to under a millimetre. Sideways this base slides - that is how mecanum
+        # works at all, mu2 = 0.20 by design (P-09) - and a slide leaves the
+        # wheels no rotation to count, so it is invisible to them. The laser has
+        # the opposite shape: it sees the side walls squarely, which pins the
+        # sideways estimate, while along the room there is little to bite on and
+        # AMCL wanders 7 cm.
+        #
+        # So: forwards from odometry, sideways from the map. This changes no
+        # motion whatsoever - only what the robot then says about the result.
+        # The placement itself is still ~18 mm out, for the same sliding reason,
+        # and neither frame can see that at the moment it happens (both are
+        # ~17 mm out in the placement window). What this fixes is the honesty of
+        # the report, not the accuracy of the placement (D-12, D-24).
+        cube_base = (float(meas[0].x), float(meas[0].y))
+        m_odom = self._marker_in_base(mark_odom, mark_height)
+        m_map = self._marker_in_base_from_map(mark_map, mark_height)
+        if m_odom is None:
             self.get_logger().warn('PLACE: no odometry for the landing check')
             self._report_mission_step(8, 8, 'MISIJA ZAVRŠENA',
                                       'Kocka je odložena na stol (nedostaje odometrija za provjeru).',
                                       state='success')
             return True
-        dx, dy = landed[0] - mark_odom[0], landed[1] - mark_odom[1]
+        dx = cube_base[0] - float(m_odom[0])
+        if m_map is not None:
+            dy = cube_base[1] - float(m_map[1])
+        else:
+            dy = cube_base[1] - float(m_odom[1])
+            self.get_logger().warn(
+                'PLACE: no map pose for the landing check; the sideways figure '
+                'is odometry-only and reads about 15 mm low')
+        # Both readings, so the difference stays visible in the log.
+        self.get_logger().info(
+            f'PLACE landing check: sideways from map {dy * 1000:+.1f} mm, '
+            f'from odometry {(cube_base[1] - float(m_odom[1])) * 1000:+.1f} mm')
         err_mm = math.hypot(dx, dy) * 1000
         self.get_logger().info(
             f'PLACE VERIFIED: the centre of the cube is {err_mm:.0f} mm '
