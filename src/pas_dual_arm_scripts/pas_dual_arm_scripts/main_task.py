@@ -51,6 +51,7 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Empty, String
+from std_srvs.srv import Empty as EmptySrv
 from sensor_msgs.msg import JointState, PointCloud2
 from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformListener
@@ -355,6 +356,10 @@ class MainTask(BaseDriver, Node):
         # DetachableJoint topics (bridged via ros_gz_bridge)
         self.attach_box_pub = self.create_publisher(
             Empty, '/aruco_box/attach', 10)
+        # AMCL's way of being asked for a fix without having moved; see
+        # _wake_the_localiser. None if the service never appears, and the code
+        # carries on without it.
+        self._nomotion = self.create_client(EmptySrv, '/request_nomotion_update')
         self.detach_box_pub = self.create_publisher(
             Empty, '/aruco_box/detach', 10)
         self._box_state = None
@@ -2518,6 +2523,37 @@ class MainTask(BaseDriver, Node):
         self.carried_pub.publish(Polygon())
         self.get_logger().info('carrying nothing: footprint is the robot again')
 
+    def _wake_the_localiser(self, why, timeout=2.0):
+        """Make AMCL process the current scan even though the robot has not moved.
+
+        AMCL gates its updates on distance travelled - update_min_d, 3 cm here -
+        and that gate is fed by WHEEL odometry. So the estimator that cannot see
+        a sideways slide is also the one deciding when the laser may correct it.
+        Through a placement the robot moves in millimetres, and /amcl_pose was
+        measured at 0.08 Hz: twelve messages in 152 seconds. map -> odom is then
+        frozen, and anything read in `map` is just odometry with a stale constant
+        in front of it.
+
+        The gate is there for a good reason - a particle filter must not fold the
+        same scan in twice, or it grows confident about a pose it has not
+        re-measured - so this is not lowered globally. It is asked for by name,
+        once, at the two moments where a stale correction actually costs
+        something: reading the marker, and checking where the box landed.
+        """
+        if self._nomotion is None:
+            return False
+        if not self._nomotion.wait_for_service(timeout_sec=timeout):
+            self.get_logger().warn(
+                f'{why}: AMCL has no /request_nomotion_update; the pose stays as it is')
+            return False
+        future = self._nomotion.call_async(EmptySrv.Request())
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
+        if future.done():
+            self.get_logger().info(f'{why}: asked AMCL for a fresh fix without moving')
+            return True
+        self.get_logger().warn(f'{why}: AMCL did not answer the no-motion request')
+        return False
+
     def _place_marker_in_base(self, timeout=8.0, max_age=0.6):
         """Centre of the place marker in base_link, from a FRESH detection."""
         deadline = self.get_clock().now().nanoseconds + int(timeout * 1e9)
@@ -2668,6 +2704,7 @@ class MainTask(BaseDriver, Node):
         # a degree of head tilt, not a fault, so the head sweeps a little before
         # the run is allowed to fail. Nothing is relaxed: the marker still has
         # to be SEEN, freshly, or the cube stays in the hands (D-12).
+        self._wake_the_localiser('PLACE before reading the marker')
         mark = None
         for pitch in (0.65, 0.55, 0.75):
             self.look_down(pitch, f'PLACE look at the table (pitch {pitch:.2f})')
@@ -2876,6 +2913,7 @@ class MainTask(BaseDriver, Node):
         #     the cube again - its front marker is visible once we have backed
         #     off - and that is compared with where the marker was, in odom, the
         #     one frame that does not move when the robot does.
+        self._wake_the_localiser('PLACE before the landing check')
         self.look_down(0.65, 'PLACE look at what we left behind')
         face = self.confirm_box(timeout=10.0)
         if face is None:
