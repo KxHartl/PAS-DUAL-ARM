@@ -88,8 +88,32 @@ jednako. Hibrid je zato promijenio 2 mm umjesto 15, i vraćen je.
 2,7 cm tješnja i zaključio sam da to košta `GoalAlign`. Nakon ispravka: **1,2 cm** je stvarna cijena,
 1,4 cm je bila moja nepažnja.
 
+## Odbačeno mjerenjem: upravljati po lidarovu odmaku od osi vrata
+`room_navigator._report_disagreement` ispisuje lidarovu i lokaliziranu procjenu odmaka od osi
+prolaza, a komentar uz njega kaže: *„turning this into a correction needs a run that shows the
+lidar number is the better one (D-18)"*. Taj run sada postoji — 27 prolaza iz serije
+`align-cist-18-09`, obje procjene uspoređene s ground truthom:
+
+| | medijan |greška| | najgore |
+|---|---|---|
+| **lidar** | **1,87 cm** | 7,68 cm |
+| **AMCL** | **1,53 cm** | 6,18 cm |
+
+**AMCL je bolji na oba kriterija.** Uvjet nije ispunjen i korekcija se **ne uvodi**.
+
+Podobrazac vrijedan zapisa: lidar je sustavno lošiji na **crvenim** vratima (1,1–4,1 cm, uvijek
+precjenjuje odmak) nego na plavima (često < 1 cm). Nije stvar nošenja kocke — plavi prolaz se vozi
+i prazan i s kockom, a razlika po tome nije jasna. Dakle nešto u geometriji oko crvenih vrata kvari
+mjeru „najbližeg povratka sa strane" (`measured = (right - left) / 2`). Prije bilo kakve buduće
+upotrebe tog broja treba razriješiti **to**.
+
 ## Sljedeći korak
 Granice se **ne smiju** popuštati da run prođe ([[AGENT_GUIDE]] §5). Ono što se smije je dati
-robotu referencu koja bočno gibanje **vidi**. AMCL je već ima — lidar — ali se osvježava tek nakon
-`update_min_d` (3 cm) prijeđenog puta, pa pri finom prilazu i odlaganju praktički spava.
-To je prvo mjesto koje treba izmjeriti prije bilo kakve izmjene.
+robotu referencu koja bočno gibanje **vidi**. AMCL je već ima — lidar — ali se osvježava tek nakon `update_min_d` (3 cm) prijeđenog puta, a taj
+prag hrani **odometrija kotača**: procjenitelj koji bočno klizanje ne vidi ujedno odlučuje kada ga
+laser smije ispraviti. Umjesto spuštanja praga (filtar bi isti sken brojao više puta i postao lažno
+siguran), AMCL se poziva servisom `/request_nomotion_update` na dva mjesta gdje zastarjela korekcija
+nešto košta — `4c7bb42`, `5e106bc`. Čeka seriju.
+
+Dublje rješenje je **ne uzimati pozu iz kotača uopće**, kako to radi i proizvođač baze →
+[[D-25_laser_odometry_like_pal]], grana `feat/laser-odometry`.
