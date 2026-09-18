@@ -75,6 +75,18 @@ class LaserOdometry(Node):
         # distance travelled rather than staying put. `wheels` is kept so the
         # comparison can be re-run, not because it is a reasonable choice.
         self.declare_parameter('yaw_source', 'imu')
+        # Where the TRANSLATION comes from, which is the part the wheels can
+        # still do. `wheels` takes their step between two messages and rotates
+        # it by the gyro's heading, so the transform goes out at their rate.
+        # `laser` drops them entirely: translation then changes only when a
+        # scan matches, about 13 times a second against a controller running at
+        # 20, and the transform goes out on the IMU instead.
+        #
+        # Which is better is a measurement, not an argument. The argument for
+        # keeping them - that 13 Hz is too thin to steer on - was made before
+        # anything was measured, and PAL's `enable_odom_tf: false` forbids the
+        # wheels the TRANSFORM, not the use of what they measure.
+        self.declare_parameter('translation_source', 'wheels')
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('publish_tf', False)
@@ -132,9 +144,11 @@ class LaserOdometry(Node):
                                  self._on_imu, sensor_qos)
         self.publisher = self.create_publisher(Odometry, '/laser_odom', 10)
         self.get_logger().info(
-            'laser odometry: matching %s; yaw from %s; publish_tf=%s' % (
+            'laser odometry: matching %s; yaw from %s, translation from %s; '
+            'publish_tf=%s' % (
                 self.get_parameter('scan_topic').value,
                 self.get_parameter('yaw_source').value,
+                self.get_parameter('translation_source').value,
                 self.get_parameter('publish_tf').value))
 
     def _on_imu(self, msg):
@@ -160,6 +174,26 @@ class LaserOdometry(Node):
         if 0.0 < dt < 1.0:                      # a gap means messages were dropped
             self._imu_yaw += msg.angular_velocity.z * dt
 
+        # Without the wheels there is nothing else ticking at this rate, so the
+        # transform goes out from here: the translation stands still between
+        # matches, the heading does not.
+        if self.get_parameter('translation_source').value != 'wheels':
+            heading = self._imu_yaw
+            if self.get_parameter('yaw_source').value != 'imu':
+                # The comparison has to stay possible in this mode too, and it
+                # is the mode where heading matters most: nothing but the
+                # heading moves the pose between two matches.
+                if self._wheel is None:
+                    return
+                heading = self._wheel[2]
+            if self._dead is None:
+                self._dead = (0.0, 0.0, heading)
+            else:
+                self._dead = (self._dead[0], self._dead[1], heading)
+            if self._base_from_laser is not None:
+                self._publish(compose(self._correction, self._dead),
+                              msg.header.stamp)
+
     def _on_wheel(self, msg):
         """Advance the dead reckoning and send the transform out.
 
@@ -177,6 +211,8 @@ class LaserOdometry(Node):
         """
         p, q = msg.pose.pose.position, msg.pose.pose.orientation
         previous, self._wheel = self._wheel, (p.x, p.y, yaw_of(q))
+        if self.get_parameter('translation_source').value != 'wheels':
+            return                              # the IMU carries it instead
 
         by_imu = (self.get_parameter('yaw_source').value == 'imu'
                   and self._imu_yaw is not None)
@@ -259,6 +295,14 @@ class LaserOdometry(Node):
         # Re-seat the correction on this measurement. Nothing is published from
         # here: the next wheel message carries it out, at 50 Hz instead of 13.
         base = compose(self._pose, invert(offset))
+        if self.get_parameter('translation_source').value != 'wheels':
+            # The laser owns the translation, so the dead reckoning is re-seated
+            # on it here; between matches only the heading moves it on.
+            if self.get_parameter('yaw_source').value == 'imu':
+                heading = self._imu_yaw if self._imu_yaw is not None else base[2]
+            else:
+                heading = self._wheel[2] if self._wheel is not None else base[2]
+            self._dead = (base[0], base[1], heading)
         if self._dead is not None:
             self._correction = compose(base, invert(self._dead))
 

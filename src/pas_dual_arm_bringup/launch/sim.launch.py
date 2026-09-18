@@ -352,11 +352,19 @@ def generate_launch_description():
         choices=['imu', 'wheels'],
         description='Heading for the fused odometry: the gyro, or the wheels')
 
+    # Whether the wheels contribute the translation at all. See the node.
+    translation_source = LaunchConfiguration('translation_source', default='wheels')
+    translation_source_arg = DeclareLaunchArgument(
+        'translation_source', default_value='wheels',
+        choices=['wheels', 'laser'],
+        description='Translation for the fused odometry: the wheels, or the laser alone')
+
     laser_odometry_node = Node(
         package='pas_dual_arm_scripts',
         executable='laser_odometry',
         parameters=[{'use_sim_time': True, 'publish_tf': True,
-                     'yaw_source': yaw_source}],
+                     'yaw_source': yaw_source,
+                     'translation_source': translation_source}],
         condition=IfCondition(laser_odometry),
         output=bg_output,
     )
@@ -482,6 +490,7 @@ def generate_launch_description():
         heavy_sensors_arg,
         laser_odometry_arg,
         yaw_source_arg,
+        translation_source_arg,
         quiet_arg,
         carry_arms_arg,
         table_arms_arg,
