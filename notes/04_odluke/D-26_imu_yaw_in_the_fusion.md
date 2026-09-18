@@ -67,6 +67,39 @@ da su beskoristan ulaz, a naše mjerenje razlikuje to dvoje: greška im je u zak
 kratkom pomaku. Bez njih ostajemo bez nosača na 50 Hz, a laser stiže na 13 — za regulator koji
 radi na 20 Hz to je premalo.
 
+## Dopuna, ista večer: matrica od osam vožnji
+
+Prekidač `translation_source: {wheels, laser}` omogućio je da se provjeri i ono što je dotad
+bilo samo tvrdnja — da kotači trebaju nositi mrtvi račun jer laser stiže na 13 Hz, a regulator
+radi na 20. Osam vožnji, sve četiri kombinacije, po dvije svaka, protiv istine:
+
+| smjer | pomak | zakret sred. | zakret max | položaj sred. | položaj max |
+|---|---|---|---|---|---|
+| IMU | kotači | 0,060° | 1,50° | **1,85 mm** | 22,9 mm |
+| IMU | laser | **0,040°** | **0,86°** | 3,55 mm | 19,6 mm |
+| kotači | kotači | 0,060° | 1,65° | **1,85 mm** | 17,8 mm |
+| kotači | laser | 0,060° | 1,42° | 3,75 mm | 19,9 mm |
+
+*(kotači sami, neispravljeni, za mjerilo: 7,4° i 276 mm)*
+
+**Razlike su sitne, i to je nalaz.** Sva četiri postava su dobra jer **laser radi gotovo sav
+posao**; izbor smjera i nosača je na rubu onoga što ova vožnja razlučuje. Dva učinka prežive
+oba kruga: kotači kao nosač **prepolove** srednju grešku položaja, a IMU daje **bolji vršni
+zakret** u režimu u kojem između podudaranja ništa drugo ne miče pozu.
+
+### Što ovo poništava od gornjeg teksta
+Tvrdnja da je IMU popravio odometriju **ne stoji**. Popravak sa 7,4° na 0,06° je laserov.
+Gornja tablica uspoređuje IMU s **neispravljenim** kotačima, što je pošteno za senzor po sebi,
+ali navodi na krivi zaključak o tome što je u sustavu promijenilo ishod.
+
+`imu` + `wheels` ostaje zadano — najbolji srednji položaj i jedini postav koji ne ovisi o tome
+da svako podudaranje uspije — ali zbog **izmjerene razlike**, ne zbog priče koju sam imao.
+
+### Redak koji nedostaje
+U svakoj od osam vožnji laser ispravlja. Zato nigdje ne vidimo **koliko laser doprinosi** odvojeno
+od žiroskopa. Nedostaje `IMU + kotači, bez lasera`: mrtvi račun s dobrim smjerom, nikad ispravljen.
+Traži objavu `_dead` na zasebnoj temi i dvije nove vožnje.
+
 ## Što ovo poništava
 Serija od 10 runova s laserskom odometrijom (`laserodom-18-09`) **nije mjerila ono što tvrdi**.
 `clean_ros.sh` nije gasio `laser_odometry`, pa se čvor gomilao kroz pokušaje — izbrojano ih je

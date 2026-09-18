@@ -82,6 +82,22 @@ updated: 2026-09-16
   truthom** (`debug_truth:=true`), a `validation/analyze_runs.py` ga mjeri protiv svijeta tog runa
   → `metrics.csv`. Time se profesorova tri komentara (0,835 m, statistika, jačina izraza) zatvaraju
   istim podacima ([[D-24_measure_from_recordings_not_logs]]). **Runovi još nisu odvoženi.**
+- **Novo 18. 9. (navečer): odometrija je preuređena i izmjerena.** Baza je od početka nosila
+  PAL-ov IMU (100 Hz) koji **nije objavljivao ništa** — nedostajali su Ignition `Imu` sustav u
+  svijetu i unos u mostu ([[P-53_imu_declared_never_published]]). Sada `odom → base_footprint`
+  daje **fuzija**: zakret od žiroskopa, korak od kotača, ispravak od lasera. Izmjereno protiv
+  istine, osam kalibracijskih vožnji: **0,06° i 1,8 mm** naspram **7,4° i 276 mm** golih kotača.
+  **Ali dobitak je laserov, ne IMU-ov** — sve četiri kombinacije izvora daju isto unutar šuma
+  ([[D-26_imu_yaw_in_the_fusion]]).
+- **Novo 18. 9.: AMCL podešen prema izmjerenom, `alpha 0.2 → 0.02`.** Filtru je dotad rečeno da mu
+  je odometrija ~300× lošija nego što jest. Rezultat na 3 runa: AMCL **4,1 → 2,9 cm**, zazor u
+  vratima **0,449 → 0,472 m**, prolaz kroz vrata **3,4 → 1,5 cm** od osi, **3/3** umjesto 2/3.
+- **Novo 18. 9.: `clean_ros.sh` nije gasio `laser_odometry`.** Čvor je preživio svako čišćenje i
+  gomilao se — **sedam živih odjednom**, svi na `/laser_odom`. Serija `laserodom-18-09` zato
+  **nije mjerila ono što tvrdi**. Popravljeno; mjerenja prije toga se odbacuju.
+- **Otvoreno: kocka sleti 2 cm ustranu i to nije lokalizacija** — tri nezavisna popravka
+  odometrije i lokalizacije nisu ga pomaknula ni za milimetar
+  ([[P-54_place_bias_not_localisation]]).
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
   → odloži u crvenoj sobi. Plan dana: [[danas]]. Iskrena odstupanja: [[odstupanja]].
 
