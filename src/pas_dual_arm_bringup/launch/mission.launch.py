@@ -51,6 +51,7 @@ def generate_launch_description():
             # exists so a recorded run can be measured against where the robot
             # actually was, instead of against what it believed and printed.
             'debug_truth': LaunchConfiguration('debug_truth'),
+            'laser_odometry': LaunchConfiguration('laser_odometry'),
         }.items())
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(bringup, 'launch', 'nav2.launch.py')),
@@ -102,6 +103,10 @@ def generate_launch_description():
             description='SDF world; a generated layout needs its own map too'),
         DeclareLaunchArgument('pick_room', default_value='blue'),
         DeclareLaunchArgument('place_room', default_value='red'),
+        DeclareLaunchArgument(
+            'laser_odometry', default_value='false',
+            description='Take odom -> base_footprint from the laser instead of '
+                        'the wheels (D-25); off until a series says otherwise'),
         DeclareLaunchArgument(
             'debug_truth', default_value='false',
             description='Bridge Gazebo ground truth and run loc_error; '

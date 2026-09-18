@@ -29,6 +29,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'world', default_value=os.path.join(bringup, 'worlds', 'seminar_world.sdf')),
         DeclareLaunchArgument('debug_truth', default_value='false'),
+        DeclareLaunchArgument('laser_odometry', default_value='false'),
         DeclareLaunchArgument('pick_room', default_value='blue'),
         DeclareLaunchArgument('place_room', default_value='red'),
         DeclareLaunchArgument(
@@ -43,6 +44,7 @@ def generate_launch_description():
                 'open_rviz': LaunchConfiguration('open_rviz'),
                 'world': LaunchConfiguration('world'),
                 'debug_truth': LaunchConfiguration('debug_truth'),
+                'laser_odometry': LaunchConfiguration('laser_odometry'),
                 'pick_room': LaunchConfiguration('pick_room'),
                 'place_room': LaunchConfiguration('place_room'),
                 'map': LaunchConfiguration('map'),

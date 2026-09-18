@@ -316,7 +316,8 @@ def run_once(index, args, batch):
 
     command = ['ros2', 'launch', 'pas_dual_arm_bringup', 'scenario_mission.launch.py',
                'headless:=true', 'open_rviz:=false', 'gui:=false', 'quiet:=true',
-               f'debug_truth:={str(args.truth).lower()}', f'world:={world}']
+               f'debug_truth:={str(args.truth).lower()}', f'world:={world}',
+               f'laser_odometry:={str(args.laser_odometry).lower()}']
     print(f'--- run {index}: {" ".join(command[-4:])}')
     began = time.monotonic()
     with open(log_path, 'w') as log:
@@ -412,6 +413,8 @@ def main():
                         help='do not record a rosbag; the run is then judged only '
                              'by what it printed, and nothing can be re-measured '
                              'from it afterwards')
+    parser.add_argument('--laser-odometry', action='store_true',
+                        help='take odom -> base_footprint from the laser (D-25)')
     parser.add_argument('--no-truth', dest='truth', action='store_false',
                         help='do not bridge Gazebo ground truth; measurements '
                              'against where the robot actually was are then lost')
