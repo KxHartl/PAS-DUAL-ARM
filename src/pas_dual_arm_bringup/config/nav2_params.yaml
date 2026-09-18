@@ -183,7 +183,7 @@ controller_server:
 
     # Progress checker parameters
     progress_checker:
-      plugin: "nav2_controller::SimpleProgressChecker"
+      plugin: "nav2_controller::PoseProgressChecker"
       # Has to be STRICTLY under the goal tolerance below, or the final approach
       # cannot satisfy it: once inside the tolerance the robot will never travel
       # the distance this demands, and after 30 s Nav2 calls a healthy robot
@@ -211,6 +211,18 @@ controller_server:
       # xy_goal_tolerance stays at 0.05. Only the stuck detector becomes able to
       # tell "closing the last 6 cm" apart from "not moving".
       required_movement_radius: 0.02
+      # Rotation counts as progress too, and it has to, because the last thing a
+      # leg does is turn to the goal heading - and a turn in place covers no
+      # ground at all. SimpleProgressChecker measures translation only, so it
+      # cannot tell that from standing still: in the 18 Sep series the four
+      # deadlocked legs each needed a further 4.5-9.0 deg of yaw (tolerance
+      # 1.43 deg) and were declared stuck while owing nothing but that turn.
+      #
+      # 0.02 rad is ~1.15 deg. Near the goal RotateToGoal slows rotation by 5x,
+      # so about 0.08 rad/s remains - over a 30 s window that is more than a full
+      # turn, and clearing 1.15 deg of it takes well under a second. A robot that
+      # is genuinely not moving still fails both tests.
+      required_movement_angle: 0.02
       movement_time_allowance: 30.0
     # Goal checker parameters
     general_goal_checker:
