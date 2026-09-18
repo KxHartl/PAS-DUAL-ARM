@@ -51,6 +51,7 @@ from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 
 from pas_dual_arm_scripts.postures import ARM_DRIVE, POSTURES
+from pas_dual_arm_scripts.robot_extent import ExtentMeasurer
 
 # Nav2 footprint, so the geometry here and the costmap's agree.
 HALF_LENGTH, HALF_WIDTH = 0.52, 0.427
@@ -94,6 +95,11 @@ class RoomNavigator(Node):
     def __init__(self):
         super().__init__('room_navigator')
         self.declare_parameter('arm_tolerance', 0.15)
+        # How wide the robot may be to be let at a doorway. The openings measure
+        # 0.997-0.999 m live, and the carry posture measures well under this, so
+        # the margin is real rather than nominal. It is the quantity the doorway
+        # actually constrains, which the joint tolerance above only stood in for.
+        self.declare_parameter('max_width', 0.95)
         self.declare_parameter('centreline_tolerance', 0.08)
         # 5.0 degrees. The crossing that was actually driven on 14 Sep went
         # through door 0 at 4.2 degrees and 1.8 cm, so a 4.0 degree limit would
@@ -143,6 +149,11 @@ class RoomNavigator(Node):
         self._arm_posture = ARM_DRIVE
         self.create_subscription(String, '/room_navigator/arm_posture',
                                  self._on_arm_posture, latched)
+        # The robot's live outline, for the width gate below. Same source the
+        # costmaps' footprint comes from, so the two cannot disagree.
+        self._measurer = None
+        self.create_subscription(String, '/robot_description',
+                                 self._on_robot_description, latched)
         # nav2.launch.py remaps Nav2's own /goal_pose to /bt_goal_pose, so RViz
         # "2D Goal Pose" lands here instead of going straight to bt_navigator.
         # A goal in another room is then routed through the doorway portals
@@ -194,6 +205,30 @@ class RoomNavigator(Node):
             self._pending_request = request
             return
         self._request = request
+
+    def _on_robot_description(self, msg):
+        if self._measurer is not None:
+            return
+        try:
+            self._measurer = ExtentMeasurer(msg.data)
+        except Exception as exc:
+            self.get_logger().warn(
+                f'could not read the robot description, so the width gate falls '
+                f'back to comparing joints: {exc}')
+
+    def width_now(self):
+        """How wide the robot is right now, across its own heading, or None.
+
+        Every link's collision geometry through live TF, projected into
+        base_link, and the span across y. That is the number a doorway cares
+        about, measured on the robot that is actually standing there.
+        """
+        if self._measurer is None:
+            return None
+        points = self._measurer.points(self._tf, rclpy.time.Time())
+        if points is None or not len(points):
+            return None
+        return float(points[:, 1].max() - points[:, 1].min())
 
     def _on_arm_posture(self, msg):
         name = msg.data.strip() or ARM_DRIVE
@@ -298,7 +333,8 @@ class RoomNavigator(Node):
     def arms_ok(self):
         """Every joint of the REFERENCE posture within tolerance, or why not.
 
-        The reference is DRIVE_V4 when the robot travels empty and CARRY_V4 once
+        Width first, posture only as a fallback. The reference posture is
+        DRIVE_V4 when the robot travels empty and CARRY_V4 once
         it has the cube: with the cube in the hands the arms are nowhere near the
         drive posture, and a gate that only knew DRIVE_V4 aborted the mission at
         the doorway (P-45). Both postures are measured and both fit the opening -
@@ -306,6 +342,23 @@ class RoomNavigator(Node):
         """
         if not self.get_parameter('require_arms').value:
             return True, 'arm check disabled'
+
+        # Ask the robot how wide it is, rather than how far its joints are from
+        # a remembered posture. A joint 0.010 rad past the tolerance aborted a
+        # run of the 18 Sep series without anyone knowing whether the robot had
+        # actually grown: the posture is a proxy for the width, and this is the
+        # width. It also stops being a lie the moment the arms find a different
+        # way to hold the same cube.
+        width = self.width_now()
+        if width is not None:
+            limit = float(self.get_parameter('max_width').value)
+            if width <= limit:
+                return True, f'{width * 100:.1f} cm wide, limit {limit * 100:.0f}'
+            return False, (f'{width * 100:.1f} cm wide against a {limit * 100:.0f} cm '
+                           f'limit; the arms set the width that has to fit the doorway')
+
+        # No description or no transforms yet: fall back to the posture, which
+        # is what this gate was before the outline was available.
         if self._joints is None:
             return False, 'no /joint_states yet'
         posture = self._arm_posture
