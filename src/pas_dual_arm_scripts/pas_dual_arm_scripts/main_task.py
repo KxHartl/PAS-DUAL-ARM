@@ -1396,19 +1396,20 @@ class MainTask(BaseDriver, Node):
         return self._send_and_wait(self.move, goal, label)
 
     # --------------------------------------------------------------- pan-tilt
-    def look_down(self, pitch, label):
-        """Tilt the camera down so the Aruco box enters the field of view."""
+    def look_down(self, pitch, label, yaw=0.0):
+        """Point the camera: `pitch` down, `yaw` across. Default straight ahead."""
         if not self._wait_server(self.pan_tilt, 'pan_tilt_controller'):
             return False
         goal = FollowJointTrajectory.Goal()
         traj = JointTrajectory()
         traj.joint_names = ['pan_tilt_yaw_joint', 'pan_tilt_pitch_joint']
         pt = JointTrajectoryPoint()
-        pt.positions = [0.0, float(pitch)]
+        pt.positions = [float(yaw), float(pitch)]
         pt.time_from_start.sec = 1
         traj.points.append(pt)
         goal.trajectory = traj
-        self.get_logger().info(f'{label}: tilt camera to pitch={pitch:.2f}')
+        self.get_logger().info(
+            f'{label}: camera to pitch={pitch:.2f}, yaw={yaw:.2f}')
         return self._send_and_wait(self.pan_tilt, goal, label)
 
     # ---------------------------------------------------------------- gripper
@@ -2744,13 +2745,30 @@ class MainTask(BaseDriver, Node):
         # to be SEEN, freshly, or the cube stays in the hands (D-12).
         self._wake_the_localiser('PLACE before reading the marker')
         mark = None
-        for pitch in (0.65, 0.55, 0.75):
-            self.look_down(pitch, f'PLACE look at the table (pitch {pitch:.2f})')
+        # A grid, not three guesses. 0.65 is the pitch the mission has always
+        # used and it is first because it is the one that works; the rest widen
+        # the search the way a person would - further down, further up, then
+        # left and right - instead of stopping at the first thing that failed.
+        #
+        # Run 10 of the centring series is why the yaw column exists: it found
+        # nothing at any pitch because the cube sat 45 cm too high in front of
+        # the camera (fixed at its source in STEP7), and a head that can only
+        # look straight ahead has no way around an obstacle in the middle of its
+        # view. Each look costs about 16 s and the alternative is throwing away
+        # a cube the robot is holding correctly.
+        for yaw, pitch in ((0.0, 0.65), (0.0, 0.55), (0.0, 0.75), (0.0, 0.85),
+                           (-0.35, 0.65), (0.35, 0.65),
+                           (-0.35, 0.75), (0.35, 0.75)):
+            self.look_down(pitch, f'PLACE look at the table '
+                                  f'(pitch {pitch:.2f}, yaw {yaw:.2f})', yaw=yaw)
             mark = self._place_marker_in_base()
             if mark is not None:
                 break
             self.get_logger().warn(
-                f'PLACE: no marker at pitch {pitch:.2f}; tilting the head and looking again')
+                f'PLACE: no marker at pitch {pitch:.2f}, yaw {yaw:.2f}; '
+                'moving the head and looking again')
+        if mark is not None:
+            self.look_down(0.65, 'PLACE head back to centre')
         if mark is None:
             self._fail('the place marker was never seen at any head tilt; '
                        'the cube stays in the hands')

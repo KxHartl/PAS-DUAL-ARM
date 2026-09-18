@@ -39,7 +39,7 @@ import numpy as np
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import Polygon, PoseStamped, Quaternion
 from nav2_msgs.action import NavigateThroughPoses, NavigateToPose
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import SetParameters
@@ -50,7 +50,7 @@ from sensor_msgs.msg import JointState, LaserScan
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 
-from pas_dual_arm_scripts.postures import ARM_DRIVE, POSTURES
+from pas_dual_arm_scripts.postures import ARM_DRIVE, POSTURES, move_to_posture
 from pas_dual_arm_scripts.robot_extent import ExtentMeasurer
 
 # Nav2 footprint, so the geometry here and the costmap's agree.
@@ -100,6 +100,9 @@ class RoomNavigator(Node):
         # the margin is real rather than nominal. It is the quantity the doorway
         # actually constrains, which the joint tolerance above only stood in for.
         self.declare_parameter('max_width', 0.95)
+        # Whether being too wide is a reason to try before it is a reason to
+        # abort. Only ever acts with empty hands; see _try_narrowing.
+        self.declare_parameter('narrow_before_abort', True)
         self.declare_parameter('centreline_tolerance', 0.08)
         # 5.0 degrees. The crossing that was actually driven on 14 Sep went
         # through door 0 at 4.2 degrees and 1.8 cm, so a 4.0 degree limit would
@@ -154,6 +157,12 @@ class RoomNavigator(Node):
         self._measurer = None
         self.create_subscription(String, '/robot_description',
                                  self._on_robot_description, latched)
+        # What the robot is carrying, as ground corners in base_link. The URDF
+        # knows nothing about the cube, so without this the width would be the
+        # arms' alone - the same reason footprint_publisher subscribes to it.
+        self._carried = None
+        self.create_subscription(Polygon, '/mission/carried_points',
+                                 self._on_carried, latched)
         # nav2.launch.py remaps Nav2's own /goal_pose to /bt_goal_pose, so RViz
         # "2D Goal Pose" lands here instead of going straight to bt_navigator.
         # A goal in another room is then routed through the doorway portals
@@ -216,6 +225,10 @@ class RoomNavigator(Node):
                 f'could not read the robot description, so the width gate falls '
                 f'back to comparing joints: {exc}')
 
+    def _on_carried(self, msg):
+        points = [(p.x, p.y) for p in msg.points]
+        self._carried = points if len(points) >= 3 else None
+
     def width_now(self):
         """How wide the robot is right now, across its own heading, or None.
 
@@ -228,7 +241,10 @@ class RoomNavigator(Node):
         points = self._measurer.points(self._tf, rclpy.time.Time())
         if points is None or not len(points):
             return None
-        return float(points[:, 1].max() - points[:, 1].min())
+        spread = [float(points[:, 1].min()), float(points[:, 1].max())]
+        if self._carried:
+            spread += [y for _, y in self._carried]
+        return max(spread) - min(spread)
 
     def _on_arm_posture(self, msg):
         name = msg.data.strip() or ARM_DRIVE
@@ -715,9 +731,45 @@ class RoomNavigator(Node):
         self._status('arrived', f'reached {dest}', destination=dest)
         self.get_logger().info(f'reached {dest}')
 
+    def _try_narrowing(self, why):
+        """Too wide for the doorway: fold back to the reference posture and re-measure.
+
+        Refusing was the whole behaviour before. But an arm that has drifted
+        wide is a thing the robot can undo, and the posture it should be holding
+        is known - so ask for it once, measure again, and only then give up.
+
+        NOT while the cube is held. The cube is rigidly attached to the left
+        wrist, and driving both arms through MoveIt against a fixed object is
+        what throws it metres across the room (P-17): two rigid paths fighting
+        one constraint. Carrying, the arms are left exactly where they are and
+        the reason is said out loud, because a mission that silently risked the
+        cube to save a leg would be the wrong trade.
+        """
+        if not self.get_parameter('narrow_before_abort').value:
+            return False, why
+        if self._arm_posture != ARM_DRIVE:
+            return False, (f'{why}; the cube is in the hands, so the arms are NOT '
+                           'moved to make room - a planned motion against a rigidly '
+                           'held cube throws it (P-17)')
+        self.get_logger().warn(f'{why}; folding back to {self._arm_posture} and '
+                               'measuring again before giving up')
+        try:
+            moved = move_to_posture(self, self._arm_posture, timeout=25.0,
+                                    label='narrow for the doorway')
+        except Exception as exc:
+            return False, f'{why}; folding back to {self._arm_posture} failed: {exc}'
+        if not moved:
+            return False, f'{why}; the arms would not go back to {self._arm_posture}'
+        ok, detail = self.arms_ok()
+        if ok:
+            return True, f'{detail} (after folding back to {self._arm_posture})'
+        return False, f'{detail} even after folding back to {self._arm_posture}'
+
     def _gate(self, leg, label, destination):
         """Preconditions for a doorway transit. Refusing here beats scraping."""
         ok, detail = self.arms_ok()
+        if not ok:
+            ok, detail = self._try_narrowing(detail)
         if not ok:
             self.get_logger().error(f'ABORT before {label}: {detail}')
             self._status('aborted', f'arms: {detail}', destination=destination)
