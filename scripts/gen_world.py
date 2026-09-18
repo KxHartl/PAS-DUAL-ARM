@@ -184,6 +184,43 @@ def apply_overrides(cfg, overrides):
     return cfg
 
 
+# Asset paths in the template are relative to the template's own directory
+# (worlds/materials/textures/aruco_marker_0.png). A generated world is written
+# somewhere else entirely - validation/results/<batch>/run_007/world.sdf - and
+# nothing copies materials/ next to it, so Ignition silently fails to load the
+# texture and the ArUco plate renders blank.
+#
+# Nothing errors: the lidar still works, the robot still drives through both
+# doorways, and the run dies much later at `scan: marker not found`, which reads
+# like a perception bug. Cost one batch on 18 Sep before it was traced here.
+#
+# Rewriting them to absolute paths is what makes a generated world portable; the
+# template keeps its relative paths, which resolve for the repository world.
+ASSET_TAGS = ('albedo_map', 'normal_map', 'roughness_map', 'metalness_map',
+              'environment_map', 'light_map', 'emissive_map', 'uri')
+
+
+def absolutise_assets(world, template_dir):
+    """Make every relative asset path absolute against the template directory."""
+    fixed = 0
+    for element in world.iter():
+        tag = element.tag.rsplit('}', 1)[-1]
+        if tag not in ASSET_TAGS or not element.text:
+            continue
+        value = element.text.strip()
+        # package://, model://, file:// and absolute paths already resolve.
+        if not value or '://' in value or os.path.isabs(value):
+            continue
+        candidate = os.path.normpath(os.path.join(template_dir, value))
+        if os.path.exists(candidate):
+            element.text = candidate
+            fixed += 1
+    if fixed:
+        print(f'  assets  : {fixed} relative path(s) made absolute '
+              f'(against {template_dir})')
+    return fixed
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -252,6 +289,8 @@ def main():
     mx, my = table_centre(cfg, marker_cfg['table'])
     set_pose(find_model(world, 'place_marker'),
              mx + marker_cfg['offset'][0], my + marker_cfg['offset'][1], marker_cfg['z'])
+
+    absolutise_assets(world, os.path.dirname(os.path.abspath(args.template)))
 
     ET.indent(tree, space='  ')
     os.makedirs(os.path.dirname(args.out), exist_ok=True)

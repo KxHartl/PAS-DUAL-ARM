@@ -146,8 +146,43 @@ Ništa od toga ne ide u git (`validation/results/` je u `.gitignore`); u seminar
 > i svi čvorovi ostaju živi. Poslije svakog prekida: `bash scripts/clean_ros.sh`, pa provjeri
 > `pgrep -af "ign gazebo|gz sim"` (mora biti prazno) prije nove serije ([[P-50_base_controller_missing_no_localisation]]).
 
-## Poznati rizik prije prvog pokretanja
-[[P-47_headless_batch_map_odom_stale]]: jedini dosad odvoženi run sklopa pao je s
-`room_navigator did not reach blue:dock` jer je `map → odom` bio ustajao. Sklop sad čeka da se
-transformacija uspostavi (`wait_for_tf`), ali **to čekanje još nije provjereno u vožnji**. Padne li
-V1 na prvoj dionici bez pomaka robota, to je i dalje P-47, a ne mjera sustava.
+## Stanje sklopa (18. 9., nakon probnih runova)
+
+Sklop je **odvožen** i radi: generira svijet, čeka stack, sam „pritisne gumb", klasificira ishod,
+piše `results.csv` i snima bag. Dva nalaza iz probe:
+
+| # | Nalaz | Status |
+|---|---|---|
+| 1 | [[P-47_headless_batch_map_odom_stale]] — `map → odom` zastari | **riješeno**: uzrok je bio `apt` ([[P-51_apt_upgrade_stops_amcl]]). U probnim runovima **0 ×** `Transform data too old` |
+| 2 | **Generirani svijet gubi teksture markera** | **riješeno** 18. 9. u `scripts/gen_world.py` |
+
+### Nalaz 2 — zašto je vrijedan pažnje
+Prvi probni run pao je s `scan: marker not found`, što izgleda kao kvar percepcije. Nije bio.
+`gen_world.py` kopira `seminar_world.sdf`, a u njemu su putanje tekstura **relativne**
+(`materials/textures/aruco_marker_0.png`). Generirani svijet se piše u
+`validation/results/<serija>/run_00N/`, gdje `materials/` ne postoji — Ignition tiho ne učita
+teksturu i ArUco ploča ostane prazna. Ništa ne javi grešku: lidar radi, robot prođe oboja vrata, i
+run pukne tek 3 minute kasnije na skeniranju.
+
+Popravak: `gen_world.py` sada svaku relativnu putanju do resursa pretvara u apsolutnu (prema mapi
+predloška). Provjereno u drugom probnom runu: `SCAN: marker found at base_link (0.78, 0.07)`.
+
+> **Pouka za sklop:** svaki run na **generiranom** svijetu treba proći kroz percepciju prije nego se
+> pokrene serija od 20. Vožnja i vrata ne dokazuju da svijet ima teksture.
+
+### Podaci od 17. 9. su nevažeći
+Sve što je sklop izmjerio 17. 9. snimljeno je na slomljenom ROS stacku
+([[P-51_apt_upgrade_stops_amcl]]) i **ne smije se navoditi**. Serija se pokreće **od nule**.
+
+---
+
+## Redoslijed za punu seriju (preporuka)
+
+1. **V1, tri runa** — mora dati barem jedan `success`, i nijedan pad na percepciji.
+2. **V2, mjerenje** — provjeri da `metrics.csv` ima popunjene stupce `place_err_truth_mm` i
+   `table_clear_transit_min_m`; ako su prazni, bag nije upotrebljiv i nema smisla voziti 20.
+3. **V3, puna serija** — tek onda, i po mogućnosti preko noći (vidi trajanje niže).
+
+**Trajanje, izmjereno 18. 9.:** uspješan run headless traje **~8–10 min** (pad na percepciji je
+trajao 3 min). Za 20 runova računaj **3–4 h**, uz gornju ogradu od 15 min po runu (`--run-timeout`).
+Stroj u to vrijeme ne smije raditi ništa drugo ROS-ovo.
