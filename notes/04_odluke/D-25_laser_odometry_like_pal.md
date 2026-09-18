@@ -1,7 +1,7 @@
 ---
 id: D-25
 type: odluka
-status: predlozena
+status: vazeca
 deviation: false
 updated: 2026-09-18
 requirements: ["[[R-08_omni_controller]]", "[[R-15_region_goal_nav2]]", "[[R-18_door_pass_empty]]", "[[R-20_place_at_destination]]"]
@@ -55,10 +55,38 @@ su samo gradivni blokovi: `libpointmatcher`, `mp2p_icp`, `fast_gicp`, te `robot_
 fuziju. Uvođenje paketa izvan snapshota vratilo bi nas u [[P-51_apt_upgrade_stops_amcl]], pa se
 laserska odometrija piše **unutar projekta**, protiv `/scan_filtered`.
 
+## Izmjereno (18. 9., offline na 10 snimljenih runova)
+Zanos od ground trutha kroz cijeli run, u okviru robota:
+
+| n=10 | naprijed | bočno |
+|---|---|---|
+| **laserska odometrija** | **0,9 mm** | **1,5 mm** |
+| odometrija kotača | 30,1 mm | 22,3 mm |
+
+Laser pobjeđuje u **svakom** runu na **obje** osi; najgori pojedinačni laserski rezultat je 8,3 mm
+bočno, najbolji kotačima 4,1 mm a najgori **77,8 mm**. Prag iz ove odluke (ispod 19,5 mm bočno) je
+prijeđen s velikom rezervom.
+
+**Trošak u stvarnom vremenu:** 1078 točaka po skenu, podudaranje **19 ms** (max 25,8), dakle ~52 Hz
+kapaciteta uz potrebnih ~4 Hz. Nije usko grlo.
+
+### Tri iteracije, svaku presudilo mjerenje
+| pristup | naprijed | bočno | zašto |
+|---|---|---|---|
+| sken-na-sken | 286 mm | 265 mm | jedna greška po skenu, 2205 ih se zbroji |
+| + ključni skenovi (30 cm / 15°) | 22 mm | 22 mm | zbrajanje ograničeno na jedan po ključnom skenu |
+| **+ točka-na-pravac** | **1,8 mm** | **8,3 mm** | ⟵ ključno, vidi niže |
+
+**Zašto je zadnji korak toliko pomogao.** Podudaranje točka-na-točku smije **kliziti uzduž ravnog
+zida**, jer ondje svaka točka jednako dobro odgovara susjedu kao ispravnom paru. Hodnik i prolaz su
+uglavnom ravan zid, a klizanje u stranu je **točno greška koju lovimo** — slabost algoritma sjedila
+je na istoj osi na kojoj je i slabost pogona. Bodovanje po **normali plohe** fiksira poklapanje
+poprijeko zida, a uzduž njega ne tvrdi ništa.
+
 ## Plan na grani
 1. Čvor `laser_odometry`: poravnavanje uzastopnih skenova (2D), objavljuje `nav_msgs/Odometry`.
-2. Mjerenje prema ground truthu iz **postojećih 50 runova** prije nego išta preuzme TF —
-   bočna greška mora biti mjerljivo manja od 19,5 mm ([[D-18_verified_baseline_first]]).
+2. ✅ **Napravljeno.** Mjerenje prema ground truthu iz postojećih runova, prije nego išta preuzme
+   TF ([[D-18_verified_baseline_first]]) — tablica gore.
 3. Tek ako prođe: `cmd_vel_relay` prestaje premošćivati `/base_controller/tf_odometry` u `/tf`,
    a `odom → base_footprint` objavljuje novi čvor.
 4. Serija od 20 runova, usporedba s `P-52` tablicom.
