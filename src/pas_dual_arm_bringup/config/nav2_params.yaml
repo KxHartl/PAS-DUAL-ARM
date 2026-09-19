@@ -206,7 +206,7 @@ controller_server:
     # They differ only in what they are allowed to do to build a map that the
     # mission will later trust - see explore_goal_checker below.
     goal_checker_plugins: ["general_goal_checker", "explore_goal_checker"]
-    controller_plugins: ["FollowPath", "FollowPathExplore", "FollowPathAlign"]
+    controller_plugins: ["FollowPath", "FollowPathDWB", "FollowPathExplore", "FollowPathAlign"]
 
     # Progress checker parameters
     progress_checker:
@@ -278,7 +278,103 @@ controller_server:
       yaw_goal_tolerance: 3.15      # any heading; pi rounded up
     # DWB Local Planner configured for omnidirectional (mecanum) base.
     # Evaluates 15,625 trajectories (25x25x25) at 20 Hz with 1 cm linear granularity.
+    # MPPI, sampling a horizon instead of a one-step window, and told it drives
+    # an OMNI base. DWB's tuning is kept below as FollowPathDWB, unchanged, so
+    # the swap is one word in controller_plugins.
+    #
+    # Why: DWB scores no critic for speed. PathDist and GoalDist reward getting
+    # further along the path within sim_time, so speed is only ever indirect,
+    # and near a goal a fast trajectory overshoots and loses. Measured, that
+    # means Nav2 asks for full speed in 24 % of its commands and the open-room
+    # median (0.143 m/s) comes out BELOW the doorway median (0.162), because
+    # open space is where all the leg endings are. MPPI has a PathFollowCritic
+    # that wants the robot ON the path making progress, and an Omni motion model
+    # that uses vy as a first-class control rather than as a sampled dimension.
     FollowPath:
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 36
+      model_dt: 0.05
+      # Kept modest on purpose: MPPI costs more than DWB and this simulation
+      # already runs at about half real time.
+      batch_size: 1000
+      iteration_count: 1
+      temperature: 0.3
+      gamma: 0.015
+      motion_model: "Omni"
+      visualize: false
+      prune_distance: 1.6
+      transform_tolerance: 0.2
+      # The same envelope DWB had, so this compares controllers and not limits.
+      vx_max: 0.45
+      vx_min: -0.30
+      vy_max: 0.15
+      wz_max: 0.40
+      vx_std: 0.15
+      vy_std: 0.15
+      wz_std: 0.30
+      AckermannConstraints:
+        min_turning_r: 0.2
+      # PreferForwardCritic is deliberately ABSENT. It penalises anything that is
+      # not forward motion, which on a mecanum base penalises the one thing the
+      # base is for.
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic",
+                "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "TwirlingCritic"]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.0
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 3
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        forward_preference: false
+      TwirlingCritic:
+        enabled: true
+        twirling_cost_power: 1
+        twirling_cost_weight: 10.0
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.81
+        critical_cost: 300.0
+        # TRUE, and this is the point. The inflation layer encodes a circle of
+        # the inscribed radius; this robot is 0.83 by 0.72 and drives through
+        # 0.998 m, so the difference between its outline and that circle IS its
+        # clearance. Checking the footprint costs CPU, which is what
+        # scripts/pin_cores.sh went and found.
+        consider_footprint: true
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+
+    FollowPathDWB:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: False
       # max_vel_y was RAISED to 0.50 and put back. The reasoning was sound and
@@ -561,17 +657,34 @@ local_costmap:
       # Without artificial costmap inflation on local_costmap, ObstacleFootprint
       # checks the exact polygon against real geometry, fitting 1.0 m doors.
       footprint: "[[0.52, 0.427], [-0.52, 0.427], [-0.52, -0.427], [0.52, -0.427]]"
-      # NO inflation layer, and it is not an oversight. MPPI was tried here and
-      # needed one: its CostCritic scores the inflated cost under a trajectory,
-      # and the costmap refuses an inflation radius below the robot's inscribed
-      # radius, which is about 0.36 m for a body 0.83 by 0.72. Inflating 0.36 m
-      # from each jamb of a 0.998 m doorway leaves 0.28 m clear, and the robot
-      # is 0.83 wide - the opening would be closed by cost alone.
+      plugins: ["voxel_layer", "inflation_layer"]
+      # MPPI's CostCritic scores a trajectory by the INFLATED cost under it, so
+      # without this layer it has nothing to read and aborts follow_path in a
+      # loop. DWB never needed one, because ObstacleFootprint checks the
+      # footprint against the obstacle grid itself.
       #
-      # DWB does not need it. ObstacleFootprint checks the real footprint
-      # against the obstacle grid, which is the only thing that works for a
-      # robot deliberately built to just fit.
-      plugins: ["voxel_layer"]
+      # The radius must be at least the footprint's INSCRIBED radius or the
+      # costmap refuses it - 0.15 was tried and rejected with exactly that
+      # message. For a body 0.83 by 0.72 m the inscribed radius is 0.36, so this
+      # is 0.40.
+      #
+      # That does NOT close the doorway, which was the first thing I assumed and
+      # it was wrong. Centred in a 0.998 m opening the robot's centre sits
+      # 0.499 m from each jamb, outside the 0.36 m inscribed band, so it is in
+      # the decay region rather than the lethal one. With this scaling the cost
+      # there is about 253*exp(-10*(0.499-0.36)) = 63 of 254: expensive, and
+      # passable, which is the correct description of that doorway.
+      #
+      # consider_footprint on the critic makes MPPI check the real outline
+      # rather than trust the circular approximation this layer encodes. On a
+      # robot built to just fit, that difference is the whole margin.
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        enabled: True
+        inflation_radius: 0.40
+        cost_scaling_factor: 10.0
+        inflate_unknown: false
+        inflate_around_unknown: false
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
