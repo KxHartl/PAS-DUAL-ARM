@@ -141,16 +141,20 @@ class RoomNavigator(Node):
         # Speed per leg (user, 16. 9.). The open-room legs run at `fast_*`; a
         # doorway transit and a dock approach drop to `slow_*`. The collision
         # monitor still scales anything down near an obstacle on top of this.
-        # Forward speed in the open. PAL allows 1.0 m/s on this axis and 0.7
-        # with x and y combined; this is one step of a ladder rather than a jump
-        # to the limit, because four parameters raised at once timed the robot
-        # out twice of two and said nothing about which of them did it.
-        self.declare_parameter('fast_vel_x', 0.60)
+        # Forward speed in the open, and it is NOT limited by this number.
+        # Measured on a run at 0.60: the controller commands 0.566 m/s, all four
+        # wheels turn at 6.11 rad/s - 0.466 m/s at the rim, already short of the
+        # command - and the robot moves at 0.230. Half the commanded speed is
+        # lost to slip, because the mecanum wheels are emulated with anisotropic
+        # friction at 45 degrees (P-09) and forward motion is partly along the
+        # low-friction axis. Raising this only spins the wheels faster against
+        # the floor: 0.45 and 0.60 gave runs of 576 s and 585 s.
+        self.declare_parameter('fast_vel_x', 0.45)
         # Open-room speed. Note that `fast_vel_x` below is written over
         # FollowPath.max_vel_x at the start of every leg, so raising the limit in
         # nav2_params.yaml alone changes nothing - the first attempt at PAL's
         # speeds did exactly that and drove a mismatched robot.
-        self.declare_parameter('fast_speed_xy', 0.60)
+        self.declare_parameter('fast_speed_xy', 0.50)
         self.declare_parameter('slow_vel_x', 0.18)
         self.declare_parameter('slow_speed_xy', 0.22)
 
