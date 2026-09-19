@@ -2,7 +2,11 @@
 # Terminate any leftover ROS 2, Gazebo, and project nodes to ensure a clean start.
 set -e
 
-echo "Zaustavljam zaostale ROS i Gazebo procese..."
+if [ -n "${IGN_PARTITION:-}" ]; then
+    echo "Zaustavljam zaostale procese u particiji $IGN_PARTITION..."
+else
+    echo "Zaustavljam zaostale ROS i Gazebo procese..."
+fi
 # Everything the project starts, not just the loud half. The ArUco detectors,
 # move_group and loc_error survived every previous cleanup and kept processing
 # camera frames between runs: four of them left over cost about 70 % of a core
@@ -32,6 +36,22 @@ ancestors() {
 }
 SKIP=" $(ancestors | tr '\n' ' ')"
 
+# Kill only OUR partition, when we are in one.
+#
+# This script matches on the command line, which is fine for one simulation on a
+# machine and fatal for several: run_batch calls it between runs, so two batches
+# in parallel would take turns killing each other. That happened on 18 Sep with
+# two batches and thousands of "Detected jump back in time".
+#
+# With IGN_PARTITION set, a process only counts if its own environment carries
+# the same one - the test run_cube_isolated.sh already uses to refuse a second
+# simulator in its partition. Without it, nothing changes and everything dies,
+# which is what a person running this by hand means by it.
+in_our_partition() {
+    [ -z "${IGN_PARTITION:-}" ] && return 0
+    grep -qz "IGN_PARTITION=$IGN_PARTITION" "/proc/$1/environ" 2>/dev/null
+}
+
 PIDS=$(pgrep -f '(ros2 launch pas_dual_arm_bringup|gz sim|ign gazebo|room_navigator|cmd_vel_relay|scan_filter|static_transform_publisher|nav2_|controller_server|bt_navigator|amcl|map_server|rviz2|teleop_twist_keyboard|parameter_bridge|ros_gz_bridge|aruco_detector|loc_error|main_task|move_group|footprint_publisher|nav_gui|nav_zones|feature_registry|table_ready|map_handoff|room_sweeper|frontier_explorer|cloud_restamp|set_posture|laser_odometry|yaw_drive|scan_watch|robot_state_publisher|joint_state_publisher|spawner|ros2 bag record)' || true)
 
 # Makni sebe i svoje pretke iz popisa za gasenje.
@@ -39,6 +59,7 @@ if [ -n "$PIDS" ]; then
     KEEP=""
     for pid in $PIDS; do
         case "$SKIP" in *" $pid "*) continue ;; esac
+        in_our_partition "$pid" || continue
         KEEP="$KEEP $pid"
     done
     PIDS=$(echo "$KEEP" | tr -s ' ' | sed 's/^ //;s/ $//')
