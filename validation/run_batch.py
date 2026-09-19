@@ -378,9 +378,32 @@ def run_once(index, args, batch):
             # has matched the mission node - the message is then simply lost and
             # the run sits at WAITING until the timeout. Wait for the subscriber
             # and send it more than once.
-            sh(['ros2', 'topic', 'pub', '--times', '3', '-w', '1',
-                '/mission/start', 'std_msgs/String', '{data: blue}'],
-               capture_output=True, timeout=120)
+            #
+            # And check that it LANDED. With three simulations on three DDS
+            # domains discovering at once, one worker sat at WAITING for 538 s
+            # after its start had been sent - the publisher had matched nothing
+            # and nobody noticed, and the run was scored "stalled" as though the
+            # robot had done something wrong. So send, look for the mission
+            # leaving WAITING, and send again until it has.
+            started_pattern = re.compile(r'\[3/8\]')
+            for attempt in range(6):
+                try:
+                    sh(['ros2', 'topic', 'pub', '--times', '3', '-w', '1',
+                        '/mission/start', 'std_msgs/String', '{data: blue}'],
+                       capture_output=True, timeout=45)
+                except subprocess.TimeoutExpired:
+                    pass
+                deadline = time.monotonic() + 20.0
+                landed = False
+                while time.monotonic() < deadline and proc.poll() is None:
+                    with open(log_path, errors='replace') as handle:
+                        if started_pattern.search(handle.read()):
+                            landed = True
+                            break
+                    time.sleep(2.0)
+                if landed:
+                    break
+                print(f'    start not received (attempt {attempt + 1}); sending again')
         else:
             not_ready = 'never reached "WAITING for the user"'
             print(f'    {not_ready}')

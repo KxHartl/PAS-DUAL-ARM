@@ -157,6 +157,14 @@ class RoomNavigator(Node):
         self.declare_parameter('fast_speed_xy', 0.50)
         self.declare_parameter('slow_vel_x', 0.18)
         self.declare_parameter('slow_speed_xy', 0.22)
+        # A doorway and a dock were one tier, and they are not the same kind of
+        # slow. The dock is where the arrival has to be accurate to a few
+        # centimetres for the grasp; the doorway only has to be narrow-safe, and
+        # it is watched the whole way through (heading guard, gap gate). The
+        # three transits were 43 s of every mission at 0.16 m/s on 2.3 m -
+        # the largest single item in the driving - so they get their own number.
+        self.declare_parameter('door_vel_x', 0.26)
+        self.declare_parameter('door_speed_xy', 0.30)
         # Who decides the speed. TRUE: per leg, which is what the 12/12 series
         # manip-par measured. The mask route below was tried with DWB and failed
         # - it let DWB take doorways at 80 % where per-leg speed gives 0.22 m/s,
@@ -325,7 +333,7 @@ class RoomNavigator(Node):
             self.get_logger().info(f'arm reference posture is now {name}')
         self._arm_posture = name
 
-    def _set_leg_speed(self, fast, label):
+    def _set_leg_speed(self, tier, label):
         """Nav2's speed limit for this leg.
 
         Full speed in the open, slow through a doorway and onto a dock, where the
@@ -337,8 +345,14 @@ class RoomNavigator(Node):
             return
         # Only DWB has these names. Under MPPI the equivalents are vx_max and
         # there is no separate norm cap, so this path is DWB-only by design.
-        vel_x = self.get_parameter('fast_vel_x' if fast else 'slow_vel_x').value
-        speed_xy = self.get_parameter('fast_speed_xy' if fast else 'slow_speed_xy').value
+        # `tier` is 'fast', 'door' or 'slow'; a bare bool from an older caller
+        # still means fast/slow.
+        if tier is True:
+            tier = 'fast'
+        elif tier is False:
+            tier = 'slow'
+        vel_x = self.get_parameter(f'{tier}_vel_x').value
+        speed_xy = self.get_parameter(f'{tier}_speed_xy').value
         if not self._speed.wait_for_service(timeout_sec=5.0):
             self.get_logger().warn(
                 f'{label}: controller_server parameters unavailable; speed unchanged')
@@ -357,7 +371,8 @@ class RoomNavigator(Node):
             self.get_logger().warn(f'{label}: could not set the speed limit')
             return
         self.get_logger().info(
-            f'{label}: {"full" if fast else "reduced"} speed ({vel_x:.2f} m/s)')
+            f'{label}: {"full" if tier == "fast" else "reduced"} speed '
+            f'({vel_x:.2f} m/s, {tier})')
 
     def _on_goal_pose(self, msg):
         x = float(msg.pose.position.x)
@@ -787,8 +802,10 @@ class RoomNavigator(Node):
             self.get_logger().info(
                 f'{label} -> ({last.x:+.2f}, {last.y:+.2f}, '
                 f'{math.degrees(last.yaw):+.1f} deg)')
-            gentle = any(leg.transit or getattr(leg, 'dock', False) for leg in group)
-            self._set_leg_speed(not gentle, label)
+            docking = any(getattr(leg, 'dock', False) for leg in group)
+            transit = any(leg.transit for leg in group)
+            tier = 'slow' if docking else ('door' if transit else 'fast')
+            self._set_leg_speed(tier, label)
             driven = (self._drive(first, label, dest) if len(group) == 1
                       else self._drive_through(group, label, dest))
             if not driven:
