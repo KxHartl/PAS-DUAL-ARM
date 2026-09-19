@@ -2535,7 +2535,7 @@ class MainTask(BaseDriver, Node):
         which is why the machinery is already here.
         """
         try:
-            _, _, jog = self._kinematics()
+            _, _, jog = self._grasp_tools()
             live = self._live_joints()
             swung = dict(live)
             paths = {}
