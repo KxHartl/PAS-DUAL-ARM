@@ -701,8 +701,13 @@ global_costmap:
   global_costmap:
     ros__parameters:
       # Raised with the replanning rate in the behaviour trees: a planner asked
-      # three times a second cannot answer with anything newer than this.
-      update_frequency: 3.0
+      # twenty times a second cannot answer with anything newer than this.
+      # There is no configured ceiling on either - expected_planner_frequency
+      # is a warning threshold, not a limit - so the real ones are how long a
+      # plan takes over 350 000 cells and how much CPU a simulation at half
+      # real time has left. Both announce themselves: Nav2 logs when the
+      # planner cannot keep up, and the RTF falls when the machine cannot.
+      update_frequency: 20.0
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
