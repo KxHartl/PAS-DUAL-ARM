@@ -296,13 +296,13 @@ controller_server:
       # were passing, and the speed goes up one parameter at a time or not at
       # all.
       min_vel_x: -0.30
-      max_vel_x: 0.45
+      max_vel_x: 0.60
       # Controlled lateral correction: strafe without crabbing or yawing
       min_vel_y: -0.50
       max_vel_y: 0.50
       max_vel_theta: 0.40
       min_speed_xy: 0.0
-      max_speed_xy: 0.50
+      max_speed_xy: 0.60
       min_speed_theta: 0.0
       acc_lim_x: 1.5
       acc_lim_y: 1.5
@@ -401,12 +401,12 @@ controller_server:
       # were passing, and the speed goes up one parameter at a time or not at
       # all.
       min_vel_x: -0.30
-      max_vel_x: 0.45
+      max_vel_x: 0.60
       min_vel_y: -0.50
       max_vel_y: 0.50
       max_vel_theta: 0.40
       min_speed_xy: 0.0
-      max_speed_xy: 0.50
+      max_speed_xy: 0.60
       min_speed_theta: 0.0
       acc_lim_x: 1.5
       acc_lim_y: 1.5
@@ -721,7 +721,7 @@ velocity_smoother:
     # Matches the omni DWB limits with controlled lateral and reverse support.
     # The smoother is the last thing before the base, so the sideways limit has
     # to match the controller's or it would clip the strafing back to 0.30.
-    max_velocity: [0.50, 0.50, 0.60]
+    max_velocity: [0.60, 0.50, 0.60]
     min_velocity: [-0.30, -0.50, -0.60]
     max_accel: [1.5, 1.5, 3.0]
     max_decel: [-1.5, -1.5, -3.0]
