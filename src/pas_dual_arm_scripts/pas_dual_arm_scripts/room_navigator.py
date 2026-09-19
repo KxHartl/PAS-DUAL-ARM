@@ -254,6 +254,25 @@ class RoomNavigator(Node):
         points = [(p.x, p.y) for p in msg.points]
         self._carried = points if len(points) >= 3 else None
 
+    def odom_pose(self):
+        """(x, y, yaw) in `odom`, for asking whether the robot has MOVED.
+
+        Not `map`: the localised pose jumps a centimetre or two on every AMCL
+        update, and a stall test with a 2 cm threshold reads that jitter as
+        motion and never fires. It did exactly that. The odometry is smooth -
+        1.8 mm of drift over a calibration drive - and for "has anything
+        changed in the last 25 seconds" its lack of absolute truth does not
+        matter.
+        """
+        try:
+            tf = self._tf.lookup_transform('odom', 'base_footprint',
+                                           rclpy.time.Time()).transform
+        except Exception:
+            return None
+        return (tf.translation.x, tf.translation.y,
+                math.atan2(2.0 * (tf.rotation.w * tf.rotation.z),
+                           1.0 - 2.0 * tf.rotation.z * tf.rotation.z))
+
     def width_now(self):
         """How wide the robot is right now, across its own heading, or None.
 
@@ -957,7 +976,7 @@ class RoomNavigator(Node):
 
             # Has it stopped moving while Nav2 still thinks it is driving?
             if attempt < 3:
-                now, here = time.monotonic(), self.pose()
+                now, here = time.monotonic(), self.odom_pose()
                 if here is not None:
                     if still_at is None or math.hypot(
                             here[0] - still_at[0],
@@ -965,12 +984,14 @@ class RoomNavigator(Node):
                             or abs(wrap(here[2] - still_at[2])) > 0.05:
                         still_since, still_at = now, here
                     elif now - still_since > self.get_parameter('stall_seconds').value:
-                        gap = math.hypot(here[0] - leg.x, here[1] - leg.y)
+                        located = self.pose()
+                        where = ''
+                        if located is not None:
+                            where = (f', {math.hypot(located[0] - leg.x, located[1] - leg.y) * 100:.1f} cm '
+                                     f'and {math.degrees(wrap(located[2] - leg.yaw)):+.1f} deg from the goal')
                         self.get_logger().warn(
                             f'{label}: nothing has moved for '
-                            f'{now - still_since:.0f} s, {gap * 100:.1f} cm and '
-                            f'{math.degrees(wrap(here[2] - leg.yaw)):+.1f} deg from the '
-                            f'goal; asking Nav2 for it again')
+                            f'{now - still_since:.0f} s{where}; asking Nav2 for it again')
                         handle.cancel_goal_async()
                         self._spin(1.0)
                         return 'retry'
