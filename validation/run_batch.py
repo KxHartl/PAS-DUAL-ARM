@@ -340,6 +340,15 @@ def run_once(index, args, batch):
                 not_ready = not_ready or 'map -> base_footprint never resolved'
                 print(f'    map -> base_footprint never resolved within '
                       f'{args.settle:.0f} s')
+            # Every run starts its processes afresh, so the affinity has to be
+            # set afresh too. Measured before doing this: controller_server
+            # missed its 20 Hz deadline 649 times in a run, and given a core to
+            # itself it turned out to want 100 % of one - it was competing, not
+            # idling. See scripts/pin_cores.sh for who goes where and why.
+            if args.pin:
+                sh(['bash', os.path.join(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__))), 'scripts', 'pin_cores.sh')],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(args.settle_extra)
             # `--once` publishes and exits, which can happen before discovery
             # has matched the mission node - the message is then simply lost and
@@ -416,6 +425,9 @@ def main():
                         help='do not record a rosbag; the run is then judged only '
                              'by what it printed, and nothing can be re-measured '
                              'from it afterwards')
+    parser.add_argument('--no-pin', dest='pin', action='store_false',
+                        help='do not pin the physics and the controllers to '
+                             'cores of their own')
     parser.add_argument('--speed-mask', action='store_true',
                         help='let the SpeedFilter mask set the speed instead of '
                              'room_navigator setting it per leg')
