@@ -652,7 +652,26 @@ local_costmap:
       # Without artificial costmap inflation on local_costmap, ObstacleFootprint
       # checks the exact polygon against real geometry, fitting 1.0 m doors.
       footprint: "[[0.52, 0.427], [-0.52, 0.427], [-0.52, -0.427], [0.52, -0.427]]"
-      plugins: ["voxel_layer"]
+      plugins: ["voxel_layer", "inflation_layer"]
+      # MPPI's CostCritic scores a trajectory by the INFLATED cost under it, so
+      # without this layer it has nothing to read and refuses every trajectory:
+      # "No inflation layer found in costmap configuration", then follow_path
+      # aborting in a loop. DWB never needed it because ObstacleFootprint checks
+      # the footprint against the obstacle grid directly.
+      #
+      # The radius is deliberately small. This robot is 0.83 m wide carrying the
+      # cube and drives through a 0.998 m opening, so an inflation that reaches
+      # far would fill the doorway with cost and there would be nothing left to
+      # aim at. It is here to grade the last few centimetres near an obstacle,
+      # not to keep the robot away from one - footprint_padding and the
+      # collision monitor do that.
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        enabled: True
+        inflation_radius: 0.15
+        cost_scaling_factor: 8.0
+        inflate_unknown: false
+        inflate_around_unknown: false
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
