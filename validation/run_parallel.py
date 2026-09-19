@@ -74,7 +74,16 @@ def main():
         environment.update(SLICES[i])
         # A domain each. ROS 2 domains are 0-101 and neighbouring ones share
         # ports, so they are spread rather than adjacent.
-        environment['PAS_DUAL_ARM_ROS_DOMAIN_ID'] = str(11 + i * 10)
+        #
+        # BOTH names, and that is not belt and braces. run_batch calls
+        # `ros2 launch` directly rather than through run_native.sh, so
+        # ROS_DOMAIN_ID is read from its own environment and
+        # PAS_DUAL_ARM_ROS_DOMAIN_ID is never consulted. Setting only the second
+        # left two workers sharing domain 5 - the one thing this file exists to
+        # prevent - while every log looked right.
+        domain = str(11 + i * 10)
+        environment['PAS_DUAL_ARM_ROS_DOMAIN_ID'] = domain
+        environment['ROS_DOMAIN_ID'] = domain
         environment['IGN_PARTITION'] = f'pas_parallel_{i}'
         environment['GZ_PARTITION'] = f'pas_parallel_{i}'
         environment['ROS_HOME'] = os.path.join(REPO, 'log', f'parallel_{i}_ros_home')
