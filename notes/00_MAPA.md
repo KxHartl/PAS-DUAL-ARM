@@ -117,6 +117,15 @@ updated: 2026-09-16
   serije su pale ondje bez ijedne reakcije.
 - **Odbijeno mjerenjem 19. 9.:** `PathAlign` (1/3, dva isteka), `max_vel_y` 0,50 (5/10 naspram
   8/10), četiri PAL-ove brzine odjednom (0/2). Svako s razlogom zapisanim u `nav2_params.yaml`.
+- **Novo 20. 9.: misija je 23 % brza, 12/12** — 173 s naspram 224 s simuliranog vremena. Sav
+  dobitak je u **rukovanju** (bilo 56 % misije i nikad mjereno) i u **prolazu kroz vrata**
+  (0,18 -> 0,30 m/s). Dokiranje i kontaktni prilaz ostaju spori namjerno.
+  → [[D-28_fastest_setup_that_works]]
+- **Novo 20. 9.: mjeri se SIMULIRANO vrijeme.** Zidni sat prestaje nesto znaciti cim runovi idu
+  paralelno (RTF 0,46 -> 0,29). `validation/speed_summary.py` i `validation/phase_times.py`.
+- **Novo 20. 9.: runovi idu paralelno** (`validation/run_parallel.py`) — svaki radnik svoja ROS
+  domena, Ignition particija i kriska jezgri. Serija od 12 traje ~35 min umjesto ~100, pa se
+  izmjene sude na 12 runova umjesto na tri.
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
   → odloži u crvenoj sobi. Plan dana: [[danas]]. Iskrena odstupanja: [[odstupanja]].
 
