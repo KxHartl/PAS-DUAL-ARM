@@ -230,18 +230,42 @@ def wait_for_controllers(log_path, timeout, proc):
         return len(PATTERNS['controller_up'].findall(handle.read()))
 
 
+def in_our_partition(pid):
+    """Does this process belong to the partition we are running in?
+
+    Without IGN_PARTITION set there is only one simulation on the machine and
+    every simulator is ours. With it, another worker's Gazebo is not - and
+    treating it as ours is what kept a second worker waiting forever for a
+    quiet machine that was never going to be quiet.
+    """
+    partition = os.environ.get('IGN_PARTITION')
+    if not partition:
+        return True
+    try:
+        with open(f'/proc/{pid}/environ', 'rb') as handle:
+            return f'IGN_PARTITION={partition}'.encode() in handle.read().split(b'\0')
+    except OSError:
+        return False
+
+
 def wait_for_quiet(timeout=60.0):
-    """No simulator left running before the next one starts.
+    """No simulator of OURS left running before the next one starts.
 
     clean_ros.sh sends the kill and waits a second; Gazebo takes longer than
     that to go, and a run that starts on top of a dying one meets two
     controller managers. Polling until the process is actually gone is the
     difference between independent runs and a batch that poisons itself.
+
+    Ours, not everyone's. This used to count every simulator on the machine,
+    which is right when there is one batch and fatal when there are three: the
+    second worker sat out its whole timeout waiting for the first to finish.
     """
     end = time.monotonic() + timeout
     while time.monotonic() < end:
-        alive = subprocess.run(['pgrep', '-f', r'ign gazebo|gz sim'],
-                               capture_output=True, text=True).stdout.split()
+        alive = [pid for pid in subprocess.run(
+            ['pgrep', '-f', r'ign gazebo|gz sim'],
+            capture_output=True, text=True).stdout.split()
+            if in_our_partition(pid)]
         if not alive:
             return True
         time.sleep(2.0)
