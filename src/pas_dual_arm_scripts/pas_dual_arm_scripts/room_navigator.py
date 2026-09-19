@@ -111,6 +111,16 @@ class RoomNavigator(Node):
         # above the 1.32 deg median and well below what closes the gap.
         self.declare_parameter('transit_heading_limit', 0.05)
         self.declare_parameter('transit_squares_up', True)
+        # A leg that stops moving while Nav2 still holds the goal. It happens a
+        # few centimetres short: the position critics behave as though they have
+        # arrived and RotateToGoal returns zero outside xy_goal_tolerance, so
+        # the controller publishes exact zeros and the leg sits there until the
+        # 240 s timeout. Measured directly - 6042 commands of 0.000 on all three
+        # axes over 160 s, the robot 6 cm from the goal and 46 deg off its
+        # heading. Re-sending the goal makes Nav2 plan again from where it
+        # actually is, which is usually enough to leave the dead zone.
+        self.declare_parameter('stall_seconds', 25.0)
+        self.declare_parameter('stall_radius', 0.02)
         self.declare_parameter('centreline_tolerance', 0.08)
         # 5.0 degrees. The crossing that was actually driven on 14 Sep went
         # through door 0 at 4.2 degrees and 1.8 cm, so a 4.0 degree limit would
@@ -910,7 +920,7 @@ class RoomNavigator(Node):
         # A transit may be driven twice: once, and once more after the robot has
         # been stopped and squared up because its heading drifted on the way
         # through. See the heading guard below and P-55.
-        for attempt in (1, 2):
+        for attempt in (1, 2, 3):
             outcome = self._drive_once(leg, label, destination, attempt)
             if outcome != 'retry':
                 return outcome
@@ -941,8 +951,30 @@ class RoomNavigator(Node):
         # Worst disagreement between where the lidar says the robot sits in the
         # opening and where the localised pose says it sits, as (gap, lidar, amcl).
         disagreement = None
+        still_since, still_at = None, None
         while not result.done():
             rclpy.spin_once(self, timeout_sec=0.05)
+
+            # Has it stopped moving while Nav2 still thinks it is driving?
+            if attempt < 3:
+                now, here = time.monotonic(), self.pose()
+                if here is not None:
+                    if still_at is None or math.hypot(
+                            here[0] - still_at[0],
+                            here[1] - still_at[1]) > self.get_parameter('stall_radius').value \
+                            or abs(wrap(here[2] - still_at[2])) > 0.05:
+                        still_since, still_at = now, here
+                    elif now - still_since > self.get_parameter('stall_seconds').value:
+                        gap = math.hypot(here[0] - leg.x, here[1] - leg.y)
+                        self.get_logger().warn(
+                            f'{label}: nothing has moved for '
+                            f'{now - still_since:.0f} s, {gap * 100:.1f} cm and '
+                            f'{math.degrees(wrap(here[2] - leg.yaw)):+.1f} deg from the '
+                            f'goal; asking Nav2 for it again')
+                        handle.cancel_goal_async()
+                        self._spin(1.0)
+                        return 'retry'
+
             if time.monotonic() > deadline:
                 self._abort(handle, f'{label}: timed out', destination)
                 return False
