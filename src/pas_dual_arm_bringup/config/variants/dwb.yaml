@@ -1,0 +1,790 @@
+amcl:
+  ros__parameters:
+    use_sim_time: True
+    set_initial_pose: true
+    initial_pose:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      yaw: 0.0
+    # Motion-model noise. These sat at the stock 0.2 until the drift they describe
+    # was actually measured, which is what that note asked for; it has been, so
+    # they move. alpha5 is the strafe term the OmniMotionModel adds.
+    #
+    # What 0.2 tells AMCL: expect 0.2 m of odometry error per metre driven and
+    # 0.2 rad per radian turned. What the fused odometry does, measured against
+    # ground truth over three calibration drives (D-26, P-53):
+    #
+    #     heading      0.06 deg over 175 deg turned    = 0.0006 rad/rad
+    #     position     1.8 mm over ~7 m driven         = 0.00026 m/m
+    #
+    # So AMCL was being told its odometry is some three hundred times noisier
+    # than it is. It answers by spreading the particle cloud far wider than the
+    # motion warrants and letting each scan pull the estimate around, and that
+    # is visible in the runs: at the doorway the lidar put the robot 0.4 cm off
+    # the opening's axis while the localised pose said 3.6 cm, a disagreement of
+    # 3.2 cm in a gap with 5 cm to spare. Nav2 steers on the localised pose.
+    #
+    # 0.02 is not the measured number. It is roughly thirty times looser, which
+    # leaves the filter room to distrust the odometry when the laser cannot
+    # match - a bare corridor, a doorway with little wall in view - while no
+    # longer throwing away two orders of magnitude of accuracy. The measured
+    # value itself would be the next step, and only after this one is driven.
+    #
+    # Note what this leans on: recovery_alpha_fast/slow are 0.0, so there is no
+    # random injection to rescue a cloud that has converged somewhere wrong. The
+    # robot starts from a known pose (set_initial_pose) and is never moved by
+    # hand, so that is a trade this mission can make and a real deployment
+    # could not.
+    alpha1: 0.02
+    alpha2: 0.02
+    alpha3: 0.02
+    alpha4: 0.02
+    alpha5: 0.02
+    base_frame_id: "base_footprint"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    # --- Measurement model, retuned 14 Sep after run 61 (P-40) ------------------
+    # Run 61 measured the filter sitting beside the truth rather than wandering:
+    # through door 1 the lidar and the localised pose disagreed by +6.0 cm one way
+    # and -5.9 cm the other - which is the same +6 cm in map y, because "left"
+    # flips with the direction of travel. Same run, door 0: +4.2 cm in x. A bias
+    # that is stable in the map is not drift, it is a filter that is not being
+    # pulled to the scan; and with the settings below it was not.
+    #
+    # The likelihood field is a distance transform of the map, so its precision
+    # was capped at the map's own grid - which is now 0.02 m, not 0.05, and the
+    # lidar under it resolves 1 mm. The model is finally allowed to use that.
+    #
+    # 0.2 was a 20 cm standard deviation: a particle 5 cm off scored 97% of a
+    # perfect one, so nothing distinguished them. 0.05 is 2.5 map cells - sharp
+    # enough to have an opinion at the scale the doorway is decided on, still
+    # broad enough for the filter to climb the gradient rather than fall off it.
+    sigma_hit: 0.05
+    # Half the probability mass was uniform noise, which flattens the field again
+    # whatever sigma_hit says. This is a simulated lidar against a map of walls
+    # that do not move; 0.1 is already a generous allowance for the unexpected.
+    # (z_max and z_short are inert under likelihood_field; kept for completeness.)
+    z_hit: 0.9
+    z_max: 0.05
+    z_rand: 0.1
+    z_short: 0.05
+    # The field only needs to reach as far as a particle might plausibly be wrong.
+    # 2.0 m of precomputed distance transform is 2.0 m of flat, useless tail.
+    laser_likelihood_max_dist: 0.5
+    # Was 100 m against a sensor that stops at 25 and a map 12 m across; SLAM
+    # clips at 12.0, and AMCL has to score the same returns SLAM drew.
+    laser_max_range: 12.0
+    laser_min_range: 0.05
+    laser_model_type: "likelihood_field"
+    # 180 of the lidar's 1080 beams was right when each beam barely discriminated;
+    # with the model above every beam carries information, so take more of them.
+    max_beams: 360
+    # --- Sample set ------------------------------------------------------------
+    # Resampling on every update, with update_min_d at 3 cm, resamples every 3 cm
+    # of travel. That is how a particle set loses its diversity: the cloud collapses
+    # onto one narrow mode and, under a flat likelihood, has nothing to pull it back.
+    # A bias that survives a whole run in both directions is what that looks like.
+    resample_interval: 2
+    max_particles: 3000
+    min_particles: 1000
+    odom_frame_id: "odom"
+    pf_err: 0.02
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    robot_model_type: "nav2_amcl::OmniMotionModel"
+    save_pose_rate: 0.5
+    tf_broadcast: true
+    # map -> odom was published good for a whole second. At 0.30 m/s that is 30 cm
+    # of pose the costmaps are entitled to keep using after it stopped being true.
+    transform_tolerance: 0.3
+    # 3 cm position / 0.03 rad (~1.7 deg) angle update, from the 14 Sep upgrade
+    # (was 25 cm / 11.5 deg). Removes the dead zone while docking.
+    update_min_a: 0.03
+    update_min_d: 0.03
+    scan_topic: /scan_filtered
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: True
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /base_controller/odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    wait_for_service_timeout: 1000
+    # Nav2's own navigate_to_pose tree, with FollowPath naming its goal checker.
+    # The stock tree leaves that name empty and the controller server then falls
+    # back to "the only goal checker loaded" - which stopped being unambiguous
+    # the moment the mapping work added a second one, and every leg died with
+    # `FollowPath called with goal_checker name  ... which does not exist`.
+    # Naming it makes navigation independent of how many others are loaded.
+    # ($(find-pkg-share ...) resolves because nav2_bringup loads this file with
+    # allow_substs=True.)
+    default_nav_to_pose_bt_xml: $(find-pkg-share pas_dual_arm_bringup)/behavior_trees/navigate_to_pose_mission.xml
+    # BOTH trees need it. room_navigator sends a multi-pose leg - back off the
+    # table and line up at the doorway without stopping between them - as
+    # NavigateThroughPoses, so half the mission runs on the second tree. Naming
+    # the checker in only the first one got the run as far as lifting the cube
+    # and then failed on the first leg of the carry.
+    default_nav_through_poses_bt_xml: $(find-pkg-share pas_dual_arm_bringup)/behavior_trees/navigate_through_poses_mission.xml
+    plugin_lib_names:
+      - nav2_compute_path_to_pose_action_bt_node
+      - nav2_compute_path_through_poses_action_bt_node
+      - nav2_smooth_path_action_bt_node
+      - nav2_follow_path_action_bt_node
+      - nav2_spin_action_bt_node
+      - nav2_wait_action_bt_node
+      - nav2_assisted_teleop_action_bt_node
+      - nav2_back_up_action_bt_node
+      - nav2_drive_on_heading_bt_node
+      - nav2_clear_costmap_service_bt_node
+      - nav2_is_stuck_condition_bt_node
+      - nav2_goal_reached_condition_bt_node
+      - nav2_goal_updated_condition_bt_node
+      - nav2_globally_updated_goal_condition_bt_node
+      - nav2_is_path_valid_condition_bt_node
+      - nav2_initial_pose_received_condition_bt_node
+      - nav2_reinitialize_global_localization_service_bt_node
+      - nav2_rate_controller_bt_node
+      - nav2_distance_controller_bt_node
+      - nav2_speed_controller_bt_node
+      - nav2_truncate_path_action_bt_node
+      - nav2_truncate_path_local_action_bt_node
+      - nav2_goal_updater_node_bt_node
+      - nav2_recovery_node_bt_node
+      - nav2_pipeline_sequence_bt_node
+      - nav2_round_robin_node_bt_node
+      - nav2_transform_available_condition_bt_node
+      - nav2_time_expired_condition_bt_node
+      - nav2_path_expiring_timer_condition
+      - nav2_distance_traveled_condition_bt_node
+      - nav2_single_trigger_bt_node
+      - nav2_goal_updated_controller_bt_node
+      - nav2_is_battery_low_condition_bt_node
+      - nav2_navigate_through_poses_action_bt_node
+      - nav2_navigate_to_pose_action_bt_node
+      - nav2_remove_passed_goals_action_bt_node
+      - nav2_planner_selector_bt_node
+      - nav2_controller_selector_bt_node
+      - nav2_goal_checker_selector_bt_node
+      - nav2_controller_cancel_bt_node
+      - nav2_path_longer_on_approach_bt_node
+      - nav2_wait_cancel_bt_node
+      - nav2_spin_cancel_bt_node
+      - nav2_back_up_cancel_bt_node
+      - nav2_assisted_teleop_cancel_bt_node
+      - nav2_drive_on_heading_cancel_bt_node
+      - nav2_is_battery_charging_condition_bt_node
+
+bt_navigator_navigate_through_poses_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+
+bt_navigator_navigate_to_pose_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+
+controller_server:
+  ros__parameters:
+    use_sim_time: True
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    # Where the SpeedFilter's limit arrives. Absolute, to match the filter.
+    speed_limit_topic: "/speed_limit"
+    progress_checker_plugin: "progress_checker"
+    # Two profiles, selected per goal through the behaviour tree: the mission
+    # drives on FollowPath/general_goal_checker, mapping on the explore pair.
+    # They differ only in what they are allowed to do to build a map that the
+    # mission will later trust - see explore_goal_checker below.
+    goal_checker_plugins: ["general_goal_checker", "explore_goal_checker"]
+    controller_plugins: ["FollowPath", "FollowPathExplore", "FollowPathAlign"]
+
+    # Progress checker parameters
+    progress_checker:
+      plugin: "nav2_controller::PoseProgressChecker"
+      # Has to be STRICTLY under the goal tolerance below, or the final approach
+      # cannot satisfy it: once inside the tolerance the robot will never travel
+      # the distance this demands, and after 30 s Nav2 calls a healthy robot
+      # stuck and starts a recovery.
+      #
+      # It used to be 0.05, which is not under xy_goal_tolerance (0.05) but EQUAL
+      # to it, so the rule above was written and then not followed. The 20-run
+      # series of 18 Sep measured what that costs. Every arrival in the whole
+      # series lands 4.1-4.9 cm from its waypoint - never nearer - so the run
+      # turns on which side of 5 cm a leg happens to fall:
+      #
+      #   4.7 cm -> inside tolerance, "arrived", leg takes 25-32 s
+      #   6.0 cm -> outside tolerance, and now the robot must cover 6 cm while
+      #             the checker demands 5 cm of progress per 30 s window. It is
+      #             declared stuck a few centimetres from a goal it is calmly
+      #             driving towards, the controller stops, and the leg sits
+      #             there until room_navigator's 240 s timeout.
+      #
+      # That deadlock is 4 of the 7 failures in the series, all four ending at
+      # (+1.80, +0.01) against a goal of (+1.86, 0.00) - 6 cm short, 2.65 m
+      # driven. There is no middle outcome anywhere in the series: a leg is
+      # either 25-32 s or a full 240 s block.
+      #
+      # 0.02 restores the rule. What counts as ARRIVING is untouched:
+      # xy_goal_tolerance stays at 0.05. Only the stuck detector becomes able to
+      # tell "closing the last 6 cm" apart from "not moving".
+      required_movement_radius: 0.02
+      # Rotation counts as progress too, and it has to, because the last thing a
+      # leg does is turn to the goal heading - and a turn in place covers no
+      # ground at all. SimpleProgressChecker measures translation only, so it
+      # cannot tell that from standing still: in the 18 Sep series the four
+      # deadlocked legs each needed a further 4.5-9.0 deg of yaw (tolerance
+      # 1.43 deg) and were declared stuck while owing nothing but that turn.
+      #
+      # 0.02 rad is ~1.15 deg. Near the goal RotateToGoal slows rotation by 5x,
+      # so about 0.08 rad/s remains - over a 30 s window that is more than a full
+      # turn, and clearing 1.15 deg of it takes well under a second. A robot that
+      # is genuinely not moving still fails both tests.
+      required_movement_angle: 0.02
+      movement_time_allowance: 30.0
+    # Goal checker parameters
+    general_goal_checker:
+      stateful: True
+      plugin: "nav2_controller::SimpleGoalChecker"
+      # Tighter than room_navigator's 0.08 m centreline gate, and it has to be.
+      # At 0.10 Nav2 was allowed to park 10 cm off a portal pose while the gate
+      # refused anything over 8 cm, so a legal arrival could be an illegal state
+      # with nothing able to fix it: on 14 Sep it delivered 9.5 cm off and the
+      # navigator aborted, correctly, with the robot simply left standing.
+      # The doorway itself allows 7.75 cm of lateral error at a square heading,
+      # so the gate is not the part that can move.
+      xy_goal_tolerance: 0.05
+      yaw_goal_tolerance: 0.025
+    # Mapping only. A frontier goal's heading is an artefact of how the goal was
+    # computed (atan2 from wherever the robot stood), and the lidar sees 360
+    # degrees, so holding it carries no information at all. Demanding 1.4 deg of
+    # it made the robot pirouette at the end of every leg - on a base that
+    # slides when it turns in place (mu2 = 0, P-10), which is precisely how yaw
+    # error gets into the scan matcher. The position tolerance is loose for the
+    # same reason: a frontier is a region to go and look at, not a spot to hit.
+    explore_goal_checker:
+      stateful: True
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 3.15      # any heading; pi rounded up
+    # DWB Local Planner configured for omnidirectional (mecanum) base.
+    # Evaluates 15,625 trajectories (25x25x25) at 20 Hz with 1 cm linear granularity.
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: False
+      # max_vel_y was RAISED to 0.50 and put back. The reasoning was sound and
+      # is still worth knowing: at 0.15 against max_vel_x's 0.45 the base has
+      # almost no lateral authority, so the cheapest way for DWB to answer a
+      # sideways error is to TURN, and it did - three bursts of wz in a doorway,
+      # entering 1.3 deg off square and crossing at 6.05 (P-55). PAL allows 1.0.
+      #
+      # What it cost, measured over ten runs: 5 of 10 against 8 of 10 with this
+      # value. The extra freedom lets the robot settle a few centimetres short
+      # of a goal with the position critics satisfied and RotateToGoal returning
+      # zero, and on the two-pose leg out of the blue room it does that often
+      # enough to beat the stall guard's one retry. Three consecutive runs died
+      # there.
+      #
+      # So the doorway heading is held by watching it instead (room_navigator),
+      # and this stays where a ten-run series says it belongs.
+      #
+      # The rest are NOT at PAL's limits, and the attempt to put them there is
+      # why this comment is long. PAL's own configuration for this base allows
+      # x and y +/- 1.0 m/s at 1.0 m/s^2, theta 2.09 rad/s at 2.09 rad/s^2, and
+      # 0.7 m/s for x and y combined. Raising x, theta, max_speed_xy and the
+      # accelerations to those values all at once TIMED OUT twice out of two, on
+      # an open-room leg rather than in a doorway, 240 s without reaching a pose
+      # it had been reaching in 30. One of those four is responsible and this
+      # file does not know which, so they are back where three runs of three
+      # were passing, and the speed goes up one parameter at a time or not at
+      # all.
+      min_vel_x: -0.30
+      max_vel_x: 0.45
+      # Controlled lateral correction: strafe without crabbing or yawing
+      min_vel_y: -0.15
+      max_vel_y: 0.15
+      max_vel_theta: 0.40
+      min_speed_xy: 0.0
+      max_speed_xy: 0.50
+      min_speed_theta: 0.0
+      acc_lim_x: 1.5
+      acc_lim_y: 1.5
+      acc_lim_theta: 3.0
+      decel_lim_x: -1.5
+      decel_lim_y: -1.5
+      decel_lim_theta: -3.0
+      vx_samples: 15
+      vy_samples: 25
+      vtheta_samples: 25
+      sim_time: 1.2
+      linear_granularity: 0.01
+      angular_granularity: 0.01
+      transform_tolerance: 0.2
+      # Must equal general_goal_checker's. RotateToGoalCritic reads THIS one.
+      xy_goal_tolerance: 0.05
+      trans_stopped_velocity: 0.05
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "GoalDist", "Twirling"]
+      ObstacleFootprint.scale: 2.0
+      PathDist.scale: 96.0
+      GoalDist.scale: 24.0
+      # PathAlign was tried here and REMOVED. Nothing in this list scores the
+      # heading - PathDist and GoalDist score position, RotateToGoal returns
+      # zero outside xy_goal_tolerance and so does nothing on the way through,
+      # and Twirling at 2.0 against PathDist's 96 is not a constraint - which is
+      # how a run of 19 Sep entered a doorway 1.3 deg off square and crossed it
+      # at 6.05 (P-55). PathAlign at Nav2's own default of 32 is the obvious
+      # answer to that and it does not work: three runs, two of them TIMED OUT
+      # in the doorway after 240 s, against 2 of 3 through before it was added.
+      # The robot neither scraped nor stalled against the jamb; DWB simply could
+      # not find a trajectory it liked with alignment pulling against PathDist.
+      #
+      # Do not add it back without driving it. The heading is held instead by
+      # room_navigator watching it through the whole transit and squaring up if
+      # it drifts past 0.05 rad, which was measured working in the same series:
+      # caught at 2.9 deg twice in one run, returned to 1.4, and that run passed.
+      # Twirling penalises turning while translating. On a diff-drive that is
+      # wasted motion; on this mecanum base it is exactly what the user asked
+      # for on 16. 9. - translate and rotate at once, rather than stop, turn,
+      # set off. Kept above zero so the robot still has no reason to spin for
+      # its own sake. Deliberately NOT raised to fix the heading drift above:
+      # the base is meant to go faster later, turning and translating at once so
+      # it need not stop to face a waypoint, and a large Twirling cost would
+      # make that impossible. PathAlign constrains the heading to the path,
+      # which is what is wanted; Twirling would constrain turning as such.
+      Twirling.scale: 2.0
+      RotateToGoal.scale: 64.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
+
+    # The approach profile: the mission's own FollowPath, plus one idea.
+    #
+    # Used ONLY on legs that are not a doorway transit - lining up at a doorway,
+    # squaring up in front of a table, docking. room_navigator picks it per leg
+    # through the goal's behavior_tree field, so a transit is driven by the
+    # untouched FollowPath above and behaves exactly as it does today. That
+    # isolation is the point: the doorway is the delicate part and it is not
+    # being experimented on.
+    #
+    # Why: on 18 Sep a leg sat 227 of its 241 seconds within 15 cm of its goal,
+    # 5.5 cm out (tolerance 5.0) and 12.3 deg off heading (tolerance 1.43), and
+    # never fixed the heading. Nav2 says why in RotateToGoalCritic's own class
+    # documentation: "If the current pose is outside xy_goal_tolerance LINEAR
+    # distance from the goal pose, this critic will just return score 0.0."
+    #
+    # So just outside the tolerance the mission's critic list contains nothing
+    # that rewards facing the goal - PathDist and GoalDist score only where a
+    # trajectory ENDS, RotateToGoal is inert, and Twirling actively penalises
+    # turning. The robot had no reason to correct 12 degrees and did not.
+    #
+    # GoalAlign scores a point held ahead of the robot, so heading starts paying
+    # before the tolerance is reached and the robot arrives already lined up,
+    # where RotateToGoal can finish the job. The scale is deliberately modest
+    # against RotateToGoal's 64: this is a nudge on the approach, not a demand
+    # to face the goal at all times, and reverse and strafe stay available -
+    # they are how an omni base reaches a pose behind it.
+    FollowPathAlign:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: False
+      # max_vel_y is the planner half of P-55. It was 0.15 against max_vel_x's
+      # 0.45: with almost no lateral authority, the cheapest way for DWB to
+      # answer a sideways error is to TURN, and it did - three bursts of wz in a
+      # doorway, entering 1.3 deg off square and crossing at 6.05. A mecanum
+      # base should strafe there, and at 0.50 it can. PAL allows 1.0.
+      #
+      # The rest are NOT at PAL's limits, and the attempt to put them there is
+      # why this comment is long. PAL's own configuration for this base allows
+      # x and y +/- 1.0 m/s at 1.0 m/s^2, theta 2.09 rad/s at 2.09 rad/s^2, and
+      # 0.7 m/s for x and y combined. Raising x, theta, max_speed_xy and the
+      # accelerations to those values all at once TIMED OUT twice out of two, on
+      # an open-room leg rather than in a doorway, 240 s without reaching a pose
+      # it had been reaching in 30. One of those four is responsible and this
+      # file does not know which, so they are back where three runs of three
+      # were passing, and the speed goes up one parameter at a time or not at
+      # all.
+      min_vel_x: -0.30
+      max_vel_x: 0.45
+      min_vel_y: -0.15
+      max_vel_y: 0.15
+      max_vel_theta: 0.40
+      min_speed_xy: 0.0
+      max_speed_xy: 0.50
+      min_speed_theta: 0.0
+      acc_lim_x: 1.5
+      acc_lim_y: 1.5
+      acc_lim_theta: 3.0
+      decel_lim_x: -1.5
+      decel_lim_y: -1.5
+      decel_lim_theta: -3.0
+      vx_samples: 15
+      vy_samples: 25
+      vtheta_samples: 25
+      sim_time: 1.2
+      linear_granularity: 0.01
+      angular_granularity: 0.01
+      transform_tolerance: 0.2
+      xy_goal_tolerance: 0.05
+      trans_stopped_velocity: 0.05
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "GoalDist", "GoalAlign", "Twirling"]
+      ObstacleFootprint.scale: 2.0
+      PathDist.scale: 96.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 64.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
+      # The one addition, and the ONLY difference from FollowPath. That was
+      # claimed once and was not true: the first version of this block also
+      # carried min_vel_x -0.26 against the mission's -0.30 and vx_samples 25
+      # against its 15, copied wrong by hand. Both change how trajectories are
+      # generated, so the 10-run series that followed could not tell GoalAlign
+      # apart from two stray numbers - and that series measured the doorway
+      # 2.7 cm tighter. Whatever it measured, it was not this critic alone.
+      GoalAlign.scale: 8.0
+      GoalAlign.forward_point_distance: 0.325
+      Twirling.scale: 2.0
+
+    # The mapping profile.
+    #
+    # The critic list is the part that matters, and the first attempt got it
+    # wrong in an instructive way. The mission's list has no PathAlign and no
+    # GoalAlign - nothing at all that rewards *facing* the way the path goes. On
+    # an omni base that still works, because reverse and strafe are allowed and
+    # PathDist/GoalDist only score where a trajectory ends: to reach a goal
+    # behind it the robot simply drives backwards. That is the whole explanation
+    # for "why does it reverse" - not a decision, an absence.
+    #
+    # Removing reverse without filling that absence deadlocked it (17 Sep, 28 s
+    # motionless with no error anywhere): forward scored worse, turning in place
+    # scored the same as standing still, so standing still won. So the fix is to
+    # add the missing idea rather than to ban a motion:
+    #
+    #   PathAlign/GoalAlign  turning to face the path is now worth something, so
+    #                        the robot turns onto its path and drives it forwards
+    #   min_vel_x: -0.10     reverse stays - it is how an omni base gets out of a
+    #                        corner - but at a third of forward speed it stops
+    #                        being the cheapest way to travel
+    #   no RotateToGoal      nothing left to force the end-of-leg pirouette; the
+    #                        goal checker does not care about the final heading
+    #   max_vel_theta 0.25   the rate the manual tour already turns at, because
+    #                        above it the wheels lie about how far (P-11)
+    #
+    # Turning in place is therefore not banned: it happens once at the start of a
+    # leg, to face the path. It is the end-of-leg turn - the one that bought
+    # nothing and cost yaw drift - that is gone.
+    FollowPathExplore:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: False
+      min_vel_x: -0.10
+      max_vel_x: 0.45
+      min_vel_y: -0.15
+      max_vel_y: 0.15
+      max_vel_theta: 0.25
+      min_speed_xy: 0.0
+      max_speed_xy: 0.50
+      min_speed_theta: 0.0
+      acc_lim_x: 1.5
+      acc_lim_y: 1.5
+      acc_lim_theta: 3.0
+      decel_lim_x: -1.5
+      decel_lim_y: -1.5
+      decel_lim_theta: -3.0
+      vx_samples: 15
+      vy_samples: 25
+      vtheta_samples: 25
+      sim_time: 1.2
+      linear_granularity: 0.01
+      angular_granularity: 0.01
+      transform_tolerance: 0.2
+      # Must equal explore_goal_checker's, as above.
+      xy_goal_tolerance: 0.25
+      trans_stopped_velocity: 0.05
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+      critics: ["Oscillation", "ObstacleFootprint", "PathAlign", "PathDist", "GoalAlign", "GoalDist", "Twirling"]
+      ObstacleFootprint.scale: 2.0
+      PathDist.scale: 96.0
+      GoalDist.scale: 24.0
+      # The two that the mission profile does without. They score a point held
+      # ahead of the robot, so "facing along the path" becomes cheaper than
+      # crabbing along it sideways or backwards.
+      PathAlign.scale: 32.0
+      PathAlign.forward_point_distance: 0.325
+      GoalAlign.scale: 8.0
+      GoalAlign.forward_point_distance: 0.325
+      # Left at the mission's value, and dominated by PathAlign: it still
+      # discourages spinning for its own sake without preventing the turn onto
+      # the path.
+      Twirling.scale: 2.0
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 15.0
+      publish_frequency: 5.0
+      global_frame: odom
+      robot_base_frame: base_link
+      use_sim_time: True
+      rolling_window: true
+      width: 3
+      height: 3
+      # 2.5 cm, not the usual 5 cm. A 1.0 m doorway leaves this robot about 4 cm
+      # a side, which is under one 5 cm cell: the jamb rounds up to a whole cell
+      # inwards and the gap the controller sees closes. Measured on 14 Sep: the
+      # local costmap showed 80 cm of free space in a 100 cm doorway, and DWB
+      # correctly reported "No valid trajectories out of 3711". The window is
+      # only 3 x 3 m, so the extra cells are cheap.
+      #
+      # 14 Sep: down to 2 cm with the map, so the static and voxel layers agree
+      # cell for cell and the same wall is not drawn in two different places.
+      # 3 x 3 m at 0.02 is 150 x 150 cells; watch for "Control loop missed" in
+      # the first run, which is how run 51 said the window had got too expensive.
+      resolution: 0.02
+      # The footprint is no longer an estimate that needs a safety margin: it is
+      # the measured convex hull of the robot's own collision geometry,
+      # published live (D-19). Padding it again subtracts 2 cm of a 8 cm budget
+      # for a robot that is already drawn at its true size.
+      footprint_padding: 0.0
+      # The measured robot: 1.04 m long, 0.854 m wide in ARM_CARRY_V2 (P-35,
+      # agreed to 2 mm by the collision-corridor search and the mesh vertices).
+      # Without artificial costmap inflation on local_costmap, ObstacleFootprint
+      # checks the exact polygon against real geometry, fitting 1.0 m doors.
+      footprint: "[[0.52, 0.427], [-0.52, 0.427], [-0.52, -0.427], [0.52, -0.427]]"
+      # NO inflation layer, and it is not an oversight. MPPI was tried here and
+      # needed one: its CostCritic scores the inflated cost under a trajectory,
+      # and the costmap refuses an inflation radius below the robot's inscribed
+      # radius, which is about 0.36 m for a body 0.83 by 0.72. Inflating 0.36 m
+      # from each jamb of a 0.998 m doorway leaves 0.28 m clear, and the robot
+      # is 0.83 wide - the opening would be closed by cost alone.
+      #
+      # DWB does not need it. ObstacleFootprint checks the real footprint
+      # against the obstacle grid, which is the only thing that works for a
+      # robot deliberately built to just fit.
+      plugins: ["voxel_layer"]
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: scan
+        scan:
+          topic: /scan_filtered
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
+      always_send_full_costmap: True
+      # The controller must see the same table/door keepouts as the planner.
+      # Keep local inflation disabled so the measured doorway remains passable.
+      filters: ["keepout_filter", "speed_filter"]
+      keepout_filter:
+        plugin: "nav2_costmap_2d::KeepoutFilter"
+        filter_info_topic: "/costmap_filter_info"
+      # Speed by place instead of by leg. The mask (maps/speed_mask.yaml, built
+      # by scripts/make_speed_mask.py from the same doorway detector the
+      # navigation graph uses) marks doorways at 45 % of the controller's
+      # maximum and tables at 55 %, and leaves the rest unrestricted. The filter
+      # publishes the limit on /speed_limit as the robot moves, so a route no
+      # longer has to be chopped into legs to be driven carefully where it
+      # matters - which is what made the robot brake at every leg boundary and
+      # drive at a median of 0.081 m/s against a peak of 0.217.
+      #
+      # It lives in the LOCAL costmap because that is the one that follows the
+      # robot; the limit has to change as it moves, not as it plans.
+      speed_filter:
+        plugin: "nav2_costmap_2d::SpeedFilter"
+        enabled: True
+        filter_info_topic: "/speed_filter_info"
+        speed_limit_topic: "/speed_limit"
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      # Raised with the replanning rate in the behaviour trees: a planner asked
+      # twenty times a second cannot answer with anything newer than this.
+      # There is no configured ceiling on either - expected_planner_frequency
+      # is a warning threshold, not a limit - so the real ones are how long a
+      # plan takes over 350 000 cells and how much CPU a simulation at half
+      # real time has left. Both announce themselves: Nav2 logs when the
+      # planner cannot keep up, and the RTF falls when the machine cannot.
+      update_frequency: 20.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_link
+      use_sim_time: True
+      # Measured 1.04 x 0.854 m in ARM_CARRY_V2 (P-35); see local_costmap.
+      # Replaced at runtime by the measured outline (D-19); this is the fallback.
+      footprint: "[[0.52, 0.427], [-0.52, 0.427], [-0.52, -0.427], [0.52, -0.427]]"
+      footprint_padding: 0.0
+      # Matches the map. It used to stay at 5 cm because the map was 5 cm, but
+      # that map drew a 0.10 m wall 0.15 m thick and read the 1.00 m doorway as
+      # 0.95 m (scripts/check_map_geometry.py, P-40); slam_toolbox now builds at
+      # 0.02, and resampling it back to 0.05 here would put the quantisation
+      # straight back into the layer the planner reads.
+      resolution: 0.02
+      track_unknown_space: true
+      rolling_window: false
+      width: 20
+      height: 20
+      plugins: ["static_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # OFF. The repelling is done by one field now, computed in nav_zones and
+        # delivered through the keepout mask (Zones.field).
+        #
+        # This layer could not be part of that field. It is isotropic, and this
+        # robot is 1.04 x 0.854 m: measured at the red table, its inscribed radius
+        # put the planner's limit 0.803 m from the table centre when the robot's
+        # front touches the top at 0.921 m - 12 cm too permissive head-on, while
+        # being too strict sideways. It is also unavoidable: it inflates every
+        # occupied cell including the door jambs, and a field in a 0.98 m opening
+        # is exactly what NavFn cannot plan through (run 65). A mask can be shaped
+        # per feature and cut away where the robot has to go; a layer cannot.
+        #
+        # Left in place, and only disabled, so the comparison can be switched back
+        # on in one word. /global_costmap/costmap keeps publishing either way, so
+        # the RViz costmap displays work unchanged.
+        enabled: false
+        cost_scaling_factor: 2.0
+        inflation_radius: 0.45
+      always_send_full_costmap: True
+      # The grown mask, not the raw one: NavFn plans the robot's centre, so a
+      # zone it is shown has to already include the body (nav_zones.Zones.mask).
+      # With the raw mask it routed the centre along the zone boundary and DWB,
+      # which scores the real footprint, could not follow a metre of it.
+      filters: ["keepout_filter"]
+      keepout_filter:
+        plugin: "nav2_costmap_2d::KeepoutFilter"
+        filter_info_topic: "/costmap_filter_info_planner"
+
+map_server:
+  ros__parameters:
+    use_sim_time: True
+    # Overridden in launch by the "map" launch configuration or provided default value.
+    # To use in yaml, remove the default "map" value in the tb3_simulation_launch.py file & provide full path to map below.
+    yaml_filename: ""
+
+map_saver:
+  ros__parameters:
+    use_sim_time: True
+    save_map_timeout: 5.0
+    free_thresh_default: 0.25
+    occupied_thresh_default: 0.65
+    map_subscribe_transient_local: True
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0
+    use_sim_time: True
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      tolerance: 0.2
+      use_astar: true
+      allow_unknown: true
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: True
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: True
+
+behavior_server:
+  ros__parameters:
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    assisted_teleop:
+      plugin: "nav2_behaviors/AssistedTeleop"
+    global_frame: odom
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+    use_sim_time: true
+    simulate_ahead_time: 2.0
+    # Slow the /spin scan so the ~2 Hz RGBD camera reliably catches the marker as
+    # it sweeps the FOV (a fast spin skipped past the marker between frames).
+    max_rotational_vel: 0.35
+    min_rotational_vel: 0.2
+    rotational_acc_lim: 1.0
+
+robot_state_publisher:
+  ros__parameters:
+    use_sim_time: True
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: True
+    loop_rate: 20
+    stop_on_failure: false
+    waypoint_task_executor_plugin: "wait_at_waypoint"
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: True
+      waypoint_pause_duration: 200
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: True
+    smoothing_frequency: 40.0
+    scale_velocities: False
+    feedback: "OPEN_LOOP"
+    # Matches the omni DWB limits with controlled lateral and reverse support.
+    # The smoother is the last thing before the base, so its limits have to
+    # match the controller's or they silently clip them.
+    max_velocity: [0.50, 0.30, 0.60]
+    min_velocity: [-0.30, -0.30, -0.60]
+    max_accel: [1.5, 1.5, 3.0]
+    max_decel: [-1.5, -1.5, -3.0]
+    odom_topic: "/base_controller/odom"
+    odom_duration: 0.05
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
+
+costmap_filter_info_server:
+  ros__parameters:
+    use_sim_time: True
+    type: 0
+    filter_info_topic: "/costmap_filter_info"
+    mask_topic: "/keepout_filter_mask"
+    base: 0.0
+    multiplier: 1.0
+
+# /keepout_filter_mask is published by the nav_zones node, not by a map_server
+# reading a pre-baked PGM: the zones are derived from the doorways and tables
+# the SLAM map actually contains, so they follow the world instead of a file
+# somebody remembered to regenerate.
