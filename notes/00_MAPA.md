@@ -98,6 +98,15 @@ updated: 2026-09-16
 - **Otvoreno: kocka sleti 2 cm ustranu i to nije lokalizacija** — tri nezavisna popravka
   odometrije i lokalizacije nisu ga pomaknula ni za milimetar
   ([[P-54_place_bias_not_localisation]]).
+- **Novo 19. 9.: padovi na vratima su UPRAVLJANJE, ne lokalizacija** — robot uđe poravnat na
+  1,3° i prođe pod 6,1°, jer mu Nav2 u prolazu tri puta zada `wz = +0,10` a kurs ne drži nijedan
+  kritičar. Bočni položaj mu je pritom 2,1 cm, a lidar kao zamjena za AMCL je izmjeren i
+  **odbijen i za sama vrata** (17/37 prolaza bliži istini). → [[P-55_doorway_skew_is_control]]
+- **Novo 19. 9.: gate za vrata mjeri širinu, ne zglobove.** `arms: 82.1 cm wide, limit 95`,
+  ponovljivo na 1 mm, uključuje nošenu kocku. Stara provjera zglobova rušila je runove na robotu
+  sa 17 cm viška zaliha.
+- **Novo 19. 9.: vodilice se spuštaju koliko mogu, a ne sve-ili-ništa.** Jedan run je nosio kocku
+  45 cm previsoko jer je MoveIt odbio 0,10 m, pa mu je kocka zaklonila marker za odlaganje.
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
   → odloži u crvenoj sobi. Plan dana: [[danas]]. Iskrena odstupanja: [[odstupanja]].
 
