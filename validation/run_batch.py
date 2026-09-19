@@ -319,7 +319,7 @@ def run_once(index, args, batch):
     command = ['ros2', 'launch', 'pas_dual_arm_bringup', 'scenario_mission.launch.py',
                'headless:=true', 'open_rviz:=false', 'gui:=false', 'quiet:=true',
                f'debug_truth:={str(args.truth).lower()}', f'world:={world}',
-               f'leg_speed:={str(not args.speed_mask).lower()}',
+               f'leg_speed:={str(args.leg_speed).lower()}',
                f'laser_odometry:={str(args.laser_odometry).lower()}']
     print(f'--- run {index}: {" ".join(command[-4:])}')
     began = time.monotonic()
@@ -428,9 +428,9 @@ def main():
     parser.add_argument('--no-pin', dest='pin', action='store_false',
                         help='do not pin the physics and the controllers to '
                              'cores of their own')
-    parser.add_argument('--speed-mask', action='store_true',
-                        help='let the SpeedFilter mask set the speed instead of '
-                             'room_navigator setting it per leg')
+    parser.add_argument('--leg-speed', action='store_true',
+                        help='set the controller speed per leg (DWB only) '
+                             'instead of leaving it to the speed mask')
     parser.add_argument('--laser-odometry', action='store_true',
                         help='take odom -> base_footprint from the laser (D-25)')
     parser.add_argument('--no-truth', dest='truth', action='store_false',

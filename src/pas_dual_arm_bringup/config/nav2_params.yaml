@@ -292,19 +292,32 @@ controller_server:
     # that uses vy as a first-class control rather than as a sampled dimension.
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
+      # --- Optimiser ------------------------------------------------------
+      # 36 steps of 50 ms is a 1.8 s horizon. model_dt MUST equal the control
+      # period (controller_frequency is 20.0 above) or the rollouts predict a
+      # robot moving at a different rate than the one being commanded.
       time_steps: 36
       model_dt: 0.05
-      # Kept modest on purpose: MPPI costs more than DWB and this simulation
-      # already runs at about half real time.
       batch_size: 1000
       iteration_count: 1
       temperature: 0.3
       gamma: 0.015
-      motion_model: "Omni"
-      visualize: false
+      # Fresh noise every iteration. It costs CPU and buys robustness; the core
+      # pinning from scripts/pin_cores.sh is what makes that affordable.
+      regenerate_noises: true
+      # How long an idle optimiser keeps its last solution before starting
+      # clean. Longer than a control period, shorter than a pause between legs.
+      reset_period: 1.0
+      retry_attempt_limit: 1
       prune_distance: 1.6
       transform_tolerance: 0.2
-      # The same envelope DWB had, so this compares controllers and not limits.
+      max_robot_pose_search_dist: 10.0
+      motion_model: "Omni"
+      visualize: false
+      # --- Velocity envelope ----------------------------------------------
+      # The same limits DWB drove, so the first comparison is of controllers
+      # and not of ceilings. vy is the one to revisit once this works: an Omni
+      # model exists to use it, and 0.15 against vx's 0.45 barely lets it.
       vx_max: 0.45
       vx_min: -0.30
       vy_max: 0.15
@@ -312,11 +325,19 @@ controller_server:
       vx_std: 0.15
       vy_std: 0.15
       wz_std: 0.30
+      # This base loses about half of every command to slip (P-56), so a
+      # deadband that throws away tiny commands throws away nothing real.
+      deadband_velocities: [0.02, 0.02, 0.02]
       AckermannConstraints:
         min_turning_r: 0.2
-      # PreferForwardCritic is deliberately ABSENT. It penalises anything that is
-      # not forward motion, which on a mecanum base penalises the one thing the
-      # base is for.
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      # --- Critics ---------------------------------------------------------
+      # PreferForwardCritic is deliberately ABSENT: it penalises anything that
+      # is not forward motion, which on a mecanum base penalises the one thing
+      # the base is for. VelocityDeadbandCritic likewise - the deadband above
+      # already handles it and a critic for it would double the penalty.
       critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic",
                 "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "TwirlingCritic"]
       ConstraintCritic:
@@ -355,6 +376,7 @@ controller_server:
         offset_from_furthest: 4
         threshold_to_consider: 0.5
         max_angle_to_furthest: 1.0
+        # False: the base has no front for these purposes.
         forward_preference: false
       TwirlingCritic:
         enabled: true
@@ -373,6 +395,13 @@ controller_server:
         consider_footprint: true
         collision_cost: 1000000.0
         near_goal_distance: 1.0
+        # These three tie the critic to the map it is reading. The critic keeps
+        # its OWN copy of the inflation model, and if it disagrees with the
+        # layer's, it scores trajectories against a map that does not exist.
+        # They must stay equal to the local costmap's inflation_layer below.
+        inflation_layer_name: "inflation_layer"
+        inflation_radius: 0.40
+        cost_scaling_factor: 10.0
 
     FollowPathDWB:
       plugin: "dwb_core::DWBLocalPlanner"
@@ -489,96 +518,100 @@ controller_server:
     # against RotateToGoal's 64: this is a nudge on the approach, not a demand
     # to face the goal at all times, and reverse and strafe stay available -
     # they are how an omni base reaches a pose behind it.
+    # The approach profile. MPPI as well - a run that drove transits on one
+    # controller and approaches on another would be comparing nothing.
+    #
+    # It exists because DWB had no critic for heading on an approach and needed
+    # GoalAlign bolted on. MPPI has GoalAngleCritic and PathAngleCritic in the
+    # box, so the difference here is their weight rather than a missing piece:
+    # squaring up to a dock and to a doorway matters more than making progress,
+    # which is the opposite of a transit.
     FollowPathAlign:
-      plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: False
-      # max_vel_y is the planner half of P-55. It was 0.15 against max_vel_x's
-      # 0.45: with almost no lateral authority, the cheapest way for DWB to
-      # answer a sideways error is to TURN, and it did - three bursts of wz in a
-      # doorway, entering 1.3 deg off square and crossing at 6.05. A mecanum
-      # base should strafe there, and at 0.50 it can. PAL allows 1.0.
-      #
-      # The rest are NOT at PAL's limits, and the attempt to put them there is
-      # why this comment is long. PAL's own configuration for this base allows
-      # x and y +/- 1.0 m/s at 1.0 m/s^2, theta 2.09 rad/s at 2.09 rad/s^2, and
-      # 0.7 m/s for x and y combined. Raising x, theta, max_speed_xy and the
-      # accelerations to those values all at once TIMED OUT twice out of two, on
-      # an open-room leg rather than in a doorway, 240 s without reaching a pose
-      # it had been reaching in 30. One of those four is responsible and this
-      # file does not know which, so they are back where three runs of three
-      # were passing, and the speed goes up one parameter at a time or not at
-      # all.
-      min_vel_x: -0.30
-      max_vel_x: 0.45
-      min_vel_y: -0.15
-      max_vel_y: 0.15
-      max_vel_theta: 0.40
-      min_speed_xy: 0.0
-      max_speed_xy: 0.50
-      min_speed_theta: 0.0
-      acc_lim_x: 1.5
-      acc_lim_y: 1.5
-      acc_lim_theta: 3.0
-      decel_lim_x: -1.5
-      decel_lim_y: -1.5
-      decel_lim_theta: -3.0
-      vx_samples: 15
-      vy_samples: 25
-      vtheta_samples: 25
-      sim_time: 1.2
-      linear_granularity: 0.01
-      angular_granularity: 0.01
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 36
+      model_dt: 0.05
+      batch_size: 1000
+      iteration_count: 1
+      temperature: 0.3
+      gamma: 0.015
+      regenerate_noises: true
+      reset_period: 1.0
+      retry_attempt_limit: 1
+      prune_distance: 1.6
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.05
-      trans_stopped_velocity: 0.05
-      short_circuit_trajectory_evaluation: True
-      stateful: True
-      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "GoalDist", "GoalAlign", "Twirling"]
-      ObstacleFootprint.scale: 2.0
-      PathDist.scale: 96.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 64.0
-      RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.0
-      # The one addition, and the ONLY difference from FollowPath. That was
-      # claimed once and was not true: the first version of this block also
-      # carried min_vel_x -0.26 against the mission's -0.30 and vx_samples 25
-      # against its 15, copied wrong by hand. Both change how trajectories are
-      # generated, so the 10-run series that followed could not tell GoalAlign
-      # apart from two stray numbers - and that series measured the doorway
-      # 2.7 cm tighter. Whatever it measured, it was not this critic alone.
-      GoalAlign.scale: 8.0
-      GoalAlign.forward_point_distance: 0.325
-      Twirling.scale: 2.0
+      max_robot_pose_search_dist: 10.0
+      motion_model: "Omni"
+      visualize: false
+      vx_max: 0.45
+      vx_min: -0.30
+      vy_max: 0.15
+      wz_max: 0.40
+      vx_std: 0.15
+      vy_std: 0.15
+      wz_std: 0.30
+      deadband_velocities: [0.02, 0.02, 0.02]
+      AckermannConstraints:
+        min_turning_r: 0.2
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic",
+                "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "TwirlingCritic"]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.0
+      # The one real difference from the transit profile: three times the weight
+      # on arriving square, and it starts caring further out.
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 9.0
+        threshold_to_consider: 1.0
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 3
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        forward_preference: false
+      TwirlingCritic:
+        enabled: true
+        twirling_cost_power: 1
+        twirling_cost_weight: 10.0
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.81
+        critical_cost: 300.0
+        consider_footprint: true
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+        inflation_layer_name: "inflation_layer"
+        inflation_radius: 0.40
+        cost_scaling_factor: 10.0
 
-    # The mapping profile.
-    #
-    # The critic list is the part that matters, and the first attempt got it
-    # wrong in an instructive way. The mission's list has no PathAlign and no
-    # GoalAlign - nothing at all that rewards *facing* the way the path goes. On
-    # an omni base that still works, because reverse and strafe are allowed and
-    # PathDist/GoalDist only score where a trajectory ends: to reach a goal
-    # behind it the robot simply drives backwards. That is the whole explanation
-    # for "why does it reverse" - not a decision, an absence.
-    #
-    # Removing reverse without filling that absence deadlocked it (17 Sep, 28 s
-    # motionless with no error anywhere): forward scored worse, turning in place
-    # scored the same as standing still, so standing still won. So the fix is to
-    # add the missing idea rather than to ban a motion:
-    #
-    #   PathAlign/GoalAlign  turning to face the path is now worth something, so
-    #                        the robot turns onto its path and drives it forwards
-    #   min_vel_x: -0.10     reverse stays - it is how an omni base gets out of a
-    #                        corner - but at a third of forward speed it stops
-    #                        being the cheapest way to travel
-    #   no RotateToGoal      nothing left to force the end-of-leg pirouette; the
-    #                        goal checker does not care about the final heading
-    #   max_vel_theta 0.25   the rate the manual tour already turns at, because
-    #                        above it the wheels lie about how far (P-11)
-    #
-    # Turning in place is therefore not banned: it happens once at the start of a
-    # leg, to face the path. It is the end-of-leg turn - the one that bought
-    # nothing and cost yaw drift - that is gone.
     FollowPathExplore:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: False

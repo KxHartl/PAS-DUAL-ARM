@@ -105,7 +105,7 @@ def generate_launch_description():
         DeclareLaunchArgument('pick_room', default_value='blue'),
         DeclareLaunchArgument('place_room', default_value='red'),
         DeclareLaunchArgument(
-            'leg_speed', default_value='true',
+            'leg_speed', default_value='false',
             description='Set the controller speed per leg, or leave it to the '
                         'speed mask over the map'),
         DeclareLaunchArgument(
