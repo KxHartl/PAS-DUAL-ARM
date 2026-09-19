@@ -39,7 +39,7 @@ import numpy as np
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import Polygon, PoseStamped, Quaternion
+from geometry_msgs.msg import Polygon, PoseStamped, Quaternion, Twist
 from nav2_msgs.action import NavigateThroughPoses, NavigateToPose
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import SetParameters
@@ -103,6 +103,14 @@ class RoomNavigator(Node):
         # Whether being too wide is a reason to try before it is a reason to
         # abort. Only ever acts with empty hands; see _try_narrowing.
         self.declare_parameter('narrow_before_abort', True)
+        # How far the heading may drift DURING a transit before the robot stops
+        # and squares up again. The gate before the opening allows 0.087 rad,
+        # and then nothing looks at the heading for the 2.3 m that follows: a
+        # run of 19 Sep entered at 1.3 deg and crossed at 6.05, which costs
+        # 6 cm of a 99.5 cm opening (P-55). 0.05 rad is 2.9 deg, comfortably
+        # above the 1.32 deg median and well below what closes the gap.
+        self.declare_parameter('transit_heading_limit', 0.05)
+        self.declare_parameter('transit_squares_up', True)
         self.declare_parameter('centreline_tolerance', 0.08)
         # 5.0 degrees. The crossing that was actually driven on 14 Sep went
         # through door 0 at 4.2 degrees and 1.8 cm, so a 4.0 degree limit would
@@ -144,6 +152,9 @@ class RoomNavigator(Node):
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self._status_pub = self.create_publisher(String, '/room_navigator/status', latched)
+        # Used only to square the robot up mid-transit, and only after the Nav2
+        # goal has been cancelled - two publishers on one base fight.
+        self._cmd_vel = self.create_publisher(Twist, '/cmd_vel', 10)
         self.create_subscription(String, '/nav_graph', self._on_graph, latched)
         self.create_subscription(String, '/room_navigator/goto', self._on_goto, 10)
         # Which posture the arms are meant to be holding right now. The mission
@@ -863,7 +874,45 @@ class RoomNavigator(Node):
         share = get_package_share_directory('pas_dual_arm_bringup')
         return os.path.join(share, 'behavior_trees', self.ALIGN_TREE)
 
+    def _square_up(self, leg, label):
+        """Turn on the spot until the robot is square with the leg again.
+
+        Nav2 must already have been cancelled: this publishes on the same topic
+        it does, and two controllers on one base fight. Rotation only - the base
+        is not moved off the line it is on, only turned back onto its heading.
+        """
+        deadline = time.monotonic() + 8.0
+        gain = 1.2
+        while time.monotonic() < deadline:
+            rclpy.spin_once(self, timeout_sec=0.05)
+            pose = self.pose()
+            if pose is None:
+                continue
+            error = wrap(pose[2] - leg.yaw)
+            if abs(error) <= 0.5 * self.get_parameter('transit_heading_limit').value:
+                self._cmd_vel.publish(Twist())
+                self.get_logger().info(
+                    f'{label}: squared up, now {math.degrees(error):+.1f} deg off')
+                return True
+            command = Twist()
+            # Slow: the point is to stop drifting, not to swing the arms about.
+            command.angular.z = max(-0.25, min(0.25, -gain * error))
+            self._cmd_vel.publish(command)
+        self._cmd_vel.publish(Twist())
+        self.get_logger().warn(f'{label}: could not square up within 8 s')
+        return False
+
     def _drive(self, leg, label, destination):
+        # A transit may be driven twice: once, and once more after the robot has
+        # been stopped and squared up because its heading drifted on the way
+        # through. See the heading guard below and P-55.
+        for attempt in (1, 2):
+            outcome = self._drive_once(leg, label, destination, attempt)
+            if outcome != 'retry':
+                return outcome
+        return False
+
+    def _drive_once(self, leg, label, destination, attempt=1):
         goal = NavigateToPose.Goal()
         goal.behavior_tree = self._tree_for(leg)
         goal.pose = PoseStamped()
@@ -918,6 +967,25 @@ class RoomNavigator(Node):
                         delta = measured - believed
                         if disagreement is None or abs(delta) > abs(disagreement[0]):
                             disagreement = (delta, measured, believed, span)
+            # The heading, watched all the way through rather than once before
+            # the opening. Nav2 turns the robot during a transit - three bursts
+            # of wz in the run that failed - and nothing in its critic list
+            # scores the heading, so the drift is nobody's job to notice.
+            if (leg.transit and attempt == 1
+                    and self.get_parameter('transit_squares_up').value):
+                pose = self.pose()
+                if pose is not None:
+                    drift = wrap(pose[2] - leg.yaw)
+                    if abs(drift) > self.get_parameter('transit_heading_limit').value:
+                        self.get_logger().warn(
+                            f'{label}: {math.degrees(drift):+.1f} deg off square part '
+                            f'way through, needing {swept_width(drift):.3f} m of the '
+                            f'opening; stopping to square up and going again')
+                        handle.cancel_goal_async()
+                        self._spin(1.0)
+                        self._square_up(leg, label)
+                        return 'retry'
+
             if leg.transit and gap < limit:
                 self._report_disagreement(label, disagreement)
                 self._abort(handle,
