@@ -96,15 +96,23 @@ def main():
         here, '..', 'src', 'pas_dual_arm_bringup', 'worlds', 'seminar_world.sdf'))
     parser.add_argument('--out', default=None,
                         help='where to write mask.pgm/.yaml (default: beside the map)')
-    # Percentages of the controller's maximum. The doorway number is the one
-    # the mission already drives openings at (slow_speed_xy 0.22 against
-    # fast 0.50), so this changes WHERE it applies, not how fast it goes.
-    parser.add_argument('--door-percent', type=float, default=45.0)
-    parser.add_argument('--table-percent', type=float, default=55.0)
-    # How far the limit reaches around each feature. A doorway needs the robot
-    # already slow when it arrives, not slowing as it enters.
-    parser.add_argument('--door-radius', type=float, default=1.30)
-    parser.add_argument('--table-radius', type=float, default=1.00)
+    # Percentages of the controller's maximum, and free space is not limited
+    # at all. The first attempt used 45 and 55 over generous radii, and measured
+    # what that costs: the robot drove at 0.142 m/s in the open against 0.081
+    # before, so removing the per-leg braking worked - but it spent three times
+    # as many samples inside the restricted zones as outside them, and the run
+    # came out 626 s against 579. The mask is not the only thing slowing the
+    # robot down; DWB's own critics already back off near obstacles, and these
+    # numbers were set as though it were.
+    parser.add_argument('--door-percent', type=float, default=80.0)
+    parser.add_argument('--table-percent', type=float, default=80.0)
+    parser.add_argument('--table-close-percent', type=float, default=50.0)
+    # How far each limit reaches. A doorway wants the robot already slowed when
+    # it arrives rather than slowing as it enters, so the radius is a little
+    # more than half the passage, not more than its whole length.
+    parser.add_argument('--door-radius', type=float, default=0.90)
+    parser.add_argument('--table-radius', type=float, default=1.20)
+    parser.add_argument('--table-close-radius', type=float, default=0.55)
     args = parser.parse_args()
 
     meta = yaml.safe_load(open(args.map))
@@ -145,10 +153,16 @@ def main():
         print(f"  vrata na ({door['x']:+.2f}, {door['y']:+.2f}) sirine "
               f"{door['width']:.2f} m -> {args.door_percent:.0f} %")
     for table in tables:
-        paint(table.cx, table.cy, args.table_radius + max(table.sx, table.sy) / 2.0,
-              int(args.table_percent))
+        half = max(table.sx, table.sy) / 2.0
+        # Two rings: near the table, and right up against it where the robot is
+        # docking and a bump costs the run.
+        paint(table.cx, table.cy, args.table_radius + half, int(args.table_percent))
+        paint(table.cx, table.cy, args.table_close_radius + half,
+              int(args.table_close_percent))
         print(f'  stol "{table.name}" na ({table.cx:+.2f}, {table.cy:+.2f}), '
-              f'{table.sx:.2f} x {table.sy:.2f} m -> {args.table_percent:.0f} %')
+              f'{table.sx:.2f} x {table.sy:.2f} m -> {args.table_percent:.0f} % '
+              f'do {args.table_radius + half:.2f} m, {args.table_close_percent:.0f} % '
+              f'do {args.table_close_radius + half:.2f} m')
 
     out = args.out or os.path.dirname(os.path.abspath(args.map))
     os.makedirs(out, exist_ok=True)
