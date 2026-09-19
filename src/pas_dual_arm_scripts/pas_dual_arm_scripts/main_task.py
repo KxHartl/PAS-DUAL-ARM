@@ -242,7 +242,7 @@ class MainTask(BaseDriver, Node):
         self.declare_parameter('pull_cube_in', 0.15)
         self.declare_parameter('pull_elbow_out_deg', 20.0)
         self.declare_parameter('pull_torso_clearance', 0.03)
-        self.declare_parameter('pull_speed', 0.02)
+        self.declare_parameter('pull_speed', 0.04)
         # DETECTION_V4 with the hands this much further out (user: a little
         # wider): wrist cameras 0.35 m from the markers (S6 read them at 0.34),
         # 20 cm off the cube while driving in.
@@ -302,6 +302,20 @@ class MainTask(BaseDriver, Node):
         self.declare_parameter('place_clearance', 0.20)
         self.declare_parameter('place_touch', 0.002)
         self.declare_parameter('place_lower_speed', 0.01)
+        # The lowering is two moves, not one. place_lower_speed is right for the
+        # last couple of centimetres, where the cube meets the table; it was
+        # being used for the whole descent, 20 cm of air at 1 cm/s, which is
+        # 20.6 s of every mission (measured, phase by phase, over ten runs).
+        self.declare_parameter('place_fast_lower_speed', 0.05)
+        self.declare_parameter('place_slow_band', 0.02)
+        # Backing the base away from a table, with or without the cube. It was a
+        # literal 0.08 m/s in two places, 6 s each; a straight reverse in open
+        # floor does not need to crawl.
+        self.declare_parameter('back_off_speed', 0.15)
+        # The descent onto the detection pose is in free air, above the cube,
+        # and was a literal 3 cm/s. The approach that actually touches the cube
+        # is grasp_approach_speed and stays slow.
+        self.declare_parameter('descent_speed', 0.06)
         # How far the base may close in on the table from the dock. Worked out
         # from the run of 16. 9.: the marker sat 0.915 m ahead and the table edge
         # 0.22 m nearer, so the edge was 0.695 m ahead of base_link while the
@@ -2415,7 +2429,9 @@ class MainTask(BaseDriver, Node):
                     walk, R, start + k / n_steps * (t - start), max_jump=0.3)))
                 path.append({n: walk[n] for n in jog[side].names})
             down[side] = path
-        return self._straight_both(down, 'STEP3c straight down onto DETECTION_V4', 0.005 / 0.03)
+        return self._straight_both(
+            down, 'STEP3c straight down onto DETECTION_V4',
+            0.005 / float(self.get_parameter('descent_speed').value))
 
     def _state_valid(self, joints, label):
         """MoveIt's verdict on a whole-robot joint state: True, False, or None
@@ -2904,6 +2920,17 @@ class MainTask(BaseDriver, Node):
         # and the cube never moved. What decides this is the MEASURED height
         # afterwards, which is the check right below - and it did its job, it
         # refused to let go 20 cm in the air.
+        # Fast through the air, slow for the last band above the table.
+        band = float(self.get_parameter('place_slow_band').value)
+        fast = float(self.get_parameter('place_fast_lower_speed').value)
+        above = target + band
+        if carriage - above > 0.01:
+            seconds = max(1.0, (carriage - above) / max(fast, 0.001))
+            if not self.move_torso(above, 'PLACE lower the cube to just above the marker',
+                                   secs=max(1, int(round(seconds)))):
+                self._fail('the carriages did not lower the cube')
+                return False
+            carriage = above
         seconds = max(2.0, abs(target - carriage) / max(lower_speed, 0.001))
         if not self.move_torso(target, 'PLACE lower the cube onto the marker',
                                secs=int(round(seconds))):
@@ -2955,7 +2982,8 @@ class MainTask(BaseDriver, Node):
                 'PLACE step 9: could not reach the detection posture at the table')
 
         # 10. BACK AWAY from the table, empty.
-        if self.drive_distance(-0.50, speed=0.08) is None:
+        if self.drive_distance(-0.50, speed=float(
+                self.get_parameter('back_off_speed').value)) is None:
             self.get_logger().warn('PLACE step 10: backing away did not track odometry')
         drop = PlanningScene()
         drop.is_diff = True
@@ -3509,7 +3537,8 @@ class MainTask(BaseDriver, Node):
         # 7. BACK AWAY FROM THE TABLE with the cube held, and stop (user, 16. 9.).
         #    The arms keep the grasp; 0.83 m wide with the cube between the hands.
         back = float(self.get_parameter('back_off_after_lift').value)
-        moved = self.drive_distance(-back, speed=0.08)
+        moved = self.drive_distance(
+            -back, speed=float(self.get_parameter('back_off_speed').value))
         if moved is None:
             return self._fail('could not back away from the table with the cube')
         self.get_logger().info(f'STEP7 backed away {moved:.3f} m with the cube held')

@@ -157,7 +157,12 @@ class RoomNavigator(Node):
         self.declare_parameter('fast_speed_xy', 0.50)
         self.declare_parameter('slow_vel_x', 0.18)
         self.declare_parameter('slow_speed_xy', 0.22)
-        # Who decides the speed. FALSE by default now, for two reasons.
+        # Who decides the speed. TRUE: per leg, which is what the 12/12 series
+        # manip-par measured. The mask route below was tried with DWB and failed
+        # - it let DWB take doorways at 80 % where per-leg speed gives 0.22 m/s,
+        # and DWB could not find a trajectory through at that speed.
+        #
+        # The original reasons for turning it off, kept for whoever tries again:
         #
         # The SpeedFilter reads a limit off a mask over the map, so the speed
         # changes where the building is tight rather than where one leg ends and
@@ -168,7 +173,7 @@ class RoomNavigator(Node):
         # NOT EXIST under MPPI - it is `vx_max` there. Left on, it would fail
         # silently every leg and the mission would drive at whatever the YAML
         # happened to say.
-        self.declare_parameter('set_leg_speed', False)
+        self.declare_parameter('set_leg_speed', True)
 
         self._graph = None
         self._scan = None

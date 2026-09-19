@@ -223,9 +223,9 @@ def generate_launch_description():
     # Who sets the speed. `leg_speed:=false` hands it to the SpeedFilter's mask
     # entirely; leaving both on would multiply two ceilings and neither number
     # would mean anything.
-    leg_speed = LaunchConfiguration('leg_speed', default='false')
+    leg_speed = LaunchConfiguration('leg_speed', default='true')
     leg_speed_arg = DeclareLaunchArgument(
-        'leg_speed', default_value='false', choices=['true', 'false'],
+        'leg_speed', default_value='true', choices=['true', 'false'],
         description='Set the controller speed per leg, or leave it to the speed mask')
 
     room_navigator = Node(

@@ -452,9 +452,9 @@ def main():
     parser.add_argument('--no-pin', dest='pin', action='store_false',
                         help='do not pin the physics and the controllers to '
                              'cores of their own')
-    parser.add_argument('--leg-speed', action='store_true',
-                        help='set the controller speed per leg (DWB only) '
-                             'instead of leaving it to the speed mask')
+    parser.add_argument('--no-leg-speed', dest='leg_speed', action='store_false',
+                        help='leave the speed to the speed mask instead of '
+                             'setting it per leg (tried with DWB: fails)')
     parser.add_argument('--laser-odometry', action='store_true',
                         help='take odom -> base_footprint from the laser (D-25)')
     parser.add_argument('--no-truth', dest='truth', action='store_false',
