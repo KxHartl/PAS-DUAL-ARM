@@ -2223,8 +2223,17 @@ class MainTask(BaseDriver, Node):
         self.goto_pub.publish(String(data=destination))
         self.get_logger().info(f'NAV: asked room_navigator for "{destination}"')
         seen_driving = False
-        end = time.monotonic() + timeout
-        while rclpy.ok() and time.monotonic() < end:
+        # On the SIMULATION clock, like every other timeout the robot's
+        # behaviour depends on. On the wall clock the same 600 s shrinks with
+        # the real-time factor: three simulations in parallel run at 0.29, so it
+        # meant 174 s of the robot's time, and a transport that took one stall
+        # retry was abandoned mid-doorway while it was driving normally.
+        # Wall time still bounds it (x4), so a frozen /clock cannot hang the
+        # mission forever.
+        end = self.get_clock().now().nanoseconds * 1e-9 + timeout
+        wall_end = time.monotonic() + 4.0 * timeout
+        while (rclpy.ok() and self.get_clock().now().nanoseconds * 1e-9 < end
+               and time.monotonic() < wall_end):
             rclpy.spin_once(self, timeout_sec=0.1)
             status = self._nav_status
             if not status or status.get('destination') != destination:
