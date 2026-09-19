@@ -241,6 +241,9 @@ class MainTask(BaseDriver, Node):
         # back face stays >= `pull_torso_clearance` in front of the torso box.
         self.declare_parameter('pull_cube_in', 0.15)
         self.declare_parameter('pull_elbow_out_deg', 20.0)
+        # A second helping of the same, used only when the carriages cannot come
+        # down because the elbows are against the torso.
+        self.declare_parameter('extra_elbow_out_deg', 15.0)
         self.declare_parameter('pull_torso_clearance', 0.03)
         self.declare_parameter('pull_speed', 0.04)
         # DETECTION_V4 with the hands this much further out (user: a little
@@ -2524,6 +2527,33 @@ class MainTask(BaseDriver, Node):
             f'{(grip.x - pull - half - TORSO_FRONT_X) * 100:.1f} cm in front of the torso')
         self.measure_width('cube pulled in')
 
+    def _swing_elbows_out(self, angle):
+        """Rotate both elbows away from the torso, holding the hands still.
+
+        The hands do not move, so the cube - rigidly attached to the left wrist -
+        is not disturbed. This is the same motion STEP6b makes after the pull,
+        which is why the machinery is already here.
+        """
+        try:
+            _, _, jog = self._kinematics()
+            live = self._live_joints()
+            swung = dict(live)
+            paths = {}
+            for side in ('left', 'right'):
+                joints, _ = jog[side].elbow_swivel(swung, -angle)
+                swung.update(zip(jog[side].names, joints))
+                start = {n: live[n] for n in jog[side].names}
+                paths[side] = [{n: start[n] + k / 10 * (swung[n] - start[n]) for n in start}
+                               for k in range(11)]
+        except Exception as exc:
+            self.get_logger().warn(f'STEP7 elbows could not be swung out: {exc}')
+            return False
+        if self._state_valid(swung, 'STEP7 elbows further out') is False:
+            self.get_logger().warn('STEP7 swinging the elbows further out collides; '
+                                   'leaving them where they are')
+            return False
+        return bool(self._straight_both(paths, 'STEP7 elbows further from the torso', 0.3))
+
     def _publish_carried_cube(self):
         """Tell the footprint publisher the ground corners of the held cube.
 
@@ -3605,6 +3635,33 @@ class MainTask(BaseDriver, Node):
             if self._state_valid(state, f'STEP7 check at carriages {height:.2f}') is not False:
                 final_height = height
                 break
+        # What stops the descent is always the same pair - the left elbow against
+        # the torso column - and the arms have a way out of it that does not
+        # disturb the grip: swivel the elbows further from the torso, which
+        # holds the hands where they are. STEP6b already does this once, 20 deg.
+        # When the ladder cannot reach the wanted height, do it again and
+        # re-check, because the cost of riding high is the whole run: the cube
+        # then blocks the head camera and the place marker is never seen at any
+        # head pose (P-54), which is one failure in every twelve.
+        if final_height is None or final_height > wanted + 0.02:
+            extra = math.radians(float(self.get_parameter('extra_elbow_out_deg').value))
+            self.get_logger().warn(
+                f'STEP7 the arms block the descent below '
+                f'{final_height if final_height is not None else here:.2f} m; '
+                f'swinging the elbows {math.degrees(extra):.0f} deg further out')
+            if self._swing_elbows_out(extra):
+                live = self._live_joints()
+                for height in candidates:
+                    if final_height is not None and height >= final_height:
+                        break
+                    state = dict(live)
+                    state['torso_left_carriage_joint'] = height
+                    state['torso_right_carriage_joint'] = height
+                    if self._state_valid(
+                            state, f'STEP7 re-check at carriages {height:.2f}') is not False:
+                        final_height = height
+                        break
+
         if final_height is None:
             self.get_logger().warn(
                 'STEP7 the held arms would touch the torso at every height down to '
