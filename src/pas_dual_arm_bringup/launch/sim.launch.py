@@ -153,8 +153,16 @@ def generate_launch_description():
 
     # 1. Gazebo Ignition Server. PythonExpression picks server-only (-s) args when
     # headless, full (GUI) args otherwise.
+    # --headless-rendering with -s: the sensors still have to be rendered when
+    # there is no GUI - three RGBD cameras and a lidar - and without this they
+    # are rendered through the X server on DISPLAY. Measured with two parallel
+    # simulations: only ONE appeared in nvidia-smi, holding 297 MiB, while the
+    # other fell back to software rendering on the CPU and said so in the log
+    # ("libEGL warning: egl: failed to create dri2 screen"). EGL gives each
+    # server its own context on the GPU, which was at 30 % with one of them.
     gz_args = PythonExpression(
-        ["('-s -r ' if '", headless, "'=='true' else '-r ') + '", world_file, "'"])
+        ["('-s -r --headless-rendering ' if '", headless,
+         "'=='true' else '-r ') + '", world_file, "'"])
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([FindPackageShare('ros_gz_sim'), 'launch', 'gz_sim.launch.py'])
