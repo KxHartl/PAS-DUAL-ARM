@@ -700,7 +700,9 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 1.0
+      # Raised with the replanning rate in the behaviour trees: a planner asked
+      # three times a second cannot answer with anything newer than this.
+      update_frequency: 3.0
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
