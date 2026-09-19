@@ -40,10 +40,19 @@ ALONE_B='laser_odometry'
 # The rest are deadline-bound but cheap, and can share what is left.
 TIMED='planner_server|bt_navigator|amcl|cmd_vel_relay|collision_monitor|velocity_smoother|room_navigator'
 
+# Only our own partition, when we are in one. pgrep matches by command line, so
+# three parallel workers would each pin the others' processes onto their own
+# slice and all three would end up crowded into one third of the machine.
+in_our_partition() {
+    [ -z "${IGN_PARTITION:-}" ] && return 0
+    grep -qz "IGN_PARTITION=$IGN_PARTITION" "/proc/$1/environ" 2>/dev/null
+}
+
 pin() {   # pattern, cores, label
     local found=0
     for pid in $(pgrep -f "$1" 2>/dev/null); do
         [ "$pid" = "$$" ] && continue
+        in_our_partition "$pid" || continue
         taskset -acp "$2" "$pid" >/dev/null 2>&1 && found=$((found + 1))
     done
     printf '%-28s -> cpu %-8s %d procesa\n' "$3" "$2" "$found"
