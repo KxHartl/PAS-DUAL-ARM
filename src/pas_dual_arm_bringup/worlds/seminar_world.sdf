@@ -10,19 +10,22 @@
        The world name must stay "seminar_world": the contact-sensor bridge
        topics (bridge.yaml) embed it. -->
   <world name="seminar_world">
-    <!-- 2 ms, not 1. real_time_factor is already 1.0 and has never been
-         reached: this machine runs the world at about half real time, and the
-         controller misses its 20 Hz deadline 649 times in a single run, all of
-         them controller_server. A starved controller is a worse robot, and MPPI
-         costs more than DWB did.
+    <!-- 1 ms, 1 kHz, and it stays there.
 
-         2 ms was tried on 18 Sep and reverted: RTF went 0.494 -> 0.614, +24 %,
-         but the arms settled 0.150 rad from the carry posture against a gate
-         that allowed 0.150. That gate is gone - the doorway now measures the
-         robot's actual width, and it is 82 cm against a 95 cm limit - so the
-         reason for reverting went with it. -->
-    <physics name="2ms" type="ignored">
-      <max_step_size>0.002</max_step_size>
+         2 ms was tried to buy CPU back - it took controller_server's missed
+         deadlines from 649 in a run to 54 - and reverted on the right
+         objection: the real Kinova Gen3 runs its control loop at 1 kHz, so a
+         500 Hz world simulates a robot that could not do what this one is asked
+         to do. It is also only five steps per period of a 100 Hz IMU, and the
+         two things this project measures most carefully - the fingertip
+         contacts in the grasp, and the friction that stands in for mecanum
+         rollers - are exactly what a coarser step resolves worst.
+
+         The controller's missed deadlines are real and stay a problem. The
+         answer to them is to give the controller more CPU, not to give the
+         physics less work. -->
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
     <plugin
