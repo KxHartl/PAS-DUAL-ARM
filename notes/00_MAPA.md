@@ -107,6 +107,16 @@ updated: 2026-09-16
   sa 17 cm viška zaliha.
 - **Novo 19. 9.: vodilice se spuštaju koliko mogu, a ne sve-ili-ništa.** Jedan run je nosio kocku
   45 cm previsoko jer je MoveIt odbio 0,10 m, pa mu je kocka zaklonila marker za odlaganje.
+- **Novo 19. 9.: brzina je zaključana klizanjem, ne Nav2-om.** Naređeno 0,566 m/s, kotači daju
+  0,466 obodno, robot ide 0,230 — a kontroler javlja da uspijeva. Uzrok je emulacija mecanuma
+  anizotropnim trenjem pod 45° ([[P-09_omni_drive_on_fortress]]). Dizanje `fast_vel_x` s 0,45 na
+  0,60 dalo je run od 585 s naspram 576 → [[P-56_speed_is_capped_by_slip]].
+- **Novo 19. 9.: dvije zaštite u `room_navigator`** — kurs se gleda cijelim prolazom kroz vrata
+  (najgori zakret 6,05° → 1,44°), a dionica koja stoji 25 s dobiva ponovno poslan cilj. Obje su
+  morale biti dodane i u `_drive_through`, jer dionice s više poza idu drugom metodom i tri
+  serije su pale ondje bez ijedne reakcije.
+- **Odbijeno mjerenjem 19. 9.:** `PathAlign` (1/3, dva isteka), `max_vel_y` 0,50 (5/10 naspram
+  8/10), četiri PAL-ove brzine odjednom (0/2). Svako s razlogom zapisanim u `nav2_params.yaml`.
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
   → odloži u crvenoj sobi. Plan dana: [[danas]]. Iskrena odstupanja: [[odstupanja]].
 
