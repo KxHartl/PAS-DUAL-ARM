@@ -198,6 +198,8 @@ controller_server:
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
+    # Where the SpeedFilter's limit arrives. Absolute, to match the filter.
+    speed_limit_topic: "/speed_limit"
     progress_checker_plugin: "progress_checker"
     # Two profiles, selected per goal through the behaviour tree: the mission
     # drives on FollowPath/general_goal_checker, mapping on the explore pair.
@@ -583,10 +585,26 @@ local_costmap:
       always_send_full_costmap: True
       # The controller must see the same table/door keepouts as the planner.
       # Keep local inflation disabled so the measured doorway remains passable.
-      filters: ["keepout_filter"]
+      filters: ["keepout_filter", "speed_filter"]
       keepout_filter:
         plugin: "nav2_costmap_2d::KeepoutFilter"
         filter_info_topic: "/costmap_filter_info"
+      # Speed by place instead of by leg. The mask (maps/speed_mask.yaml, built
+      # by scripts/make_speed_mask.py from the same doorway detector the
+      # navigation graph uses) marks doorways at 45 % of the controller's
+      # maximum and tables at 55 %, and leaves the rest unrestricted. The filter
+      # publishes the limit on /speed_limit as the robot moves, so a route no
+      # longer has to be chopped into legs to be driven carefully where it
+      # matters - which is what made the robot brake at every leg boundary and
+      # drive at a median of 0.081 m/s against a peak of 0.217.
+      #
+      # It lives in the LOCAL costmap because that is the one that follows the
+      # robot; the limit has to change as it moves, not as it plans.
+      speed_filter:
+        plugin: "nav2_costmap_2d::SpeedFilter"
+        enabled: True
+        filter_info_topic: "/speed_filter_info"
+        speed_limit_topic: "/speed_limit"
 
 global_costmap:
   global_costmap:

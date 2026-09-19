@@ -1,6 +1,6 @@
 free_thresh: 0.0
 image: speed_mask.pgm
-mode: scale
+mode: raw
 negate: 0
 occupied_thresh: 1.0
 origin:

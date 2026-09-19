@@ -157,6 +157,12 @@ class RoomNavigator(Node):
         self.declare_parameter('fast_speed_xy', 0.50)
         self.declare_parameter('slow_vel_x', 0.18)
         self.declare_parameter('slow_speed_xy', 0.22)
+        # Who decides the speed. False leaves it to the SpeedFilter, which reads
+        # it off a mask over the map, so it changes where the building is tight
+        # rather than where one leg ends and the next begins. The per-leg limits
+        # above then stop being written at all - two mechanisms setting the same
+        # ceiling would multiply, and neither number would mean anything.
+        self.declare_parameter('set_leg_speed', True)
 
         self._graph = None
         self._scan = None
@@ -316,6 +322,8 @@ class RoomNavigator(Node):
         through doors and up to tables). A warning, not an abort: driving at the
         speed it already has is safe, just slower.
         """
+        if not self.get_parameter('set_leg_speed').value:
+            return
         vel_x = self.get_parameter('fast_vel_x' if fast else 'slow_vel_x').value
         speed_xy = self.get_parameter('fast_speed_xy' if fast else 'slow_speed_xy').value
         if not self._speed.wait_for_service(timeout_sec=5.0):

@@ -123,6 +123,40 @@ def generate_launch_description():
         }],
     )
 
+    # Speed, drawn on the map rather than set per leg. type 1 is Nav2's
+    # percentage speed limit: the mask value IS the percentage of the
+    # controller's maximum, and 0 means unrestricted. scripts/make_speed_mask.py
+    # generates the mask from the same doorway detector the navigation graph
+    # uses, so it follows the map rather than a list of coordinates.
+    speed_filter_info_server = Node(
+        package='nav2_map_server',
+        executable='costmap_filter_info_server',
+        name='speed_filter_info_server',
+        output=bg_output,
+        parameters=[{
+            'use_sim_time': True,
+            'type': 1,
+            'filter_info_topic': '/speed_filter_info',
+            'mask_topic': '/speed_filter_mask',
+            'base': 0.0,
+            'multiplier': 1.0,
+        }],
+    )
+    speed_mask_server = Node(
+        package='nav2_map_server',
+        executable='map_server',
+        name='speed_mask_server',
+        output=bg_output,
+        parameters=[{
+            'use_sim_time': True,
+            'topic_name': '/speed_filter_mask',
+            'frame_id': 'map',
+            'yaml_filename': os.path.join(
+                get_package_share_directory('pas_dual_arm_bringup'),
+                'maps', 'speed_mask.yaml'),
+        }],
+    )
+
     lifecycle_manager_costmap_filters = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
@@ -132,7 +166,9 @@ def generate_launch_description():
             'use_sim_time': True,
             'autostart': True,
             'node_names': ['costmap_filter_info_server',
-                           'costmap_filter_info_server_planner'],
+                           'costmap_filter_info_server_planner',
+                           'speed_filter_info_server',
+                           'speed_mask_server'],
         }],
     )
 
@@ -184,10 +220,19 @@ def generate_launch_description():
     )
     # Drives room-to-room legs off the zone graph. Started with Nav2 so the
     # GUI has something to talk to; it does nothing until asked.
+    # Who sets the speed. `leg_speed:=false` hands it to the SpeedFilter's mask
+    # entirely; leaving both on would multiply two ceilings and neither number
+    # would mean anything.
+    leg_speed = LaunchConfiguration('leg_speed', default='true')
+    leg_speed_arg = DeclareLaunchArgument(
+        'leg_speed', default_value='true', choices=['true', 'false'],
+        description='Set the controller speed per leg, or leave it to the speed mask')
+
     room_navigator = Node(
         package='pas_dual_arm_scripts', executable='room_navigator',
         name='room_navigator', output=bg_output,
-        parameters=[{'use_sim_time': True}],
+        parameters=[{'use_sim_time': True,
+                     'set_leg_speed': PythonExpression(["'", leg_speed, "' == 'true'"])}],
         condition=IfCondition(zones),
     )
 
@@ -226,12 +271,15 @@ def generate_launch_description():
         rviz_arg,
         zones_arg,
         gui_arg,
+        leg_speed_arg,
         safety_arg,
         mapping,
         localization,
         nav_zones,
         costmap_filter_info_server,
         costmap_filter_info_server_planner,
+        speed_filter_info_server,
+        speed_mask_server,
         lifecycle_manager_costmap_filters,
         collision_monitor,
         lifecycle_manager_safety,

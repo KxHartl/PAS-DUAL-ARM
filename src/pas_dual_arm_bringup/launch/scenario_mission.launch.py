@@ -30,6 +30,7 @@ def generate_launch_description():
             'world', default_value=os.path.join(bringup, 'worlds', 'seminar_world.sdf')),
         DeclareLaunchArgument('debug_truth', default_value='false'),
         DeclareLaunchArgument('laser_odometry', default_value='false'),
+        DeclareLaunchArgument('leg_speed', default_value='true'),
         DeclareLaunchArgument('pick_room', default_value='blue'),
         DeclareLaunchArgument('place_room', default_value='red'),
         DeclareLaunchArgument(
@@ -45,6 +46,7 @@ def generate_launch_description():
                 'world': LaunchConfiguration('world'),
                 'debug_truth': LaunchConfiguration('debug_truth'),
                 'laser_odometry': LaunchConfiguration('laser_odometry'),
+                'leg_speed': LaunchConfiguration('leg_speed'),
                 'pick_room': LaunchConfiguration('pick_room'),
                 'place_room': LaunchConfiguration('place_room'),
                 'map': LaunchConfiguration('map'),

@@ -156,7 +156,11 @@ def main():
     with open(os.path.join(out, 'speed_mask.yaml'), 'w') as handle:
         yaml.safe_dump({
             'image': 'speed_mask.pgm',
-            'mode': 'scale',          # the pixel value IS the percentage
+            # RAW, not scale: in scale mode the map server rescales the pixel,
+            # so a 45 would arrive as 82. In raw mode the value passes through
+            # untouched and the pixel IS the percentage. Nothing in the mask is
+            # 255, which raw reads as unknown.
+            'mode': 'raw',
             'resolution': resolution,
             'origin': origin,
             'negate': 0,

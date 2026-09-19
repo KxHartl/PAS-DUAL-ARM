@@ -64,6 +64,7 @@ def generate_launch_description():
             # mention of it in launch.log - so the mission owns it directly.
             'rviz': 'false',
             'gui': LaunchConfiguration('gui'),
+            'leg_speed': LaunchConfiguration('leg_speed'),
         }.items())
     rviz = Node(
         package='rviz2',
@@ -103,6 +104,10 @@ def generate_launch_description():
             description='SDF world; a generated layout needs its own map too'),
         DeclareLaunchArgument('pick_room', default_value='blue'),
         DeclareLaunchArgument('place_room', default_value='red'),
+        DeclareLaunchArgument(
+            'leg_speed', default_value='true',
+            description='Set the controller speed per leg, or leave it to the '
+                        'speed mask over the map'),
         DeclareLaunchArgument(
             'laser_odometry', default_value='false',
             description='Take odom -> base_footprint from the laser instead of '
