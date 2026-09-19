@@ -306,24 +306,25 @@ controller_server:
       trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True
-      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "GoalDist", "PathAlign", "Twirling"]
+      critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "PathDist", "GoalDist", "Twirling"]
       ObstacleFootprint.scale: 2.0
       PathDist.scale: 96.0
       GoalDist.scale: 24.0
-      # PathAlign scores the HEADING against the path's direction. Without it
-      # nothing in this list did: PathDist and GoalDist score where the robot
-      # is, RotateToGoal returns zero outside xy_goal_tolerance and so does
-      # nothing during a transit, and Twirling at 2.0 against PathDist's 96 is
-      # not a constraint. A run of 19 Sep entered a doorway 1.3 deg off square
-      # and crossed it at 6.05, because Nav2 turned it three times on the way
-      # through and no score objected (P-55). A robot 0.83 m wide and 0.72 m
-      # long crossing at 6 deg presents 90.1 cm of a 99.5 cm opening.
+      # PathAlign was tried here and REMOVED. Nothing in this list scores the
+      # heading - PathDist and GoalDist score position, RotateToGoal returns
+      # zero outside xy_goal_tolerance and so does nothing on the way through,
+      # and Twirling at 2.0 against PathDist's 96 is not a constraint - which is
+      # how a run of 19 Sep entered a doorway 1.3 deg off square and crossed it
+      # at 6.05 (P-55). PathAlign at Nav2's own default of 32 is the obvious
+      # answer to that and it does not work: three runs, two of them TIMED OUT
+      # in the doorway after 240 s, against 2 of 3 through before it was added.
+      # The robot neither scraped nor stalled against the jamb; DWB simply could
+      # not find a trajectory it liked with alignment pulling against PathDist.
       #
-      # 32 is Nav2's own default for this critic and a third of PathDist, so
-      # position still leads and heading is no longer free. The forward point
-      # matches the one the approach profile already uses for GoalAlign.
-      PathAlign.scale: 32.0
-      PathAlign.forward_point_distance: 0.325
+      # Do not add it back without driving it. The heading is held instead by
+      # room_navigator watching it through the whole transit and squaring up if
+      # it drifts past 0.05 rad, which was measured working in the same series:
+      # caught at 2.9 deg twice in one run, returned to 1.4, and that run passed.
       # Twirling penalises turning while translating. On a diff-drive that is
       # wasted motion; on this mecanum base it is exactly what the user asked
       # for on 16. 9. - translate and rotate at once, rather than stop, turn,
