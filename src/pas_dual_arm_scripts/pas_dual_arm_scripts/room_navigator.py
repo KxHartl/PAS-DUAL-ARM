@@ -132,7 +132,12 @@ class RoomNavigator(Node):
         # doorway transit and a dock approach drop to `slow_*`. The collision
         # monitor still scales anything down near an obstacle on top of this.
         self.declare_parameter('fast_vel_x', 0.45)
-        self.declare_parameter('fast_speed_xy', 0.50)
+        # Open-room speed. PAL caps this base at 0.7 m/s with x and y combined
+        # (omni_base_controller_configuration), so this is that cap and the
+        # controller profiles carry the same number. The doorway and the dock
+        # keep slow_speed_xy below: 0.7 m/s through a 1 m opening with 83 cm of
+        # robot is not a saving worth having.
+        self.declare_parameter('fast_speed_xy', 0.70)
         self.declare_parameter('slow_vel_x', 0.18)
         self.declare_parameter('slow_speed_xy', 0.22)
 
