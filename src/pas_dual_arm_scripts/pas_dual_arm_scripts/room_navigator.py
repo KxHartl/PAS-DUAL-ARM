@@ -829,6 +829,14 @@ class RoomNavigator(Node):
         return True
 
     def _drive_through(self, group, label, destination):
+        """Drive several poses as ONE goal, retrying once if it stops moving."""
+        for attempt in (1, 2):
+            outcome = self._drive_through_once(group, label, destination, attempt)
+            if outcome != 'retry':
+                return outcome
+        return False
+
+    def _drive_through_once(self, group, label, destination, attempt=1):
         """Drive several poses as ONE goal, passing through the intermediate ones.
 
         A route used to be one Nav2 goal per leg, so the robot parked on every
@@ -863,8 +871,35 @@ class RoomNavigator(Node):
         result = handle.get_result_async()
         deadline = time.monotonic() + self.get_parameter('leg_timeout').value * len(group)
         tightest = float('inf')
+        # The same stall guard the single-pose path has. It belongs here too -
+        # in fact it belongs here MORE. Three series in a row failed on this one
+        # leg, the robot standing still for 170 s at 5 cm and 30 deg from its
+        # goal, and neither guard fired because both lived in the other method
+        # and a multi-pose leg never goes through it.
+        still_since, still_at = None, None
         while not result.done():
             rclpy.spin_once(self, timeout_sec=0.05)
+            if attempt < 2:
+                now, here = time.monotonic(), self.odom_pose()
+                if here is not None:
+                    if still_at is None or math.hypot(
+                            here[0] - still_at[0],
+                            here[1] - still_at[1]) > self.get_parameter('stall_radius').value \
+                            or abs(wrap(here[2] - still_at[2])) > 0.05:
+                        still_since, still_at = now, here
+                    elif now - still_since > self.get_parameter('stall_seconds').value:
+                        last = group[-1]
+                        located = self.pose()
+                        where = ''
+                        if located is not None:
+                            where = (f', {math.hypot(located[0] - last.x, located[1] - last.y) * 100:.1f} cm '
+                                     f'and {math.degrees(wrap(located[2] - last.yaw)):+.1f} deg from the last pose')
+                        self.get_logger().warn(
+                            f'{label}: nothing has moved for {now - still_since:.0f} s'
+                            f'{where}; asking Nav2 for the route again')
+                        handle.cancel_goal_async()
+                        self._spin(1.0)
+                        return 'retry'
             if time.monotonic() > deadline:
                 self._abort(handle, f'{label}: timed out', destination)
                 return False
