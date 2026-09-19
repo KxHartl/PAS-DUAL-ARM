@@ -10,8 +10,19 @@
        The world name must stay "seminar_world": the contact-sensor bridge
        topics (bridge.yaml) embed it. -->
   <world name="seminar_world">
-    <physics name="1ms" type="ignored">
-      <max_step_size>0.001</max_step_size>
+    <!-- 2 ms, not 1. real_time_factor is already 1.0 and has never been
+         reached: this machine runs the world at about half real time, and the
+         controller misses its 20 Hz deadline 649 times in a single run, all of
+         them controller_server. A starved controller is a worse robot, and MPPI
+         costs more than DWB did.
+
+         2 ms was tried on 18 Sep and reverted: RTF went 0.494 -> 0.614, +24 %,
+         but the arms settled 0.150 rad from the carry posture against a gate
+         that allowed 0.150. That gate is gone - the doorway now measures the
+         robot's actual width, and it is 82 cm against a 95 cm limit - so the
+         reason for reverting went with it. -->
+    <physics name="2ms" type="ignored">
+      <max_step_size>0.002</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
     <plugin
