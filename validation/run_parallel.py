@@ -48,6 +48,16 @@ SLICES = [
 ]
 
 
+# With two workers each gets roughly half the machine rather than a third, which
+# is closer to the single simulation the mission is delivered as. Three workers
+# showed a stall in about one run in twelve with bt_navigator starved ("Behavior
+# Tree tick rate 100.00 was exceeded") on legs no parameter under test touched.
+SLICES_TWO = [
+    {'P_CORES': '0-3',  'ALONE_A_CORE': '4-5',   'ALONE_B_CORE': '6',  'REST_CORES': '7,16-19'},
+    {'P_CORES': '8-11', 'ALONE_A_CORE': '12-13', 'ALONE_B_CORE': '14', 'REST_CORES': '15,20-23'},
+]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', type=int, default=12, help='runs in total')
@@ -75,7 +85,7 @@ def main():
         name = f'{args.batch}-w{i}'
         shutil.rmtree(os.path.join(RESULTS, name), ignore_errors=True)
         environment = dict(os.environ)
-        environment.update(SLICES[i])
+        environment.update((SLICES_TWO if args.workers == 2 else SLICES)[i])
         # A domain each. ROS 2 domains are 0-101 and neighbouring ones share
         # ports, so they are spread rather than adjacent.
         #
@@ -100,8 +110,8 @@ def main():
         log = open(os.path.join(REPO, 'log', f'parallel-{name}.log'), 'w')
         print(f'radnik {i}: {count} runova, domena '
               f'{environment["PAS_DUAL_ARM_ROS_DOMAIN_ID"]}, particija '
-              f'{environment["IGN_PARTITION"]}, jezgre {SLICES[i]["P_CORES"]}'
-              f'+{SLICES[i]["REST_CORES"]}')
+              f'{environment["IGN_PARTITION"]}, jezgre {environment["P_CORES"]}'
+              f'+{environment["REST_CORES"]}')
         workers.append((i, name, subprocess.Popen(
             command, cwd=REPO, env=environment, stdout=log, stderr=subprocess.STDOUT)))
         # Let one finish starting before the next begins; simultaneous Gazebo

@@ -163,8 +163,8 @@ class RoomNavigator(Node):
         # it is watched the whole way through (heading guard, gap gate). The
         # three transits were 43 s of every mission at 0.16 m/s on 2.3 m -
         # the largest single item in the driving - so they get their own number.
-        self.declare_parameter('door_vel_x', 0.26)
-        self.declare_parameter('door_speed_xy', 0.30)
+        self.declare_parameter('door_vel_x', 0.30)
+        self.declare_parameter('door_speed_xy', 0.34)
         # Who decides the speed. TRUE: per leg, which is what the 12/12 series
         # manip-par measured. The mask route below was tried with DWB and failed
         # - it let DWB take doorways at 80 % where per-leg speed gives 0.22 m/s,

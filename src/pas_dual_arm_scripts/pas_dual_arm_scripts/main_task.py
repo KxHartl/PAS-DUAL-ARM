@@ -316,6 +316,12 @@ class MainTask(BaseDriver, Node):
         # and was a literal 3 cm/s. The approach that actually touches the cube
         # is grasp_approach_speed and stays slow.
         self.declare_parameter('descent_speed', 0.06)
+        # The base closing the last 20-odd cm to the place table with the cube
+        # held above it. It was a literal 0.05 m/s - about 3 cm/s once the
+        # wheels have slipped - and took 8 s of every mission. It does not set
+        # the placement accuracy: the arms carry the cube onto the marker centre
+        # immediately afterwards, and the landing is checked by measurement.
+        self.declare_parameter('place_approach_speed', 0.10)
         # How far the base may close in on the table from the dock. Worked out
         # from the run of 16. 9.: the marker sat 0.915 m ahead and the table edge
         # 0.22 m nearer, so the edge was 0.695 m ahead of base_link while the
@@ -2866,7 +2872,8 @@ class MainTask(BaseDriver, Node):
         self.get_logger().info(
             f'PLACE step 4: the cube is {need * 100:+.1f} cm short of the marker; the '
             f'base closes in {advance * 100:.1f} cm of the {limit * 100:.0f} cm it may')
-        if advance >= 0.01 and self.drive_distance(advance, speed=0.05) is None:
+        if advance >= 0.01 and self.drive_distance(
+                advance, speed=float(self.get_parameter('place_approach_speed').value)) is None:
             self._fail('the approach to the table did not track odometry')
             return False
 
