@@ -107,12 +107,15 @@ def main():
     parser.add_argument('--door-percent', type=float, default=80.0)
     parser.add_argument('--table-percent', type=float, default=80.0)
     parser.add_argument('--table-close-percent', type=float, default=50.0)
-    # How far each limit reaches. A doorway wants the robot already slowed when
-    # it arrives rather than slowing as it enters, so the radius is a little
-    # more than half the passage, not more than its whole length.
-    parser.add_argument('--door-radius', type=float, default=0.90)
-    parser.add_argument('--table-radius', type=float, default=1.20)
-    parser.add_argument('--table-close-radius', type=float, default=0.55)
+    # How far each limit reaches, and it should be little. Measured with the
+    # radii at 0.90/1.20/0.55: the robot spent 35.7 % of its driving time inside
+    # the table rings, at a median of 0.038 m/s, and the mask was not what held
+    # it there - the 95th percentile inside those rings was well under what the
+    # mask allows. A ring that reaches past the feature only lets the docking
+    # manoeuvre look like a speed limit.
+    parser.add_argument('--door-radius', type=float, default=0.70)
+    parser.add_argument('--table-radius', type=float, default=0.80)
+    parser.add_argument('--table-close-radius', type=float, default=0.40)
     args = parser.parse_args()
 
     meta = yaml.safe_load(open(args.map))
