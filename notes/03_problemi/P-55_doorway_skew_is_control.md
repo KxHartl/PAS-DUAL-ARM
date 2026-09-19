@@ -1,7 +1,7 @@
 ---
 id: P-55
 type: problem
-status: otvoreno
+status: rijeseno
 verified: "37 prolaza kroz vrata iz 2 serije, protiv Gazebove istine, 19. 9. 2026."
 updated: 2026-09-19
 requirements: ["[[R-18_door_pass_empty]]", "[[R-19_door_pass_with_box]]"]
@@ -87,10 +87,42 @@ Znači da kurs u prolazu **ne drži nitko** — jedina kazna za zakretanje je `T
 skalom 2 naspram 96 za položaj. Rotacija je slobodna, a za mecanum bazu u vratima je najgori
 mogući način ispravljanja bočne greške: `vy` postoji (`vy_samples: 25`, ±0,15 m/s) i ne koristi se.
 
-## Što treba pokušati
-1. `PathAlign` u popis kritičara za prolaze, sa smislenom skalom
-2. i/ili `Twirling` znatno veći na tim dionicama
-3. i/ili kontinuirana provjera kursa tijekom prolaza umjesto jedne prije ulaska
+## Što je pokušano
 
-Svaka od tri je zaseban pokus; mjeri se istim alatom (`validation/doorway_offset.py`),
-usporedno s ovih 37 prolaza kao polazištem.
+### `PathAlign` u kritičare — ODBIJENO, pogoršava
+Očit odgovor: jedini kritičar koji ocjenjuje kurs prema smjeru putanje, Nav2-ov default 32.
+Tri runa: **jedan prošao, dva ISTEKLA** u vratima nakon 240 s, naspram 2 od 3 prije toga.
+Robot se nije ni ogrebao ni zaglavio o dovratnik — DWB naprosto nije našao putanju koja mu
+odgovara dok poravnanje vuče protiv `PathDist` od 96. Maknuto; razlog i rezultat zapisani u
+samom `nav2_params.yaml`, jer je ideja previše očita da je netko ne bi ponovio.
+
+### `Twirling` veći — NIJE ni pokušano, namjerno
+Bio bi kraći put i krivi. Baza je predviđena da kasnije vozi blizu svojih ograničenja,
+**istovremeno se okrećući i translatirajući**, kako ne bi morala stajati da se okrene prema
+svakoj točki. Velika cijena rotacije to onemogućuje. `PathAlign` bi vezao kurs uz putanju;
+`Twirling` kažnjava okretanje kao takvo.
+
+### Nadzor kursa kroz cijeli prolaz — RADI
+`room_navigator` gleda kurs cijelim prolazom, ne samo prije ulaska. Preko **0,05 rad (2,9°)**
+otkazuje Nav2 goal, okrene robota u mjestu dok nije ravan, i vozi dionicu ponovno. Jednom po
+dionici, pa robot koji ne može držati kurs padne umjesto da kruži.
+
+Rezultat, 3 runa i 8 prolaza (`kurs2-19-09`) protiv 37 prolaza polazišta:
+
+| | polazište | sa zaštitom |
+|---|---|---|
+| zakret, medijan | 1,32° | 1,30° |
+| **zakret, najgori** | **6,05°** | **1,44°** |
+| zazor, medijan | 7,14 cm | 7,20 cm |
+| **zazor, najmanji** | **2,61 cm** | **5,30 cm** |
+| uspjeh serije | 2/3 | **3/3** |
+
+Medijan se nije pomaknuo i nije trebao: zaštita ne popravlja tipičan prolaz nego **odsijeca
+rep**, a rep je bio uzrok padova. Okinula se 4 puta kroz 3 runa — zanošenje i dalje nastaje,
+samo više ne naraste.
+
+## Što ostaje
+Uzrok zanošenja **nije uklonjen**, samo presretnut. Nav2 i dalje zakreće robota u prolazu jer
+mu nijedan kritičar to ne brani, a jedini kritičar koji bi to radio ruši prolaznost. Prava bi
+meta bio lokalni planer koji za mecanum bazu bočnu grešku ispravlja `vy`-jem umjesto rotacijom
+— `vy_samples: 25` i ±0,15 m/s stoje neiskorišteni.
