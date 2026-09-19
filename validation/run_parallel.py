@@ -38,9 +38,13 @@ RESULTS = os.path.join(HERE, 'results')
 # threads, cpu16-23 the E-cores; one P-thread and two E-cores are left for the
 # rest of the machine.
 SLICES = [
-    {'P_CORES': '0-2',   'ALONE_A_CORE': '3',  'ALONE_B_CORE': '4',  'REST_CORES': '16-17'},
-    {'P_CORES': '5-7',   'ALONE_A_CORE': '8',  'ALONE_B_CORE': '9',  'REST_CORES': '18-19'},
-    {'P_CORES': '10-12', 'ALONE_A_CORE': '13', 'ALONE_B_CORE': '14', 'REST_CORES': '20-21'},
+    # Two P-cores for the controller, not one. With one each, DWB - 15 x 25 x
+    # 25 = 9375 trajectories every 50 ms - missed its deadline 156 times in a
+    # run and could not get through a doorway. The laser odometry moves to an
+    # E-core of its own instead: it works on scans, not on the control clock.
+    {'P_CORES': '0-2',   'ALONE_A_CORE': '3-4',   'ALONE_B_CORE': '16', 'REST_CORES': '17-18'},
+    {'P_CORES': '5-7',   'ALONE_A_CORE': '8-9',   'ALONE_B_CORE': '19', 'REST_CORES': '20-21'},
+    {'P_CORES': '10-12', 'ALONE_A_CORE': '13-14', 'ALONE_B_CORE': '22', 'REST_CORES': '15,23'},
 ]
 
 
