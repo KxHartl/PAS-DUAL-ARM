@@ -109,9 +109,9 @@ def generate_launch_description():
             description='Set the controller speed per leg, or leave it to the '
                         'speed mask over the map'),
         DeclareLaunchArgument(
-            'laser_odometry', default_value='false',
+            'laser_odometry', default_value='true',
             description='Take odom -> base_footprint from the laser instead of '
-                        'the wheels (D-25); off until a series says otherwise'),
+                        'the wheels (D-25); on since the 40-run series drove on it'),
         DeclareLaunchArgument(
             'debug_truth', default_value='false',
             description='Bridge Gazebo ground truth and run loc_error; '

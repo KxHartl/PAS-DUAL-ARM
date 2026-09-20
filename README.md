@@ -146,12 +146,12 @@ between mapping and driving.
 
 | Mapping in progress | The accepted map |
 |---|---|
-| ![SLAM in progress: two rooms mapped, the third still unknown, the robot standing in the doorway between them](docs/img/mapping.png) | ![The saved occupancy map of the three rooms](docs/img/map.png) |
+| ![SLAM in progress: the home room mapped, the other two only partly seen, the robot standing in a doorway](docs/img/mapping.png) | ![The saved occupancy map of the three rooms](docs/img/map.png) |
 
 Left: part way through a run. Free space the lidar has swept is light, everything
 not yet observed stays dark, and the walls come up as the orange occupied cells
-the scan matcher is aligning against — the third room is still unmapped because
-the robot has not driven through to it yet. Right: the same building once the
+the scan matcher is aligning against — the other two rooms are only partly seen,
+through the doorways, because the robot has not driven into them yet. Right: the same building once the
 map is complete and has passed the acceptance checks.
 
 ### Doing it by hand, terminal by terminal
@@ -244,7 +244,7 @@ MISSION COMPLETE: the cube is on the marker.
 ```
 
 Those two figures are the robot's **own** measurement. It is consistently optimistic by about
-5 mm, which is why the numbers quoted in this README come from the simulator's poses instead
+4 mm (it reports a median of 4.0 mm where the simulator measures 8.0 mm), which is why the numbers quoted in this README come from the simulator's poses instead
 (section 9).
 
 Without the `PLACE VERIFIED` line the run is **not** a success, whatever else the log says. Every
@@ -283,7 +283,7 @@ is repeated, recorded and measured:
 ```bash
 # several simulations at once, each on its own ROS domain and its own cores
 ./scripts/run_native.sh python3 validation/run_parallel.py \
-    --n 28 --workers 2 --batch series -- --laser-odometry
+    --n 28 --workers 2 --batch series -- --laser-odometry   # the default, stated explicitly
 
 # what the robot did, measured against the simulator's own poses
 ./scripts/run_native.sh python3 validation/analyze_runs.py --batch series
@@ -339,7 +339,8 @@ meaningless.
 | Robotiq 2F-85 grippers | `ros2_kortex` | `GripperActionController` |
 | Torso: two vertical rails | STL by **Branimir Ćaran** (assignment attachment, 4 May 2026) | `joint_trajectory_controller` (prismatic, 0.05–0.65 m) |
 | Pan-tilt + RealSense D435 | `pan_tilt_ros`, `realsense-ros` | `joint_trajectory_controller` |
-| Sensors | lidar (1080 rays), head RGB-D, **2 × wrist RGB-D**, fingertip contact sensors, wrist force-torque | see [`docs/SENSORS.md`](docs/SENSORS.md) |
+| Sensors | lidar (1080 rays), base IMU, head RGB-D, **2 × wrist RGB-D**, fingertip contact sensors, wrist force-torque | see [`docs/SENSORS.md`](docs/SENSORS.md) |
+| Odometry | `laser_odometry`: heading from the IMU gyro, translation from the wheels, corrected by scan matching (PAL's base also takes odometry from the laser) | publishes `odom → base_footprint` in the mission; mapping uses the wheels |
 | Gazebo interface | `ign_ros2_control/IgnitionSystem` | — |
 | Mapping / navigation | `slam_toolbox` + `nav2` (AMCL, NavFn, DWB, collision monitor) | — |
 | Box perception | ArUco `DICT_4X4_50` (own detector on `cv2.aruco`) | — |
@@ -387,7 +388,7 @@ This repository is Apache-2.0 (`LICENSE`); all of the licences above are compati
 
 | What | Why |
 |---|---|
-| The box is held by a **rigid joint** (`DetachableJoint`), engaged only after contact on both hands has been confirmed | DART does not hold the box by pad friction — tested exhaustively |
+| The box is held by a **rigid joint** (`DetachableJoint`), engaged only after contact on both hands has been confirmed | lifting by pad friction alone did work (about 3.6 N estimated per side), but not repeatably enough to survive the drive |
 | Torso masses are **estimates** (12 kg per rail, 2 kg per carriage) | the rail manufacturer does not publish them |
 | The rigid joint attaches to the **left** wrist although both hands hold the box | two simultaneous rigid constraints make the box over-constrained and break the physics solver |
 | The base uses `mecanum_drive_controller`, not PAL's `omni_drive_controller` | PAL's controller targets Gazebo Classic and publishes nothing on Fortress |

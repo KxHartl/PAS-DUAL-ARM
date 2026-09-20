@@ -9,7 +9,6 @@ below is classified by **role**, not by whether it produces data:
 | **closed loop** | the measurement changes the command that is issued next |
 | **gate** | the measurement does not shape a command, but it decides whether the next step is allowed to happen at all; failing it aborts the mission |
 | **evaluation** | recorded or logged for offline assessment; no decision depends on it |
-| **not bridged** | present in the robot description, but never reaches ROS |
 
 ## Summary
 
@@ -22,7 +21,7 @@ below is classified by **role**, not by whether it produces data:
 | Fingertip contact sensors | 4 | `/contact/{left,right}_{left,right}_tip` | 50 Hz | **gate** |
 | Wrist force-torque sensors | 2 | `/ft/{left,right}_wrist` | 200 Hz | **evaluation** |
 | Joint torque (`effort` in `/joint_states`) | — | `/joint_states` | — | **evaluation** |
-| Base IMU | 1 | — | — | **not bridged** |
+| Base IMU (gyro) | 1 | `/base_imu` | 100 Hz | **closed loop** |
 
 ---
 
@@ -97,9 +96,19 @@ A second reason disappeared later: the force profile was originally needed becau
 would not lift under load, but the real cause turned out to be an initial value sitting exactly on
 the lower joint limit. Once corrected, the `position` profile lifts the full load.
 
-## Not bridged
+## Odometry fusion
 
-**Base IMU.** The IMU is present in the inherited base description, but its Gazebo plugin is guarded
-for Gazebo Classic while this project builds for Fortress, and there is no entry for it in
-`bridge.yaml`. It therefore publishes nothing and nothing reads it. It is listed here so that the
-sensor inventory of the model is not mistaken for the sensor inventory of the running system.
+**Base IMU.** The IMU is inherited from the base description, where its plugin was written for
+Gazebo Classic, so on Fortress it published nothing. An Ignition `Imu` system in the world and an
+entry in `bridge.yaml` now bring it to `/base_imu` at 100 Hz.
+
+It is read by `laser_odometry`, which publishes `odom → base_footprint` in the mission (on by
+default in `mission.launch.py` and `scenario_mission.launch.py`; the 40-run series drove on it):
+heading from the gyro, translation from the wheels, and the whole corrected by matching
+consecutive scans. PAL's own base configuration likewise takes this transform from laser odometry
+rather than from the wheels. The reason is the mecanum
+drive's sideways slip, which the wheels cannot count: against the simulator's poses the wheels
+alone are 0.8 mm off forward but 19.5 mm sideways. Over eight calibration drives the fusion took
+the error from 7.4° and 276 mm to 0.06° and 1.8 mm; the gain comes from the scan matching, not
+from the gyro — every combination of heading and translation source gives the same result within
+noise once the laser correction is on. The mapping scenarios keep the wheel odometry.

@@ -343,9 +343,9 @@ def generate_launch_description():
     # Nav2/teleop publish Twist on /cmd_vel; the diff_drive controller listens on
     # its namespaced topic, so relay between them.
     # Where odom -> base_footprint comes from. `laser_odometry:=true` hands it to
-    # the scan matcher and stops the wheels publishing it; see D-25. Off by
-    # default until a series has driven the whole mission on it - it changes the
-    # input to every part of navigation at once (D-18).
+    # the scan matcher and stops the wheels publishing it; see D-25. The mission
+    # launch files turn it on (the 40-run series drove on it); here it stays off
+    # so the mapping scenarios keep the wheel odometry the map was built with.
     laser_odometry = LaunchConfiguration('laser_odometry', default='false')
     laser_odometry_arg = DeclareLaunchArgument(
         'laser_odometry', default_value='false',
