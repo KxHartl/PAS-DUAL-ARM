@@ -14,12 +14,15 @@ command**:
 
 ## The mission, recorded
 
-[![The complete mission: drive, find the box, lift it with both arms, carry it through a doorway and place it on the marker](docs/img/demo_poster.png)](docs/demo.mp4)
+![The complete mission at 16x speed: drive, find the box, lift it with both arms, carry it through a doorway and place it on the marker](docs/img/demo.gif)
 
-**▶ [Watch the full run (6 min, 13 MB)](docs/demo.mp4)** — one uncut take, from the robot waiting
-for a command to the mission reporting itself complete. Gazebo on the left, what the robot
-believes on the right: the map, its own footprint, the laser, the particle cloud and the planned
-path. The panel in the middle is the only input — one button.
+*The whole mission at 16× speed. Nothing is cut — this is one run from end to end.*
+
+**▶ [Watch the full run at normal speed (6 min, 13 MB)](docs/demo.mp4)** — GitHub does not play an
+mp4 stored in a repository inline, so that link downloads it. It is the same run, and it shows
+what the animation above crops out: Gazebo on the left, what the robot *believes* on the right —
+the map, its own footprint, the laser, the particle cloud and the planned path. The panel between
+them is the only input the run takes: one button.
 
 The run ends with the robot's own verdict on screen: *"Kocka je točno na markeru! Odstupanje od
 centra: 3 mm"* — the box is on the marker, 3 mm off centre by its own measurement. Measured
