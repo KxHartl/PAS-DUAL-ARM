@@ -1,9 +1,9 @@
 ---
 id: P-54
 type: problem
-status: otvoreno
-verified: "4 serije, 18. 9. 2026., mjereno protiv Gazebove istine."
-updated: 2026-09-18
+status: rijeseno-djelomicno
+verified: "12 runova (cam-par) + mjerenje detektora protiv istine, 20. 9. 2026."
+updated: 2026-09-20
 requirements: ["[[R-20_place_at_destination]]"]
 solutions: ["[[S-08_grasp_squeeze_attach]]"]
 decisions: ["[[D-24_measure_from_recordings_not_logs]]", "[[D-18_measure_do_not_argue]]"]
@@ -66,3 +66,57 @@ ali tek nakon što se sirovi položaji oba vrha i kamerino središte ispišu u l
 3. `where_is_the_marker.py` — drugi osumnjičeni; alat postoji, poravnanje po vremenu mu je krivo
 4. izolirani test hvat–odlaganje bez vožnje: ovaj ciklus traje 10 min po runu, a vožnja u njemu
    ne sudjeluje
+
+---
+
+## Rješenje bočne sastavnice (20. 9. 2026.)
+
+**Uzrok je bio naziv koordinatnog sustava, ne geometrija hvata.**
+
+Dubinska kamera glave objavljivala je slike označene `camera_color_optical_frame`, a taj je
+sustav u opisu RealSense D435 pomaknut **15 mm u +y** od `camera_link`
+(`d435_cam_depth_to_color_offset = 0.015`). Sve što je izmjereno iz dubine bilo je time
+sustavno pomaknuto ustranu — točno duž osi na kojoj je greška i viđena.
+
+Ispravak je jedan redak u `robot.urdf.xacro`: `ignition_frame_id` postavljen na
+`camera_depth_optical_frame`.
+
+| | prije (`fin2-par`) | poslije (`cam-par`) |
+|---|---|---|
+| ukupno | 20,85 mm | **7,95 mm** |
+| bočno (`place_dy`) | 19,60 mm | **2,85 mm** |
+| naprijed (`place_dx`) | 6,50 mm | 6,90 mm |
+| uspjeh | 12/12 | 12/12 |
+
+Brojke potvrđuju dijagnozu do milimetra: pomak je bio **isključivo bočan**, pa je popravak
+uklonio bočnu sastavnicu i uzdužnu ostavio netaknutom.
+
+**Osumnjičeni 1 iz gornjeg popisa (kocka se pomakne tijekom stiska) je time isključen** —
+asimetrija vrhova alata postoji, ali nije ono što je pomicalo mjesto odlaganja.
+
+## Što je preostalo: uzdužnih ~7 mm
+
+Ostatak **nije šum**: `place_dx` je pozitivan u svih 12 runova (6,0–7,9 mm), dok je `place_dy`
+raspršen oko nule (−0,6 do 5,5 mm).
+
+Izmjereno izravno, usporedbom onoga što detektor javlja s Gazebovom istinom
+(`validation/where_is_the_marker.py`, n=12):
+
+```
+kamera javlja   0,932 m        istina  0,924 m
+n=12   naprijed +7,7 mm   bocno +0,7 mm
+```
+
+**Kamera marker vidi 7,7 mm dalje nego što jest** — precjenjivanje udaljenosti za 0,83 %, koje
+se prenosi ravno na mjesto odlaganja i objašnjava cijeli ostatak.
+
+Provjereno da **nije** uzrok:
+- duljina stranice markera (zadana odgovara modelu),
+- unutarnji parametri kamere (`fx = 462,27` odgovara FOV-u 69,4° pri širini 640),
+- nedostatak profinjenja kutova — detektor već koristi `CORNER_REFINE_SUBPIX`.
+
+Preostaje pristranost procjene položaja kutova pri 640×480, ispod jednog slikovnog elementa na
+ovoj udaljenosti. **Kalibrabilno** (ispravak 0,8 % u procjeni udaljenosti), ali nije uvedeno jer
+bi to bila kalibracija na ovaj marker i ovu razlučivost, a ne otklanjanje uzroka.
+
+Zapisano u seminaru kao zasebno potpoglavlje (`Sustavna pogreška u procjeni udaljenosti markera`).

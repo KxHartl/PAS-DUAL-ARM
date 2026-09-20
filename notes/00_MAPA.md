@@ -125,7 +125,13 @@ updated: 2026-09-16
   paralelno (RTF 0,46 -> 0,29). `validation/speed_summary.py` i `validation/phase_times.py`.
 - **Novo 20. 9.: runovi idu paralelno** (`validation/run_parallel.py`) — svaki radnik svoja ROS
   domena, Ignition particija i kriska jezgri. Serija od 12 traje ~35 min umjesto ~100, pa se
-  izmjene sude na 12 runova umjesto na tri.
+  izmjene sude na 12 runova umjesto na tri. **Dva radnika, ne tri**: treći daje +10 % propusnosti
+  i kvari AMCL (2,95 -> 4,60 cm). → [[D-29_two_workers_not_three]]
+- **Novo 20. 9.: bočna greška odlaganja je riješena** — 19,6 -> 2,85 mm. Uzrok je bio naziv
+  koordinatnog sustava dubinske slike (15 mm bočno). Preostalih ~7 mm naprijed je **sustavno** i
+  izmjereno: kamera marker vidi 7,7 mm predaleko (0,8 %). → [[P-54_place_bias_not_localisation]]
+- **Novo 20. 9.: brojke seminara generira serija** (`validation/seminar_numbers.py` ->
+  `seminar/mjerenja.tex`). Tekst više ne nosi ručno prepisane vrijednosti.
 - **Redoslijed misije [MAIL]:** mapiraj → regija (plava soba) → pronađi → podigni → nosi kroz vrata
   → odloži u crvenoj sobi. Plan dana: [[danas]]. Iskrena odstupanja: [[odstupanja]].
 

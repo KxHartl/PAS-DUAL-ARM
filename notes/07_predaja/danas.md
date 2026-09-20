@@ -23,6 +23,21 @@ misija vozi **`MISSION COMPLETE`, 5 mm od centra markera**, s nepromijenjenim ko
 - **ROS stack je zaključan** (`apt-mark hold`, 543 paketa; živi repo isključen). Ne puštati
   automatske nadogradnje do predaje ([[S-10_build_run_environment]]).
 
+## Stanje predaje 20. 9. 2026. (navečer)
+1. **Video cijelog sustava** — ❌ još; `scripts/record_demo.sh` je spreman, čeka da se serija
+   isprazni jer traži GUI i slobodan stroj.
+2. **README na engleskom** — ✅, i više ne citira jedan run nego seriju.
+3. **Seminar usklađen sa serijom** — ✅. Brojke generira `validation/seminar_numbers.py` u
+   `seminar/mjerenja.tex`; tekst ih samo uvlači. Dodano: tablica statistike, donja granica
+   uspješnosti po pravilu $1-3/N$, potpoglavlje o sustavnoj pogrešci procjene udaljenosti.
+4. **Statistika** — serija `n40` (28 runova, 2 radnika) u tijeku; s `cam-par` daje **40 runova**
+   iz jednog uzorka za sve veličine.
+5. **Slajdovi** — otpada (korisnik, 20. 9.).
+6. **`git status` čist** — ⚠ `build.pre-18-09/` i `install.pre-18-09/` (253 MB) stoje nepraćeni
+   od oporavka 18. 9.; sustav je otad prebuildan i odvozio 40 runova, pa više ne služe ničemu.
+   Brisanje čeka odluku korisnika.
+7. **Push na `origin`** — ❌ ništa nije gurnuto; grane i tagovi su lokalni.
+
 ## Aktualno otvoreno (stanje 18. 9. 2026.)
 Nakon profesorovih smjernica na objavljeni repo i seminar:
 1. **Video cijelog sustava** — ❌ ne postoji. `scripts/record_demo.sh` snima GUI run.
