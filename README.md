@@ -19,8 +19,10 @@ marker at the end of the mission.
 |---|---|
 | ![Robot carrying the box through a doorway](docs/img/robot_box_door.png) | ![Box placed on the destination marker](docs/img/drop.png) |
 
-Last verified run (GUI, 16 September 2026): the box was released **4 mm** above the table top and
-settled **5 mm** from the marker centre — `PLACE VERIFIED`, `MISSION COMPLETE`.
+**Measured over a series of runs, not once.** In the most recent series the mission finished
+every time, and the box was placed a median of **8 mm** from the marker centre — measured against
+the simulator's own poses, not against what the robot claimed. The full statistics, and how they
+were recorded, are in [section 9](#9-repeating-the-mission-and-measuring-it).
 
 > **The map ships with the repository.** `src/pas_dual_arm_bringup/maps/seminar_map.yaml` is the
 > default map and the mission drives on it, so **you do not need to run SLAM to see the demo**.
@@ -218,10 +220,14 @@ STEP5d left tool tip 1.1 mm from its target
 CARRIAGE LIFT MEASURED left=0.5500 right=0.5500 m
 NAV: arrived at "red:dock"
 PLACE step 6: the arms carry the cube +19.6 cm forward and +1.3 cm across
-PLACE the cube bottom is +4 mm from the table top
-PLACE VERIFIED: the centre of the cube is 5 mm from the marker centre
+PLACE the cube bottom is +3 mm from the table top
+PLACE VERIFIED: the centre of the cube is 3 mm from the marker centre
 MISSION COMPLETE: the cube is on the marker.
 ```
+
+Those two figures are the robot's **own** measurement. It is consistently optimistic by about
+5 mm, which is why the numbers quoted in this README come from the simulator's poses instead
+(section 9).
 
 Without the `PLACE VERIFIED` line the run is **not** a success, whatever else the log says. Every
 check is independent of the command that was issued: the grasp is confirmed against a *fresh*
@@ -254,18 +260,37 @@ A generated layout needs its own map:
 ## 9. Repeating the mission and measuring it
 
 A single run cannot distinguish "it works" from "it worked once", so the mission
-can be repeated and summarised:
+is repeated, recorded and measured:
 
 ```bash
-./scripts/run_native.sh python3 validation/run_batch.py --n 20
-./scripts/run_native.sh python3 validation/summarize.py --latex --chart
+# several simulations at once, each on its own ROS domain and its own cores
+./scripts/run_native.sh python3 validation/run_parallel.py \
+    --n 28 --workers 2 --batch series -- --laser-odometry
+
+# what the robot did, measured against the simulator's own poses
+./scripts/run_native.sh python3 validation/analyze_runs.py --batch series
+./scripts/run_native.sh python3 validation/speed_summary.py series
 ```
 
 Each run is a fresh headless simulation on its own slightly different world (the
-box is displaced by a few centimetres), judged only by what the robot itself
-printed. The result is a success rate, and the median and range of the placement
-error, the tool-tip errors and the run duration — plus which phase the failures
-stopped in. Details: [`validation/README.md`](validation/README.md).
+box is displaced by a few centimetres). A run counts as a success only if the
+robot printed both the verified-placement line and the mission-complete line.
+
+The numbers, however, do **not** come from what the robot printed. `analyze_runs.py`
+reads the recorded bag and the simulator's ground-truth poses, so the placement
+error, the localisation error and the doorway clearance are differences between
+what the robot believed and where it actually was:
+
+| Measured over the series | Median | Range |
+|---|---|---|
+| Placement error from the marker centre | 8.0 mm | 6.2 – 9.0 mm |
+| Localisation error, peak | 3.0 cm | 2.3 – 4.3 cm |
+| Lateral clearance in the doorway | 4.9 cm | 3.6 – 6.1 cm |
+| Mission duration (simulated time) | 175.7 s | 169.0 – 180.9 s |
+
+The same figures feed the report directly: `validation/seminar_numbers.py` writes
+them as LaTeX macros, so the text cannot drift away from the data. Details:
+[`validation/README.md`](validation/README.md).
 
 ## 10. Checks that run without the simulator
 

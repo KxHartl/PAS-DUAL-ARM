@@ -36,7 +36,7 @@ Nakon profesorovih smjernica na objavljeni repo i seminar:
 5. **Ponavljanja misije i statistika** — ⚠ sklop postoji; **podaci od 17. 9. su nevažeći** jer su
    snimljeni na slomljenom stacku ([[P-51_apt_upgrade_stops_amcl]]). Seriju treba **ponoviti od
    nule** na vraćenom stacku; prvi ispravan run je B1 ([[runovi]]).
-6. Slajdovi — ❌.
+6. Slajdovi — **otpada** (korisnik, 20. 9.: prezentacije nema, predaje se rad).
 
 ### Profesorovi komentari, doslovno (seminar)
 > - provjeriti tvrdnju o udaljenosti 0,835 m od prepreka jer iz trenutnog opisa nije jasno na što
