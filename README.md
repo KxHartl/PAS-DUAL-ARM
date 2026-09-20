@@ -19,9 +19,9 @@ marker at the end of the mission.
 |---|---|
 | ![Robot carrying the box through a doorway](docs/img/robot_box_door.png) | ![Box placed on the destination marker](docs/img/drop.png) |
 
-**Measured over a series of runs, not once.** In the most recent series the mission finished
-every time, and the box was placed a median of **8 mm** from the marker centre — measured against
-the simulator's own poses, not against what the robot claimed. The full statistics, and how they
+**Measured over 40 runs, not once.** The mission finished **40 times out of 40**, and the box was
+placed a median of **8.0 mm** from the marker centre — measured against the simulator's own poses,
+not against what the robot claimed. The full statistics, and how they
 were recorded, are in [section 9](#9-repeating-the-mission-and-measuring-it).
 
 > **The map ships with the repository.** `src/pas_dual_arm_bringup/maps/seminar_map.yaml` is the
@@ -281,12 +281,21 @@ reads the recorded bag and the simulator's ground-truth poses, so the placement
 error, the localisation error and the doorway clearance are differences between
 what the robot believed and where it actually was:
 
-| Measured over the series | Median | Range |
+| Measured over 40 runs | Median | Range |
 |---|---|---|
-| Placement error from the marker centre | 8.0 mm | 6.2 – 9.0 mm |
-| Localisation error, peak | 3.0 cm | 2.3 – 4.3 cm |
-| Lateral clearance in the doorway | 4.9 cm | 3.6 – 6.1 cm |
-| Mission duration (simulated time) | 175.7 s | 169.0 – 180.9 s |
+| Mission completed | **40 / 40** | — |
+| Placement error from the marker centre | 8.0 mm | 6.2 – 9.3 mm |
+| Localisation error, peak | 3.1 cm | 2.3 – 5.1 cm |
+| Lateral clearance in the doorway | 4.8 cm | 3.6 – 6.1 cm |
+| Doorway passes | **80 / 80** | — |
+| Mission duration (simulated time) | 173.0 s | 165.4 – 312.3 s |
+
+With no failure in 40 runs, the 95 % lower bound on the success rate is **92.5 %** — that is the
+claim the sample supports, and the report makes that one rather than "it always works".
+
+The 312 s run is not an outlier in the measurement: the robot stalled while backing away from the
+table, the guard noticed that nothing had moved for 25 s and asked for a new route, and the run
+finished 5 mm from the marker. The recovery works and it is slow; both are stated.
 
 The same figures feed the report directly: `validation/seminar_numbers.py` writes
 them as LaTeX macros, so the text cannot drift away from the data. Details:

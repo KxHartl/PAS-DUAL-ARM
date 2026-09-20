@@ -30,8 +30,10 @@ misija vozi **`MISSION COMPLETE`, 5 mm od centra markera**, s nepromijenjenim ko
 3. **Seminar usklađen sa serijom** — ✅. Brojke generira `validation/seminar_numbers.py` u
    `seminar/mjerenja.tex`; tekst ih samo uvlači. Dodano: tablica statistike, donja granica
    uspješnosti po pravilu $1-3/N$, potpoglavlje o sustavnoj pogrešci procjene udaljenosti.
-4. **Statistika** — serija `n40` (28 runova, 2 radnika) u tijeku; s `cam-par` daje **40 runova**
-   iz jednog uzorka za sve veličine.
+4. **Statistika** — ✅ **40 od 40**. `cam-par` (12) + `n40` (28), isti kod, isti postav, dva
+   radnika u oba slučaja, RTF 0,39 u oba — dakle jedan uzorak za sve veličine. Donja granica
+   uspješnosti uz 95 % povjerenja: **92,5 %**. Medijan odlaganja 8,0 mm, misija 173,0 s.
+   Jedan run (1/40) pokazao je zastoj i oporavak → [[P-57_stall_recovery_is_slow]].
 5. **Slajdovi** — otpada (korisnik, 20. 9.).
 6. **`git status` čist** — ⚠ `build.pre-18-09/` i `install.pre-18-09/` (253 MB) stoje nepraćeni
    od oporavka 18. 9.; sustav je otad prebuildan i odvozio 40 runova, pa više ne služe ničemu.
