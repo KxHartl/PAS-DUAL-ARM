@@ -24,8 +24,10 @@ misija vozi **`MISSION COMPLETE`, 5 mm od centra markera**, s nepromijenjenim ko
   automatske nadogradnje do predaje ([[S-10_build_run_environment]]).
 
 ## Stanje predaje 20. 9. 2026. (navečer)
-1. **Video cijelog sustava** — ❌ još; `scripts/record_demo.sh` je spreman, čeka da se serija
-   isprazni jer traži GUI i slobodan stroj.
+1. **Video cijelog sustava** — ✅ snimljen 21. 9. (korisnik, OBS). Jedan neprekinut prolaz,
+   5 min 58 s, od čekanja naredbe do dovršene misije uz 3 mm od markera. U repozitoriju kao
+   `docs/demo.mp4` (1080p30, bez zvuka, 13 MB — ispod GitHubove granice od 100 MB), uvršten u
+   README s posterom. Izvornik (1080p60 sa zvukom, 105 MB) stoji u `dist/`, izvan gita.
 2. **README na engleskom** — ✅, i više ne citira jedan run nego seriju.
 3. **Seminar usklađen sa serijom** — ✅. Brojke generira `validation/seminar_numbers.py` u
    `seminar/mjerenja.tex`; tekst ih samo uvlači. Dodano: tablica statistike, donja granica

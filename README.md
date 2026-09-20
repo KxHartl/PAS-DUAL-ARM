@@ -12,8 +12,23 @@ command**:
 > **lifts it with both arms** → carries it through a doorway → **places it on a marked spot**
 > in another room.
 
-The robot is shown below carrying the box through a doorway, and placing it on the destination
-marker at the end of the mission.
+## The mission, recorded
+
+[![The complete mission: drive, find the box, lift it with both arms, carry it through a doorway and place it on the marker](docs/img/demo_poster.png)](docs/demo.mp4)
+
+**▶ [Watch the full run (6 min, 13 MB)](docs/demo.mp4)** — one uncut take, from the robot waiting
+for a command to the mission reporting itself complete. Gazebo on the left, what the robot
+believes on the right: the map, its own footprint, the laser, the particle cloud and the planned
+path. The panel in the middle is the only input — one button.
+
+The run ends with the robot's own verdict on screen: *"Kocka je točno na markeru! Odstupanje od
+centra: 3 mm"* — the box is on the marker, 3 mm off centre by its own measurement. Measured
+independently against the simulator's poses, runs like this one land a median of 8.0 mm off; the
+difference between those two numbers is the subject of
+[section 9](#9-repeating-the-mission-and-measuring-it).
+
+The stills below are the two moments the video is about — carrying the box through a doorway, and
+placing it on the destination marker.
 
 | Carrying the box through a doorway | Placing it on the marker |
 |---|---|
