@@ -347,7 +347,21 @@
       <update_rate>15</update_rate>
       <always_on>1</always_on>
       <visualize>true</visualize>
-      <ignition_frame_id>camera_color_optical_frame</ignition_frame_id>
+      <!-- DEPTH optical, not colour, and that is the whole of P-54.
+           This sensor is attached to camera_link, so Ignition renders it from
+           camera_link's origin. It used to stamp its images
+           camera_color_optical_frame, which the RealSense description puts
+           15 mm away: _d435.urdf.xacro gives camera_color_frame an origin of
+           (0, 0.015, 0) from camera_link, +y being the robot's left. Every
+           detection was therefore reported from a viewpoint 15 mm to the left
+           of the one that produced it.
+           Measured over twelve runs before the change: the head camera placed
+           the marker +15.7 mm to the left and +7.7 mm forward of where Gazebo
+           had it, and the cube landed +19.6 mm left and +6.5 mm forward of the
+           marker. The robot was hitting exactly where it believed.
+           camera_depth_optical_frame is the same origin as camera_link with the
+           optical rotation, which is what this sensor actually looks through. -->
+      <ignition_frame_id>camera_depth_optical_frame</ignition_frame_id>
       <camera>
         <horizontal_fov>1.211</horizontal_fov>
         <image>

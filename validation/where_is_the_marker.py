@@ -34,14 +34,13 @@ def yaw_of(q):
 
 
 def read_bag(bag):
-    """Ground-truth robot poses on SIM time, via the wheel odometry's stamps.
+    """Ground-truth robot poses, on the clock the log is written in.
 
-    The truth bridge leaves its headers empty, so the poses carry only bag time,
-    and the log carries only simulation time. /clock would relate them but it
-    ticks at a kilohertz and pairing every pose against it by search took longer
-    than the runs did. The wheel odometry is stamped in simulation time AND
-    recorded in bag time, arrives fifty times a second, and so relates the two
-    clocks at a fiftieth of the cost.
+    Both are WALL time and always were. rcl stamps every log line from the
+    system clock even under use_sim_time, and rosbag records arrival on the same
+    clock, so the two line up directly. The first version of this converted the
+    bag to simulation time and compared it against a wall-clock log stamp, which
+    put the marker 250 mm away and had me looking for a fault in the robot.
     """
     import rosbag2_py
     from rclpy.serialization import deserialize_message
@@ -50,30 +49,17 @@ def read_bag(bag):
     reader.open(rosbag2_py.StorageOptions(uri=bag, storage_id='sqlite3'),
                 rosbag2_py.ConverterOptions('', ''))
     types = {t.name: t.type for t in reader.get_all_topics_and_types()}
-    clock, poses = [], []
+    poses = []
     while reader.has_next():
         topic, data, stamp = reader.read_next()
-        if topic == '/base_controller/odom':
-            msg = deserialize_message(data, get_message(types[topic]))
-            clock.append((stamp * 1e-9, msg.header.stamp.sec
-                          + msg.header.stamp.nanosec * 1e-9))
-        elif topic == '/debug/gz_dynamic_pose':
+        if topic == '/debug/gz_dynamic_pose':
             msg = deserialize_message(data, get_message(types[topic]))
             for tf in msg.transforms:
                 if tf.child_frame_id == ROBOT:
                     poses.append((stamp * 1e-9, tf.transform.translation.x,
                                   tf.transform.translation.y,
                                   yaw_of(tf.transform.rotation)))
-    if not clock:
-        return []
-    clock.sort()
-    bag_times = [c[0] for c in clock]
-    dated = []
-    for when, x, y, yaw in poses:
-        i = min(bisect.bisect_left(bag_times, when), len(clock) - 1)
-        bag_time, sim_time = clock[i]
-        dated.append((sim_time + (when - bag_time), x, y, yaw))
-    return dated
+    return poses
 
 
 def main():
