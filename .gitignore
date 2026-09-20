@@ -92,3 +92,15 @@ src/pas_dual_arm_bringup/maps/map_2*
 # Izlaz generatora svijeta (scripts/gen_world.py iz config/world.yaml).
 # Prepisuje se pri svakom pokretanju; izvor je konfiguracija, ne rezultat.
 /src/pas_dual_arm_bringup/worlds/generated_world.sdf
+
+# Radni dnevnik (zahtjevi, problemi, odluke, dnevne bilješke). Profesorova
+# smjernica bila je razdvojiti radni od objavljenog repozitorija: bilješke su
+# alat za rad, a ne dio isporuke, pa ostaju lokalno. Povijest ih i dalje sadrži,
+# pa nisu izgubljene - samo ih svjež klon ne dobiva.
+/notes/
+
+# Build i install od prije oporavka 18. 9. (P-51). Radno stablo je otad
+# prebuildano i odvozilo 40 izvođenja; ove kopije stoje lokalno dok ih korisnik
+# ne obriše, ali u repozitoriju nemaju što tražiti.
+/build.pre-*/
+/install.pre-*/
